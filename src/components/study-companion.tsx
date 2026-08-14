@@ -1,19 +1,14 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, DotsThree as MoreHorizontal, Link, Sparkle, ChatText, GraduationCap, Trash, PlusCircle } from '@phosphor-icons/react'
+import { useMemo, useState, useEffect } from 'react'
+import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, DotsThree as MoreHorizontal, Link, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info } from '@phosphor-icons/react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { login, logout } from '@/app/actions/auth'
 import type { User as PrismaUser } from '@prisma/client'
 import { createClient } from '@/utils/supabase/client'
 import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage } from '@/app/actions/notes'
 import { getPresignedUrl } from '@/app/actions/upload'
-import { Document, Page, pdfjs } from 'react-pdf'
 import React from 'react'
-import 'react-pdf/dist/Page/AnnotationLayer.css'
-import 'react-pdf/dist/Page/TextLayer.css'
-
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
 
 type Role = 'student' | 'senior' | 'admin'
 type Screen = 'semesters' | 'subject' | 'notifications' | 'submissions' | 'cms' | 'saved'
@@ -395,6 +390,13 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
   const [uploading,setUploading]=useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedSemester, setSelectedSemester] = useState(1);
+  
+  // Prevent body scroll when dialog is open
+  useEffect(() => {
+    if (open) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = 'unset';
+    return () => { document.body.style.overflow = 'unset'; };
+  }, [open]);
   const [subjectCode, setSubjectCode] = useState('MTH 101');
   const [customName, setCustomName] = useState('');
   const [customCode, setCustomCode] = useState('');
@@ -501,21 +503,31 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
 
   return <div className="grid gap-7 lg:grid-cols-[1fr_340px]"><section><div className="rounded-3xl bg-mist p-7"><Upload size={25}/><h2 className="mt-10 text-3xl font-semibold">Share what helped you learn.</h2><p className="mt-2 max-w-xl text-muted-foreground">Every note is reviewed by the department before students can see it.</p><button onClick={()=>setOpen(true)} className="mt-6 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground">Submit a note</button></div><div className="mt-8"><Header kicker="Your contributions" title="Submission history"/>
   {myNotes.map(x=><div key={x.id} className="mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border bg-card p-4"><div className="flex items-center gap-4 flex-1 min-w-0"><FileText className="shrink-0 text-muted-foreground"/><div className="flex-1 min-w-0"><b className="block truncate">{x.title}</b><p className="text-sm text-muted-foreground truncate">Submitted {x.date} · {x.subject || x.code}</p></div></div><span className={`bg-secondary rounded-full px-3 py-1 text-xs font-semibold whitespace-nowrap w-fit`}>{x.status}</span></div>)}
-  </div></section><aside className="rounded-3xl bg-butter p-6 lg:self-start"><h3 className="font-semibold">Before you submit</h3><ul className="mt-4 flex flex-col gap-3 text-sm leading-relaxed text-muted-foreground"><li>Select your target semester & subject.</li><li>Add helpful exam tips or study advice.</li><li>Only upload material you can share.</li><li>PDF files, up to 20 MB.</li></ul></aside><AnimatePresence>
-      {open&&<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="submit-title"><motion.form initial={{scale:0.95, y:20}} animate={{scale:1, y:0}} exit={{scale:0.95, y:20}} transition={{type:"spring", bounce:0.2, duration:0.4}} onSubmit={handleUpload} className="dialog-panel max-w-lg p-7 max-h-[90vh] overflow-y-auto"><div className="flex justify-between"><div><p className="section-kicker">New submission</p><h2 id="submit-title" className="text-2xl sm:text-3xl font-semibold">Upload your note</h2></div><button type="button" onClick={()=>setOpen(false)} className="icon-button"><X/></button></div>{submitted?<div className="py-20 text-center"><Check className="mx-auto"/><h3 className="mt-4 text-xl font-semibold">Sent for review</h3></div>:<div className="mt-6 flex flex-col gap-4">
+  </div></section><aside className="rounded-3xl bg-butter p-6 lg:self-start"><h3 className="font-semibold">Before you submit</h3><ul className="mt-4 flex flex-col gap-3 text-sm leading-relaxed text-muted-foreground"><li>Select your target semester & subject.</li><li>Add helpful exam tips or study advice.</li><li>Only upload material you can share.</li><li>PDF files, up to 100 MB.</li></ul></aside><AnimatePresence>
+      {open&&<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} className="dialog-backdrop overscroll-none" role="dialog" aria-modal="true" aria-labelledby="submit-title">
+        <motion.form initial={{scale:0.95, y:20}} animate={{scale:1, y:0}} exit={{scale:0.95, y:20}} transition={{type:"spring", bounce:0.2, duration:0.4}} onSubmit={handleUpload} className="dialog-panel flex flex-col w-full max-w-lg rounded-[2rem] bg-card border shadow-2xl max-h-[90vh] overflow-hidden">
+          
+          <div className="flex-1 overflow-y-auto custom-scrollbar overscroll-contain relative">
+            <div className="sticky top-0 z-10 flex items-start justify-between p-5 sm:p-7 pb-4 bg-card/85 backdrop-blur-xl border-b border-border/50">
+              <div><p className="section-kicker">New submission</p><h2 id="submit-title" className="text-2xl sm:text-3xl font-semibold">Upload your note</h2></div>
+              <button type="button" onClick={()=>setOpen(false)} className="icon-button bg-secondary/50 hover:bg-secondary"><X/></button>
+            </div>
+            
+            <div className="p-5 sm:p-7 pt-4">
+              {submitted?<div className="py-16 text-center"><Check className="mx-auto"/><h3 className="mt-4 text-xl font-semibold">Sent for review</h3></div>:<div className="flex flex-col gap-6">
         
         <label className="field-label">Note Title<input name="title" required className="field-input" placeholder="e.g. Complete Lecture Summary & Past Papers"/></label>
         
         {/* Semester selector */}
         <div className="flex flex-col gap-1.5">
           <label className="field-label">Target Semester</label>
-          <div className="grid grid-cols-4 gap-1.5 rounded-2xl bg-secondary p-1">
+          <div className="flex flex-wrap gap-1.5 rounded-[1.25rem] bg-secondary p-1.5">
             {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
               <button
                 key={sem}
                 type="button"
                 onClick={() => handleSemesterChange(sem)}
-                className={`py-1.5 text-xs font-semibold rounded-xl transition-all ${
+                className={`flex-1 min-w-[60px] py-2 sm:py-1.5 text-[13px] font-semibold rounded-xl transition-all ${
                   selectedSemester === sem
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
@@ -544,8 +556,9 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
           {isCustomSubject ? (
             <div className="flex flex-col gap-2">
               {semesterSubjects.length === 0 && (
-                <div className="rounded-xl border border-dashed border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-600 mb-1">
-                  No standard subjects found for Semester {selectedSemester}. Please enter custom details.
+                <div className="flex items-start gap-2 rounded-xl bg-secondary/80 p-3 mb-1">
+                  <Info size={16} weight="fill" className="text-muted-foreground mt-0.5 shrink-0" />
+                  <span className="text-[13px] leading-relaxed text-foreground">No standard subjects found for Semester {selectedSemester}. Please enter custom details below.</span>
                 </div>
               )}
               <div className="grid gap-2 sm:grid-cols-2">
@@ -569,7 +582,7 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
             <select
               value={subjectCode}
               onChange={e => setSubjectCode(e.target.value)}
-              className="field-input"
+              className="field-input pr-10"
             >
               {semesterSubjects.map(s => (
                 <option key={s.code} value={s.code}>
@@ -586,13 +599,14 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
             <Sparkle size={14} className="text-primary" />
             Senior Advice & Study Tips (Optional)
           </span>
-          <textarea
-            value={seniorAdvice}
-            onChange={e => setSeniorAdvice(e.target.value)}
-            rows={3}
-            className="field-input py-2.5 text-sm resize-none"
-            placeholder="e.g. Focus heavily on Chapter 4 formulas for midterms. Past exam solutions included on page 14!"
-          />
+          <div className="flex h-28 rounded-2xl border bg-background overflow-hidden focus-within:border-foreground">
+            <textarea
+              value={seniorAdvice}
+              onChange={e => setSeniorAdvice(e.target.value)}
+              className="w-full h-full bg-transparent px-4 py-3 text-sm outline-none resize-none custom-scrollbar"
+              placeholder="e.g. Focus heavily on Chapter 4 formulas for midterms. Past exam solutions included on page 14!"
+            />
+          </div>
         </label>
 
         {/* PDF File Upload */}
@@ -623,7 +637,11 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
             Submit note for review
           </button>
         )}
-      </div>}</motion.form></motion.div>}
+      </div>}
+            </div>
+          </div>
+        </motion.form>
+      </motion.div>}
     </AnimatePresence></div>}
 
 function AdminCms({notes,subjects,setSubjects,publish}:{notes:Note[],subjects:SubjectItem[],setSubjects:(s:SubjectItem[])=>void,publish:(n:Note)=>void}){
