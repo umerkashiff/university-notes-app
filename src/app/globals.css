@@ -87,8 +87,8 @@
   }
   .modal-scroll::-webkit-scrollbar-track {
     background: transparent;
-    margin-top: 12px;
-    margin-bottom: 28px;
+    margin-top: 16px;
+    margin-bottom: 32px;
   }
   .modal-scroll::-webkit-scrollbar-thumb {
     background: var(--border);

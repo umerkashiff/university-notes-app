@@ -560,7 +560,7 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
           </div>
           
           {/* Body - Inset scroll container so scrollbar never collides with rounded corners */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 pr-4 mr-1.5 modal-scroll overscroll-contain" data-lenis-prevent>
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-5 pb-6 pr-4 mr-2 modal-scroll overscroll-contain" data-lenis-prevent>
             {submitted?<div className="py-16 text-center">
               <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-sage text-foreground mb-4">
                 <Check size={26} weight="bold"/>
@@ -746,6 +746,8 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
         )}
       </div>}
             </div>
+          {/* Bottom cushion to lift scrollbar well above the bottom rounded corner */}
+          <div className="h-4 w-full bg-card shrink-0 pointer-events-none" />
         </motion.form>
       </motion.div>}
     </AnimatePresence></div>}
