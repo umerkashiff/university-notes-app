@@ -399,6 +399,7 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedSemester, setSelectedSemester] = useState(1);
   const [subjectDropdownOpen, setSubjectDropdownOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const lenis = useLenis();
   
   // Bulletproof body & Lenis scroll lock when dialog is open
@@ -535,6 +536,7 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
       });
       setSubmitted(true);
       setSeniorAdvice('');
+      setSelectedFile(null);
       setTimeout(()=>{setOpen(false);setSubmitted(false);setUploadProgress(0);},1500);
     }
     setUploading(false);
@@ -717,11 +719,54 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
         </label>
 
         {/* PDF File Upload */}
-        <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed bg-secondary/40 p-4 text-sm hover:border-primary/40 hover:bg-secondary/70 transition-all">
-          <Upload size={22} className="text-muted-foreground mb-1.5" />
-          <span className="font-semibold text-foreground">Choose PDF document</span>
-          <span className="text-xs text-muted-foreground mt-0.5">Maximum size 100 MB</span>
-          <input type="file" name="file" accept="application/pdf" className="sr-only" required />
+        <label className={`relative flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border transition-all p-4 ${
+          selectedFile
+            ? 'border-primary/40 bg-secondary/80 hover:bg-secondary'
+            : 'border-dashed border-border/80 bg-secondary/40 hover:border-primary/40 hover:bg-secondary/70'
+        }`}>
+          {selectedFile ? (
+            <div className="flex w-full items-center gap-3.5">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+                <FileText size={22} weight="fill" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="block font-semibold text-sm text-foreground truncate">{selectedFile.name}</span>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB · Ready for Cloudflare upload
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-primary px-3 py-1.5 rounded-full bg-background border border-border/60 shadow-xs shrink-0">
+                Change
+              </span>
+            </div>
+          ) : (
+            <>
+              <Upload size={22} className="text-muted-foreground mb-1.5" />
+              <span className="font-semibold text-foreground">Choose PDF document</span>
+              <span className="text-xs text-muted-foreground mt-0.5">PDF files up to 100 MB</span>
+            </>
+          )}
+          <input
+            type="file"
+            name="file"
+            accept="application/pdf"
+            className="sr-only"
+            required
+            onChange={(e) => {
+              if (e.target.files && e.target.files[0]) {
+                const f = e.target.files[0];
+                if (f.type !== 'application/pdf') {
+                  alert('Please select a valid PDF file.');
+                  return;
+                }
+                if (f.size > 100 * 1024 * 1024) {
+                  alert('File size exceeds 100 MB limit.');
+                  return;
+                }
+                setSelectedFile(f);
+              }
+            }}
+          />
         </label>
 
         {uploading ? (
