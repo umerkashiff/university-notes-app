@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      String   @default("STUDENT") // STUDENT, SENIOR, ADMIN
+  avatar    String?
+  createdAt DateTime @default(now())
+
+  notes       Note[]
+  bookmarks   Bookmark[]
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  semester  Int
+  createdAt DateTime @default(now())
+
+  notes     Note[]
+}
+
+model Note {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  fileUrl     String
+  pages       Int
+  size        String
+  status      String   @default("PENDING") // PENDING, PUBLISHED, REJECTED
+  tone        String   @default("bg-sage")
+  downloads   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  
+  subjectId   String
+  subject     Subject  @relation(fields: [subjectId], references: [id])
+
+  bookmarks   Bookmark[]
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  noteId    String
+  note      Note     @relation(fields: [noteId], references: [id])
+
+  @@unique([userId, noteId])
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  audience  String   @default("ALL") // ALL, SEM_1, etc.
+  createdAt DateTime @default(now())
+}

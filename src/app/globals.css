@@ -1,0 +1,104 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--secondary);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--secondary);
+  --color-accent-foreground: var(--foreground);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--primary);
+  --color-sage: var(--sage);
+  --color-mist: var(--mist);
+  --color-blush: var(--blush);
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-mono);
+  --radius-sm: calc(var(--radius) * .55);
+  --radius-md: calc(var(--radius) * .75);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.35);
+  --radius-2xl: calc(var(--radius) * 1.7);
+  --radius-3xl: calc(var(--radius) * 2.2);
+}
+
+:root {
+  color-scheme: light;
+  --background: #f7f5f2;
+  --foreground: #252629;
+  --card: #ffffff;
+  --card-foreground: #252629;
+  --popover: #ffffff;
+  --popover-foreground: #252629;
+  --primary: #252629;
+  --primary-foreground: #f7f5f2;
+  --secondary: #ece9e5;
+  --secondary-foreground: #252629;
+  --muted-foreground: #6f706f;
+  --border: #d8d4cf;
+  --sage: #d8e2dc;
+  --mist: #dce3ec;
+  --blush: #ead8d3;
+  --radius: 1rem;
+}
+
+@layer base {
+  * { @apply border-border outline-ring/40; }
+  html { @apply bg-background scroll-smooth; scrollbar-gutter: stable; }
+  body { @apply bg-background text-foreground font-sans; }
+  button, a, input, select { @apply focus-visible:outline-2 focus-visible:outline-offset-2; }
+  button, a { -webkit-tap-highlight-color: transparent; }
+
+  /* Custom Scrollbar Styling */
+  ::-webkit-scrollbar {
+    width: 14px;
+    height: 14px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border: 4px solid var(--background);
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+  }
+}
+
+@layer components {
+  .icon-button { @apply flex size-10 items-center justify-center rounded-full transition hover:bg-secondary; }
+  .eyebrow { @apply flex w-fit items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground; }
+  .section-kicker { @apply mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground; }
+  .section-title { @apply text-2xl font-semibold tracking-tight md:text-3xl; }
+  .popover { @apply absolute top-12 z-40 rounded-2xl border bg-popover text-popover-foreground shadow-lg; animation: pop-in 180ms ease-out both; }
+  .dialog-backdrop { @apply fixed inset-0 z-50 flex items-start justify-center bg-foreground/30 px-4 py-6; backdrop-filter: blur(4px); }
+  .dialog-panel { @apply w-full overflow-hidden rounded-3xl border bg-card text-card-foreground shadow-xl; animation: dialog-in 220ms ease-out both; }
+  .mobile-nav { @apply flex min-w-16 flex-col items-center gap-1 rounded-full px-3 py-2 text-[10px] text-muted-foreground; }
+  .mobile-nav.active { @apply bg-secondary text-foreground; }
+  .field-label { @apply flex flex-col gap-2 text-sm font-medium; }
+  .field-input { @apply h-12 rounded-2xl border bg-background px-4 text-sm outline-none focus:border-foreground; }
+  .document-page { @apply min-h-[800px] w-full max-w-[720px] bg-card p-8 shadow-md transition-transform md:min-h-[920px] md:p-16; }
+}
+
+.card-enter { animation: card-enter 500ms ease-out both; }
+
+@keyframes card-enter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes dialog-in { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
