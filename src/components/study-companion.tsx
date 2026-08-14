@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic'
 import { useLenis } from 'lenis/react'
 
 import { useMemo, useState, useEffect } from 'react'
-import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDown, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, DotsThree as MoreHorizontal, Link, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info } from '@phosphor-icons/react'
+import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDown, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info } from '@phosphor-icons/react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { login, logout } from '@/app/actions/auth'
 import type { User as PrismaUser } from '@prisma/client'
@@ -45,28 +45,33 @@ const SEMESTER_LABELS: Record<number, string> = {
   8: 'Eighth semester',
 }
 
-function FilterChip({ label, count, active, onClick }: { label:string, count?:number, active?:boolean, onClick?:()=>void }) {
-  return (
-    <button onClick={onClick} className={`relative inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold whitespace-nowrap transition-colors duration-200 select-none ${active ? 'text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'}`}>
-      {active && <motion.div layoutId="filter-pill" className="absolute inset-0 bg-primary rounded-full z-0 shadow-sm" transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />}
-      <span className="relative z-10 flex items-center gap-1.5">
-        {label}
-        {count !== undefined && (
-          <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-bold leading-none ${active ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background text-muted-foreground'}`}>
-            {count}
-          </span>
-        )}
-      </span>
-    </button>
-  )
-}
-
 export function StudyCompanion({ initialUser, initialNotes = [], initialAnnouncements = [], initialSubjects = [] }: { initialUser: PrismaUser | null, initialNotes?: any[], initialAnnouncements?: any[], initialSubjects?: any[] }){
   const [user, setUser] = useState<PrismaUser | null>(initialUser)
   const role = (user?.role?.toLowerCase() as Role) || null
   const [screen,setScreen]=useState<Screen>(role === 'admin' ? 'cms' : role === 'senior' ? 'submissions' : 'semesters')
   const [reader,setReader]=useState<Note|null>(null)
   const [selectedSubjectName, setSelectedSubjectName] = useState<string | null>(null)
+
+  // Real Bookmark / Saved Notes State with Local Storage persistence
+  const [savedNoteIds, setSavedNoteIds] = useState<string[]>([])
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('luma_saved_notes')
+      if (stored) setSavedNoteIds(JSON.parse(stored))
+    } catch {}
+  }, [])
+
+  const toggleSave = (noteId: string | number) => {
+    const idStr = String(noteId)
+    setSavedNoteIds(prev => {
+      const next = prev.includes(idStr) ? prev.filter(x => x !== idStr) : [...prev, idStr]
+      try {
+        localStorage.setItem('luma_saved_notes', JSON.stringify(next))
+      } catch {}
+      return next
+    })
+  }
 
   const mapNote = (n: any): Note => ({
     id: n.id,
@@ -139,7 +144,7 @@ export function StudyCompanion({ initialUser, initialNotes = [], initialAnnounce
     : screen==='subject'
     ? (selectedSubjectName || `Semester ${selectedSemester}`)
     : screen==='saved'
-    ? 'Your notes'
+    ? 'Saved notes'
     : greeting
 
   return <main className="min-h-screen bg-background text-foreground">
@@ -151,7 +156,7 @@ export function StudyCompanion({ initialUser, initialNotes = [], initialAnnounce
           <span className="hidden rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground sm:inline">Computer Engineering</span>
         </button>
         <nav className="hidden items-center gap-1 rounded-full bg-secondary p-1 md:flex" aria-label="Primary">
-          {role==='student'&&<><Nav active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')}>Home</Nav><Nav active={screen==='saved'} onClick={()=>setScreen('saved')}>Saved</Nav></>}
+          {role==='student'&&<><Nav active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')}>Home</Nav><Nav active={screen==='saved'} onClick={()=>setScreen('saved')}>Saved ({savedNoteIds.length})</Nav></>}
           {role==='senior'&&<><Nav active={screen==='submissions'} onClick={()=>setScreen('submissions')}>My notes</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}
           {role==='admin'&&<><Nav active={screen==='cms'} onClick={()=>setScreen('cms')}>Studio</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}
           <Nav active={screen==='notifications'} onClick={()=>setScreen('notifications')}>Notices</Nav>
@@ -189,9 +194,9 @@ export function StudyCompanion({ initialUser, initialNotes = [], initialAnnounce
       </div>
       <AnimatePresence mode="wait">
         <motion.div key={screen} initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} transition={{duration:0.2}}>
-          {screen==='saved'&&<SavedNotes notes={notes} subjects={subjectsList} open={setReader}/>} 
+          {screen==='saved'&&<SavedNotes notes={notes} subjects={subjectsList} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader}/>} 
           {screen==='semesters'&&<SemesterLibrary subjects={subjectsList} notes={notes} select={(n)=>{setSelectedSemester(n);setScreen('subject')}}/>}
-          {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} open={setReader} onBack={()=>setScreen('semesters')} onSelectSubjectName={setSelectedSubjectName}/>} 
+          {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')} onSelectSubjectName={setSelectedSubjectName}/>} 
           {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts}/>} 
           {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])}/>} 
           {screen==='cms'&&<AdminCms notes={notes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
@@ -200,7 +205,7 @@ export function StudyCompanion({ initialUser, initialNotes = [], initialAnnounce
     </div>
     <nav className="fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 gap-1 rounded-full border bg-card p-1.5 shadow-lg md:hidden">
       <Mobile active={role==='admin'?screen==='cms':role==='senior'?screen==='submissions':(screen==='semesters'||screen==='subject')} onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} icon={<Home/>}>Home</Mobile>
-      {role==='student'?<Mobile active={screen==='saved'} onClick={()=>setScreen('saved')} icon={<Bookmark/>}>Saved</Mobile>:<Mobile active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')} icon={<BookOpen/>}>Library</Mobile>}
+      {role==='student'?<Mobile active={screen==='saved'} onClick={()=>setScreen('saved')} icon={<Bookmark/>}>Saved ({savedNoteIds.length})</Mobile>:<Mobile active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')} icon={<BookOpen/>}>Library</Mobile>}
       <Mobile active={screen==='notifications'} onClick={()=>setScreen('notifications')} icon={<Bell/>}>Notices</Mobile>
     </nav>
   </main>
@@ -223,120 +228,77 @@ function Login({onLogin}:{onLogin:(email:string, password:string)=>void}){const 
   <section className="flex flex-col justify-center p-7 md:p-12"><div className="mb-10 flex items-center gap-3 md:hidden"><span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground"><BookOpen size={20}/></span><b className="text-xl">Luma</b></div><p className="section-kicker">Welcome back</p><h2 className="text-4xl font-semibold tracking-[-.04em]">Sign in to Luma</h2><p className="mt-2 text-muted-foreground">Your department's notes and notices await.</p><form onSubmit={e=>{e.preventDefault();setError('');onLogin(identity, password)}} className="mt-8 flex flex-col gap-5"><label className="field-label">Email address<input required value={identity} onChange={e=>setIdentity(e.target.value)} type="email" className="field-input" placeholder="student@uet.edu"/></label><label className="field-label">Password<input required value={password} onChange={e=>setPassword(e.target.value)} type="password" className="field-input" placeholder="••••••••"/></label>{error&&<p className="text-sm text-destructive">{error}</p>}<button className="rounded-full bg-primary px-5 py-3.5 font-semibold text-primary-foreground">Continue</button></form><p className="mt-7 text-center text-sm text-muted-foreground">New student? Your department will issue your account.</p></section>
   </div></main>}
 
-function SavedNotes({notes,subjects,open}:{notes:Note[],subjects:SubjectItem[],open:(n:Note)=>void}){
-  const [activeFilter, setActiveFilter] = useState('All')
-  const [viewMode, setViewMode] = useState<'list'|'grid'>('list')
+function SavedNotes({
+  notes,
+  subjects,
+  savedNoteIds,
+  toggleSave,
+  open
+}: {
+  notes: Note[]
+  subjects: SubjectItem[]
+  savedNoteIds: string[]
+  toggleSave: (id: string | number) => void
+  open: (n: Note) => void
+}){
   const [search, setSearch] = useState('')
 
-  const published = useMemo(() => notes.filter(n => !n.status || n.status === 'PUBLISHED'), [notes])
-
-  // Distinct semesters derived dynamically from subjects
-  const semesterNumbers = useMemo(() => {
-    const set = new Set<number>()
-    subjects.forEach(s => set.add(s.semester))
-    return Array.from(set).sort((a, b) => a - b)
-  }, [subjects])
-
-  const FILTERS = useMemo(() => {
-    const items = [
-      { label: 'All', count: published.length }
-    ]
-    semesterNumbers.forEach(sem => {
-      const semSubCodes = new Set(subjects.filter(s => s.semester === sem).map(s => s.code))
-      const count = published.filter(n => semSubCodes.has(n.code) || subjects.some(s => s.semester === sem && s.name === n.subject)).length
-      items.push({ label: `Sem ${sem}`, count })
-    })
-    return items
-  }, [published, semesterNumbers, subjects])
+  // ONLY notes explicitly bookmarked/saved by the student
+  const savedList = useMemo(() => {
+    return notes.filter(n => savedNoteIds.includes(String(n.id)))
+  }, [notes, savedNoteIds])
 
   const filtered = useMemo(() => {
-    return published.filter(n => {
-      const matchSearch = `${n.title} ${n.subject} ${n.author} ${n.code}`.toLowerCase().includes(search.toLowerCase())
-      if (!matchSearch) return false
-
-      if (activeFilter.startsWith('Sem ')) {
-        const semNum = parseInt(activeFilter.replace('Sem ', ''), 10)
-        const noteSem = subjects.find(s => s.code === n.code || s.name === n.subject)?.semester
-        if (noteSem !== semNum) return false
-      }
-      return true
+    return savedList.filter(n => {
+      const q = search.toLowerCase()
+      return !q || `${n.title} ${n.subject} ${n.author} ${n.code}`.toLowerCase().includes(q)
     })
-  }, [published, search, activeFilter, subjects])
+  }, [savedList, search])
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Search & View Mode row */}
-      <div className="flex items-center gap-3">
-        <label className="flex-1 flex items-center gap-3 bg-card border border-border rounded-2xl px-4 py-3 text-muted-foreground focus-within:border-primary/40 focus-within:text-foreground transition-colors">
+      {savedList.length > 0 && (
+        <label className="flex items-center gap-3 bg-card border border-border rounded-2xl px-4 py-3 text-muted-foreground focus-within:border-primary/40 focus-within:text-foreground transition-colors">
           <Search className="h-4 w-4 shrink-0" />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search notes, subjects, authors..."
+            placeholder="Search your saved notes..."
             className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
           />
         </label>
-        <div className="flex items-center bg-secondary rounded-2xl p-1 shrink-0">
-          <button
-            onClick={() => setViewMode('list')}
-            className={`p-2 rounded-xl transition-colors ${viewMode === 'list' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-            aria-label="List view"
-          >
-            <List className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`p-2 rounded-xl transition-colors ${viewMode === 'grid' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-            aria-label="Grid view"
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </button>
+      )}
+
+      {savedList.length === 0 ? (
+        <div className="py-20 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40 max-w-xl mx-auto p-8">
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-secondary mx-auto mb-4 text-muted-foreground">
+            <Bookmark size={28} />
+          </div>
+          <h3 className="font-semibold text-lg text-foreground">No saved notes yet</h3>
+          <p className="text-sm mt-1.5 text-muted-foreground leading-relaxed">
+            Browse course notes in the Library and click the bookmark icon on any note to save it here for quick revision.
+          </p>
         </div>
-      </div>
-
-      {/* Dynamic Filter chips scrollable row */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-        {FILTERS.map(f => (
-          <FilterChip
-            key={f.label}
-            label={f.label}
-            count={f.count}
-            active={activeFilter === f.label}
-            onClick={() => setActiveFilter(f.label)}
-          />
-        ))}
-      </div>
-
-      {/* Notes listing */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={`${activeFilter}-${viewMode}-${search}`}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.2 }}
-        >
-          {filtered.length === 0 ? (
-            <div className="py-20 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40">
-              <Bookmark className="h-8 w-8 mx-auto mb-3 opacity-40" />
-              <p className="font-semibold text-foreground">No notes found</p>
-              <p className="text-sm mt-1">Try adjusting your filters or search terms.</p>
-            </div>
-          ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtered.map((n, i) => (
-                <NoteCard key={n.id} note={n} subjects={subjects} open={() => open(n)} variant="grid" index={i} />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {filtered.map((n, i) => (
-                <NoteCard key={n.id} note={n} subjects={subjects} open={() => open(n)} variant="list" index={i} />
-              ))}
-            </div>
-          )}
-        </motion.div>
-      </AnimatePresence>
+      ) : filtered.length === 0 ? (
+        <div className="py-16 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40">
+          <p className="font-semibold text-foreground text-sm">No matching saved notes found</p>
+          <p className="text-xs mt-1">Try a different search term.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {filtered.map((n, i) => (
+            <NoteRow 
+              key={n.id} 
+              note={n} 
+              subjects={subjects} 
+              isSaved={true} 
+              toggleSave={toggleSave} 
+              index={i} 
+              open={() => open(n)} 
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -394,6 +356,8 @@ function SubjectLibrary({
   notes,
   query,
   setQuery,
+  savedNoteIds,
+  toggleSave,
   open,
   onBack,
   onSelectSubjectName
@@ -403,6 +367,8 @@ function SubjectLibrary({
   notes: Note[]
   query: string
   setQuery: (s: string) => void
+  savedNoteIds: string[]
+  toggleSave: (id: string | number) => void
   open: (n: Note) => void
   onBack: () => void
   onSelectSubjectName?: (name: string | null) => void
@@ -508,7 +474,17 @@ function SubjectLibrary({
               <p className="text-xs mt-1">Be the first senior to contribute notes for {activeSubject?.name || 'this subject'}!</p>
             </div>
           ) : (
-            list.map((n,i)=><NoteRow key={n.id} note={n} subjects={subjects} index={i} open={()=>open(n)}/>)
+            list.map((n,i)=>(
+              <NoteRow 
+                key={n.id} 
+                note={n} 
+                subjects={subjects} 
+                isSaved={savedNoteIds.includes(String(n.id))}
+                toggleSave={toggleSave}
+                index={i} 
+                open={()=>open(n)}
+              />
+            ))
           )}
         </div>
       </section>
@@ -516,65 +492,21 @@ function SubjectLibrary({
   )
 }
 
-function NoteCard({note,subjects,open,variant='list',index=0}:{note:Note,subjects:SubjectItem[],open:()=>void,variant?:'list'|'grid',index?:number}){
-  const semNumber = subjects.find(s => s.code === note.code || s.name === note.subject)?.semester
-  const semLabel = semNumber ? `Semester ${semNumber}` : ''
-
-  if (variant === 'grid') {
-    return (
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.06, duration: 0.4 }}>
-        <button onClick={open} className="w-full text-left bg-card border border-border rounded-2xl p-4 flex flex-col gap-3 hover:border-primary/30 hover:shadow-sm transition-all duration-200 h-full group">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <span className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground">
-                {note.subject} {semLabel ? `› ${semLabel}` : ''}
-              </span>
-              <h3 className="text-sm font-semibold text-foreground mt-1 line-clamp-2 leading-snug">{note.title}</h3>
-            </div>
-            <FileText className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-          </div>
-          <div className="flex items-center justify-between mt-auto pt-2 border-t border-border">
-            <span className="text-xs text-muted-foreground">{note.date}</span>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <span className="hover:text-foreground transition-colors"><Link className="h-3.5 w-3.5" /></span>
-              <span className="hover:text-foreground transition-colors"><Bookmark className="h-3.5 w-3.5" /></span>
-              <span className="hover:text-foreground transition-colors"><MoreHorizontal className="h-3.5 w-3.5" /></span>
-            </div>
-          </div>
-        </button>
-      </motion.div>
-    )
-  }
-  return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05, duration: 0.4 }}>
-      <button onClick={open} className="w-full text-left bg-card border border-border rounded-2xl px-5 py-4 flex items-start gap-4 hover:border-primary/30 hover:shadow-sm transition-all duration-200 group">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground shrink-0">{note.subject}</span>
-            {semLabel && (
-              <>
-                <span className="text-muted-foreground/40 text-[10px]">›</span>
-                <span className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground truncate">{semLabel}</span>
-              </>
-            )}
-          </div>
-          <h3 className="text-sm font-semibold text-foreground leading-snug line-clamp-1">{note.title}</h3>
-          <div className="flex items-center gap-4 mt-2">
-            <span className="text-xs text-muted-foreground">Created {note.date}</span>
-            <span className="text-xs text-muted-foreground flex items-center gap-1"><Download className="h-3 w-3" /> {note.pages} pages</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-          <span className="hover:text-foreground transition-colors p-1"><Link className="h-4 w-4" /></span>
-          <span className="hover:text-foreground transition-colors p-1"><Bookmark className="h-4 w-4" /></span>
-          <span className="hover:text-foreground transition-colors p-1"><MoreHorizontal className="h-4 w-4" /></span>
-        </div>
-      </button>
-    </motion.div>
-  )
-}
-
-function NoteRow({note,subjects=[],open,index=0}:{note:Note,subjects?:SubjectItem[],open:()=>void,index?:number}){
+function NoteRow({
+  note,
+  subjects = [],
+  isSaved = false,
+  toggleSave,
+  open,
+  index = 0
+}: {
+  note: Note
+  subjects?: SubjectItem[]
+  isSaved?: boolean
+  toggleSave?: (id: string | number) => void
+  open: () => void
+  index?: number
+}){
   const [expanded, setExpanded] = useState(false);
   const semNumber = subjects.find(s => s.code === note.code || s.name === note.subject)?.semester
 
@@ -604,7 +536,20 @@ function NoteRow({note,subjects=[],open,index=0}:{note:Note,subjects?:SubjectIte
             {note.author} · {note.date} · {semNumber ? `Semester ${semNumber} · ` : ''}{note.pages} pages · {note.size}
           </p>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex gap-2 shrink-0 items-center">
+          {toggleSave && (
+            <button 
+              type="button"
+              onClick={() => toggleSave(note.id)} 
+              className={`icon-button border transition-colors ${
+                isSaved ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-secondary text-muted-foreground hover:text-foreground'
+              }`}
+              title={isSaved ? "Remove from saved" : "Save note"}
+              aria-label={isSaved ? "Remove from saved" : "Save note"}
+            >
+              <Bookmark size={18} weight={isSaved ? "fill" : "regular"} />
+            </button>
+          )}
           <button onClick={open} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-transform hover:scale-105 active:scale-95">Read</button>
           <button onClick={()=>downloadNote(note)} className="icon-button border transition-transform hover:scale-105 active:scale-95" aria-label={`Download ${note.title}`}><Download size={18}/></button>
         </div>
@@ -863,7 +808,7 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
         </div>
       </section>
 
-      {/* Before you submit sidebar - High contrast bg-secondary */}
+      {/* Before you submit sidebar */}
       <aside className="rounded-3xl bg-secondary p-6 lg:self-start border border-border/60">
         <h3 className="font-semibold text-foreground">Before you submit</h3>
         <ul className="mt-4 flex flex-col gap-3 text-sm leading-relaxed text-muted-foreground">
