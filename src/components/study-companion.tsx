@@ -670,7 +670,7 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.98 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-56 overflow-y-auto rounded-2xl border bg-card p-1.5 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-56 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                   >
                     {semesterSubjects.map(s => {
                       const isSelected = subjectCode === s.code;
@@ -685,7 +685,7 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
                           className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
                             isSelected
                               ? 'bg-secondary font-semibold text-foreground'
-                              : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
+                              : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
                           }`}
                         >
                           <span className="truncate">{s.name} ({s.code})</span>
