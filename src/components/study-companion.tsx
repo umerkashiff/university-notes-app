@@ -399,18 +399,38 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
   const [selectedSemester, setSelectedSemester] = useState(1);
   const [subjectDropdownOpen, setSubjectDropdownOpen] = useState(false);
   
-  // Prevent body scroll when dialog is open
+  // Bulletproof body scroll lock when dialog is open
   useEffect(() => {
     if (open) {
+      const scrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.left = '0';
+      document.body.style.right = '0';
+      document.body.style.width = '100%';
       document.body.style.overflow = 'hidden';
       document.documentElement.style.overflow = 'hidden';
     } else {
-      document.body.style.overflow = 'unset';
-      document.documentElement.style.overflow = 'unset';
+      const scrollY = document.body.style.top;
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || '0', 10) * -1);
+      }
     }
     return () => {
-      document.body.style.overflow = 'unset';
-      document.documentElement.style.overflow = 'unset';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
     };
   }, [open]);
   const [subjectCode, setSubjectCode] = useState('MTH 101');
@@ -520,7 +540,7 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
   return <div className="grid gap-7 lg:grid-cols-[1fr_340px]"><section><div className="rounded-3xl bg-mist p-7"><Upload size={25}/><h2 className="mt-10 text-3xl font-semibold">Share what helped you learn.</h2><p className="mt-2 max-w-xl text-muted-foreground">Every note is reviewed by the department before students can see it.</p><button onClick={()=>setOpen(true)} className="mt-6 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground">Submit a note</button></div><div className="mt-8"><Header kicker="Your contributions" title="Submission history"/>
   {myNotes.map(x=><div key={x.id} className="mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border bg-card p-4"><div className="flex items-center gap-4 flex-1 min-w-0"><FileText className="shrink-0 text-muted-foreground"/><div className="flex-1 min-w-0"><b className="block truncate">{x.title}</b><p className="text-sm text-muted-foreground truncate">Submitted {x.date} · {x.subject || x.code}</p></div></div><span className={`bg-secondary rounded-full px-3 py-1 text-xs font-semibold whitespace-nowrap w-fit`}>{x.status}</span></div>)}
   </div></section><aside className="rounded-3xl bg-butter p-6 lg:self-start"><h3 className="font-semibold">Before you submit</h3><ul className="mt-4 flex flex-col gap-3 text-sm leading-relaxed text-muted-foreground"><li>Select your target semester & subject.</li><li>Add helpful exam tips or study advice.</li><li>Only upload material you can share.</li><li>PDF files, up to 100 MB.</li></ul></aside><AnimatePresence>
-      {open&&<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm overscroll-none" role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={() => setSubjectDropdownOpen(false)}>
+      {open&&<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm overscroll-none touch-none" role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={() => setSubjectDropdownOpen(false)}>
         <motion.form initial={{scale:0.95, y:15, opacity: 0}} animate={{scale:1, y:0, opacity: 1}} exit={{scale:0.95, y:15, opacity: 0}} transition={{type:"spring", bounce:0.15, duration:0.35}} onSubmit={handleUpload} onClick={(e) => e.stopPropagation()} className="relative flex flex-col w-full max-w-lg rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden">
           
           {/* Frosted Sticky Header */}
@@ -534,8 +554,8 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
             </button>
           </div>
           
-          {/* Body - Clean scrolling without scrollbar corner clipping */}
-          <div className="flex-1 overflow-y-auto px-6 py-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden overscroll-contain">
+          {/* Body - Clean smooth scrolling with sleek custom scrollbar */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 modal-scroll overscroll-contain">
             {submitted?<div className="py-16 text-center">
               <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-sage text-foreground mb-4">
                 <Check size={26} weight="bold"/>
@@ -564,20 +584,13 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
                     handleSemesterChange(sem);
                     setSubjectDropdownOpen(false);
                   }}
-                  className={`relative flex items-center justify-center py-2.5 px-3 text-xs font-semibold rounded-2xl border transition-all duration-200 ${
+                  className={`flex items-center justify-center py-2.5 px-3 text-xs font-semibold rounded-2xl border transition-colors ${
                     isActive
                       ? 'bg-primary text-primary-foreground border-primary shadow-sm'
                       : 'bg-secondary/40 hover:bg-secondary text-muted-foreground hover:text-foreground border-border/40'
                   }`}
                 >
-                  {isActive && (
-                    <motion.div
-                      layoutId="active-sem-dialog"
-                      className="absolute inset-0 rounded-2xl bg-primary z-0"
-                      transition={{ type: "spring", bounce: 0.15, duration: 0.4 }}
-                    />
-                  )}
-                  <span className="relative z-10">Sem {sem}</span>
+                  Sem {sem}
                 </button>
               );
             })}
@@ -692,7 +705,7 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
             <textarea
               value={seniorAdvice}
               onChange={e => setSeniorAdvice(e.target.value)}
-              className="w-full h-full bg-transparent px-4 py-3 text-sm outline-none resize-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="w-full h-full bg-transparent px-4 py-3 text-sm outline-none resize-none modal-scroll"
               placeholder="e.g. Focus heavily on Chapter 4 formulas for midterms. Past exam solutions included on page 14!"
             />
           </div>
