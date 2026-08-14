@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { login, logout } from '@/app/actions/auth'
 import type { User as PrismaUser } from '@prisma/client'
 import { createClient } from '@/utils/supabase/client'
-import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage } from '@/app/actions/notes'
+import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage, createAnnouncement } from '@/app/actions/notes'
 import { getPresignedUrl } from '@/app/actions/upload'
 import React from 'react'
 
@@ -21,39 +21,29 @@ const PDFViewer = dynamic(() => import('@/components/pdf-viewer').then(mod => mo
 type Role = 'student' | 'senior' | 'admin'
 type Screen = 'semesters' | 'subject' | 'notifications' | 'submissions' | 'cms' | 'saved'
 type SubjectItem = { id:string; name:string; code:string; semester:number }
-type Note = { id:string|number; fileUrl?:string; status?:string; title:string; subject:string; code:string; author:string; date:string; pages:number; size:string; tone:string; description?:string }
+type Note = { id:string|number; authorId?:string; fileUrl?:string; status?:string; title:string; subject:string; code:string; author:string; date:string; pages:number; size:string; tone:string; description?:string }
 
-const defaultSubjects: SubjectItem[] = [
-  { id: 'sub-1', name: 'Calculus I', code: 'MTH 101', semester: 1 },
-  { id: 'sub-2', name: 'Reading & Communication', code: 'GST 101', semester: 1 },
-  { id: 'sub-3', name: 'Programming Fundamentals', code: 'CP 101', semester: 1 },
-  { id: 'sub-4', name: 'Applied Physics', code: 'PHY 101', semester: 1 },
-  { id: 'sub-5', name: 'Calculus II', code: 'MTH 102', semester: 2 },
-  { id: 'sub-6', name: 'Technical Writing', code: 'GST 102', semester: 2 },
-  { id: 'sub-7', name: 'Circuit Theory', code: 'EE 101', semester: 2 },
-  { id: 'sub-8', name: 'Engineering Drawing', code: 'ME 101', semester: 2 },
-  { id: 'sub-9', name: 'Digital Logic', code: 'CE 201', semester: 3 },
-  { id: 'sub-10', name: 'Data Structures', code: 'CS 201', semester: 3 },
-  { id: 'sub-11', name: 'Electrical Machines', code: 'EE 201', semester: 3 },
-  { id: 'sub-12', name: 'Statistics', code: 'MTH 201', semester: 3 },
-  { id: 'sub-13', name: 'Microprocessors', code: 'CE 202', semester: 4 },
-  { id: 'sub-14', name: 'Control Systems', code: 'EE 202', semester: 4 },
-  { id: 'sub-15', name: 'Data Communications', code: 'CE 203', semester: 4 },
-  { id: 'sub-16', name: 'Numerical Methods', code: 'MTH 202', semester: 4 },
+const SEMESTER_COLORS = [
+  'bg-sage',      // Sem 1 (Soft green)
+  'bg-mist',      // Sem 2 (Soft blue)
+  'bg-blush',     // Sem 3 (Soft rose)
+  'bg-sand',      // Sem 4 (Warm sand)
+  'bg-lavender',  // Sem 5 (Lavender)
+  'bg-mint',      // Sem 6 (Mint green)
+  'bg-peach',     // Sem 7 (Apricot peach)
+  'bg-sky',       // Sem 8 (Soft sky)
 ]
 
-const semesters = [
-  { number:1, label:'First semester', subjects:6, tone:'bg-sage', items:['Calculus I','Reading & Communication','Programming Fundamentals','Applied Physics'] },
-  { number:2, label:'Second semester', subjects:6, tone:'bg-mist', items:['Calculus II','Technical Writing','Circuit Theory','Engineering Drawing'] },
-  { number:3, label:'Third semester', subjects:7, tone:'bg-blush', items:['Digital Logic','Data Structures','Electrical Machines','Statistics'] },
-  { number:4, label:'Fourth semester', subjects:7, tone:'bg-butter', items:['Microprocessors','Control Systems','Data Communications','Numerical Methods'] },
-]
-const seedNotes: Note[] = [
-  { id:1,title:'Limits, continuity & differentiation',subject:'Calculus I',code:'MTH 101',author:'Chidinma Okafor',date:'10 Aug 2026',pages:24,size:'2.4 MB',tone:'bg-sage',description:"💡 Exam Focus: Pay special attention to Chapter 2 on Epsilon-Delta proofs and L'Hôpital's Rule. Past midterm questions are included at the end!" },
-  { id:2,title:'Complete lecture summary — weeks 1–6',subject:'Calculus I',code:'MTH 101',author:'David Mensah',date:'8 Aug 2026',pages:38,size:'4.1 MB',tone:'bg-mist',description:"📌 Lecture Summary: Comprehensive notes covering Weeks 1 to 6. Great for quick revision before quiz 2." },
-  { id:3,title:'Practice questions with solutions',subject:'Calculus I',code:'MTH 101',author:'Zainab Bello',date:'3 Aug 2026',pages:16,size:'1.8 MB',tone:'bg-blush',description:"📝 Practice Set: Complete step-by-step solutions for Problem Sets 1–4 with margin notes on common pitfalls." },
-  { id:4,title:'Effective reading strategies',subject:'Reading & Communication',code:'GST 101',author:'Amara Kalu',date:'1 Aug 2026',pages:19,size:'1.2 MB',tone:'bg-butter',description:"📖 Study Strategy: Critical techniques for speed reading technical documentation and writing structured engineering briefs." },
-]
+const SEMESTER_LABELS: Record<number, string> = {
+  1: 'First semester',
+  2: 'Second semester',
+  3: 'Third semester',
+  4: 'Fourth semester',
+  5: 'Fifth semester',
+  6: 'Sixth semester',
+  7: 'Seventh semester',
+  8: 'Eighth semester',
+}
 
 function FilterChip({ label, count, active, onClick }: { label:string, count?:number, active?:boolean, onClick?:()=>void }) {
   return (
@@ -71,47 +61,54 @@ function FilterChip({ label, count, active, onClick }: { label:string, count?:nu
   )
 }
 
-const initialAlerts = [
-  { id:1,kind:'Department',title:'First semester course registration',body:'Course registration closes Friday at 4:00 pm.',time:'12 min ago',unread:true },
-  { id:2,kind:'New note',title:'Calculus I notes published',body:'Limits, continuity & differentiation is now available.',time:'2 hours ago',unread:true },
-  { id:3,kind:'Department',title:'Lab orientation moved',body:'The orientation will now hold in Engineering Hall B.',time:'Yesterday',unread:false },
-]
-
 export function StudyCompanion({ initialUser, initialNotes = [], initialAnnouncements = [], initialSubjects = [] }: { initialUser: PrismaUser | null, initialNotes?: any[], initialAnnouncements?: any[], initialSubjects?: any[] }){
   const [user, setUser] = useState<PrismaUser | null>(initialUser)
   const role = (user?.role?.toLowerCase() as Role) || null
   const [screen,setScreen]=useState<Screen>(role === 'admin' ? 'cms' : role === 'senior' ? 'submissions' : 'semesters')
-  const [reader,setReader]=useState<Note|null>(null);   const mapNote = (n: any) => ({
+  const [reader,setReader]=useState<Note|null>(null)
+  const [selectedSubjectName, setSelectedSubjectName] = useState<string | null>(null)
+
+  const mapNote = (n: any): Note => ({
     id: n.id,
+    authorId: n.authorId || n.author?.id || undefined,
     title: n.title,
-    subject: n.subject?.name || '',
-    code: n.subject?.code || '',
-    author: n.author?.name || n.author?.email || 'Unknown',
-    date: new Date(n.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
-    pages: n.pages,
-    size: n.size,
-    tone: n.tone,
-    status: n.status,
+    subject: n.subject?.name || n.subject || '',
+    code: n.subject?.code || n.code || '',
+    author: n.author?.name || n.author?.email || 'Senior Contributor',
+    date: n.createdAt ? new Date(n.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recently',
+    pages: n.pages || 1,
+    size: n.size || '1.0 MB',
+    tone: n.tone || 'bg-sage',
+    status: n.status || 'PUBLISHED',
     fileUrl: n.fileUrl,
     description: n.description || undefined
   })
   
   const mapAlert = (a: any) => ({
     id: a.id,
-    kind: 'Department',
+    kind: a.audience === 'ALL' ? 'Department' : a.audience || 'Department',
     title: a.title,
     body: a.body,
-    time: new Date(a.createdAt).toLocaleDateString('en-GB'),
+    time: a.createdAt ? new Date(a.createdAt).toLocaleDateString('en-GB') : 'Just now',
     unread: true
   })
 
-  const [notes, setNotes] = useState<Note[]>(() => (initialNotes && initialNotes.length > 0) ? initialNotes.map(mapNote) : seedNotes)
-  const [alerts, setAlerts] = useState<any[]>(() => (initialAnnouncements && initialAnnouncements.length > 0) ? initialAnnouncements.map(mapAlert) : initialAlerts)
-  const [subjectsList, setSubjectsList] = useState<SubjectItem[]>(() => (initialSubjects && initialSubjects.length > 0) ? initialSubjects : defaultSubjects)
+  const [notes, setNotes] = useState<Note[]>(() => (initialNotes && initialNotes.length > 0) ? initialNotes.map(mapNote) : [])
+  const [alerts, setAlerts] = useState<any[]>(() => (initialAnnouncements && initialAnnouncements.length > 0) ? initialAnnouncements.map(mapAlert) : [])
+  const [subjectsList, setSubjectsList] = useState<SubjectItem[]>(() => (initialSubjects && initialSubjects.length > 0) ? initialSubjects : [])
 
   const [selectedSemester,setSelectedSemester]=useState(1)
-  const [query,setQuery]=useState(''); const [showRole,setShowRole]=useState(false)
-  const unread=alerts.filter(a=>a.unread).length
+  const [query,setQuery]=useState('')
+  const [showRole,setShowRole]=useState(false)
+  const unread = alerts.filter(a=>a.unread).length
+
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours()
+    const timeStr = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+    const firstName = user?.name ? user.name.split(' ')[0] : 'there'
+    return `${timeStr}, ${firstName}`
+  }, [user])
+
   const signIn = async (email: string, password?: string) => {
     const res = await login(email, password)
     if (res.error) {
@@ -122,40 +119,98 @@ export function StudyCompanion({ initialUser, initialNotes = [], initialAnnounce
       setScreen(next === 'admin' ? 'cms' : next === 'senior' ? 'submissions' : 'semesters')
     }
   }
+
   const handleLogout = async () => {
     await logout()
     setUser(null)
   }
+
   if(!role) return <Login onLogin={signIn}/>
   if(reader) return <PdfReader note={reader} onBack={()=>setReader(null)}/>
-  const title=screen==='cms'?'Content studio':screen==='submissions'?'Contributor desk':screen==='notifications'?'Notifications':screen==='semesters'?'Semesters':screen==='subject'?'Calculus I':screen==='saved'?'Your notes':'Good morning, Amara'
+
+  const title = screen==='cms'
+    ? 'Content studio'
+    : screen==='submissions'
+    ? 'Contributor desk'
+    : screen==='notifications'
+    ? 'Notifications'
+    : screen==='semesters'
+    ? 'Semesters'
+    : screen==='subject'
+    ? (selectedSubjectName || `Semester ${selectedSemester}`)
+    : screen==='saved'
+    ? 'Your notes'
+    : greeting
+
   return <main className="min-h-screen bg-background text-foreground">
-    <header className="sticky top-0 z-40 border-b border-white/30 bg-white/40 backdrop-blur-xl shadow-sm supports-[backdrop-filter]:bg-white/30 transform-gpu will-change-transform"><div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
-      <button onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} className="flex items-center gap-3" aria-label="Luma home"><span className="flex size-9 -rotate-3 items-center justify-center rounded-xl bg-primary text-primary-foreground"><BookOpen size={18}/></span><span className="text-xl font-bold tracking-tight">Luma</span><span className="hidden rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground sm:inline">Computer Engineering</span></button>
-      <nav className="hidden items-center gap-1 rounded-full bg-secondary p-1 md:flex" aria-label="Primary">{role==='student'&&<><Nav active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')}>Home</Nav><Nav active={screen==='saved'} onClick={()=>setScreen('saved')}>Saved</Nav></>}{role==='senior'&&<><Nav active={screen==='submissions'} onClick={()=>setScreen('submissions')}>My notes</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}{role==='admin'&&<><Nav active={screen==='cms'} onClick={()=>setScreen('cms')}>Studio</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}<Nav active={screen==='notifications'} onClick={()=>setScreen('notifications')}>Notices</Nav></nav>
-      <div className="flex items-center gap-2"><button onClick={()=>setScreen('notifications')} className="icon-button relative" aria-label={`${unread} unread notifications`}><Bell size={19}/>{unread>0&&<span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground">{unread}</span>}</button><div className="relative"><button onClick={()=>setShowRole(!showRole)} className="flex size-10 items-center justify-center rounded-full bg-mist text-sm font-bold">{user?.avatar || "AK"}</button><AnimatePresence>
-          {showRole&&<motion.div initial={{opacity:0, scale:0.95, y:5}} animate={{opacity:1, scale:1, y:0}} exit={{opacity:0, scale:0.95, y:5}} transition={{duration:0.15}} className="popover right-0 w-64 p-2 origin-top-right"><div className="border-b p-3"><b>{user?.name}</b><p className="text-xs capitalize text-muted-foreground">{role} preview</p></div>{(['student','senior','admin'] as Role[]).map(r=><button key={r} onClick={()=>{signIn(r + '@uet.edu');setShowRole(false)}} className="flex w-full items-center gap-2 rounded-xl p-3 text-sm capitalize hover:bg-secondary">{r===role&&<Check size={15}/>} {r}</button>)}<button onClick={handleLogout} className="flex w-full items-center gap-2 rounded-xl p-3 text-sm text-muted-foreground hover:bg-secondary"><LogOut size={16}/> Sign out</button></motion.div>}
-        </AnimatePresence></div></div>
-    </div></header>
-    <div className="mx-auto max-w-7xl px-5 py-8 pb-28 md:px-8 md:py-12"><div className="mb-8 flex items-end justify-between"><div><p className="section-kicker">{role==='admin'?'Department CMS':role==='senior'?'Senior contributor':'Your study library'}</p><h1 className="text-balance text-4xl font-semibold tracking-[-.04em] md:text-5xl">{title}</h1></div></div>
+    <header className="sticky top-0 z-40 border-b border-white/30 bg-white/40 backdrop-blur-xl shadow-sm supports-[backdrop-filter]:bg-white/30 transform-gpu will-change-transform">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
+        <button onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} className="flex items-center gap-3" aria-label="Luma home">
+          <span className="flex size-9 -rotate-3 items-center justify-center rounded-xl bg-primary text-primary-foreground"><BookOpen size={18}/></span>
+          <span className="text-xl font-bold tracking-tight">Luma</span>
+          <span className="hidden rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground sm:inline">Computer Engineering</span>
+        </button>
+        <nav className="hidden items-center gap-1 rounded-full bg-secondary p-1 md:flex" aria-label="Primary">
+          {role==='student'&&<><Nav active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')}>Home</Nav><Nav active={screen==='saved'} onClick={()=>setScreen('saved')}>Saved</Nav></>}
+          {role==='senior'&&<><Nav active={screen==='submissions'} onClick={()=>setScreen('submissions')}>My notes</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}
+          {role==='admin'&&<><Nav active={screen==='cms'} onClick={()=>setScreen('cms')}>Studio</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}
+          <Nav active={screen==='notifications'} onClick={()=>setScreen('notifications')}>Notices</Nav>
+        </nav>
+        <div className="flex items-center gap-2">
+          <button onClick={()=>setScreen('notifications')} className="icon-button relative" aria-label={`${unread} unread notifications`}>
+            <Bell size={19}/>
+            {unread>0&&<span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground">{unread}</span>}
+          </button>
+          <div className="relative">
+            <button onClick={()=>setShowRole(!showRole)} className="flex size-10 items-center justify-center rounded-full bg-mist text-sm font-bold">
+              {user?.avatar || (user?.name ? user.name.slice(0, 2).toUpperCase() : "ST")}
+            </button>
+            <AnimatePresence>
+              {showRole&&<motion.div initial={{opacity:0, scale:0.95, y:5}} animate={{opacity:1, scale:1, y:0}} exit={{opacity:0, scale:0.95, y:5}} transition={{duration:0.15}} className="popover right-0 w-64 p-2 origin-top-right">
+                <div className="border-b p-3">
+                  <b>{user?.name || user?.email}</b>
+                  <p className="text-xs capitalize text-muted-foreground">{role} preview</p>
+                </div>
+                {(['student','senior','admin'] as Role[]).map(r=><button key={r} onClick={()=>{signIn(r + '@uet.edu');setShowRole(false)}} className="flex w-full items-center gap-2 rounded-xl p-3 text-sm capitalize hover:bg-secondary">{r===role&&<Check size={15}/>} {r}</button>)}
+                <button onClick={handleLogout} className="flex w-full items-center gap-2 rounded-xl p-3 text-sm text-muted-foreground hover:bg-secondary"><LogOut size={16}/> Sign out</button>
+              </motion.div>}
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div className="mx-auto max-w-7xl px-5 py-8 pb-28 md:px-8 md:py-12">
+      <div className="mb-8 flex items-end justify-between">
+        <div>
+          <p className="section-kicker">{role==='admin'?'Department CMS':role==='senior'?'Senior contributor':'Your study library'}</p>
+          <h1 className="text-balance text-4xl font-semibold tracking-[-.04em] md:text-5xl">{title}</h1>
+        </div>
+      </div>
       <AnimatePresence mode="wait">
         <motion.div key={screen} initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} transition={{duration:0.2}}>
-          {screen==='saved'&&<SavedNotes notes={notes} open={setReader}/>} 
-          {screen==='semesters'&&<SemesterLibrary select={(n)=>{setSelectedSemester(n);setScreen('subject')}}/>}
-          {screen==='subject'&&<SubjectLibrary semester={selectedSemester} notes={notes} query={query} setQuery={setQuery} open={setReader} onBack={()=>setScreen('semesters')}/>} 
+          {screen==='saved'&&<SavedNotes notes={notes} subjects={subjectsList} open={setReader}/>} 
+          {screen==='semesters'&&<SemesterLibrary subjects={subjectsList} notes={notes} select={(n)=>{setSelectedSemester(n);setScreen('subject')}}/>}
+          {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} open={setReader} onBack={()=>setScreen('semesters')} onSelectSubjectName={setSelectedSubjectName}/>} 
           {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts}/>} 
-          {screen==='submissions'&&<ContributorDesk notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])}/>} 
-          {screen==='cms'&&<AdminCms notes={notes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}}/>}
+          {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])}/>} 
+          {screen==='cms'&&<AdminCms notes={notes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
         </motion.div>
       </AnimatePresence>
     </div>
-    <nav className="fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 gap-1 rounded-full border bg-card p-1.5 shadow-lg md:hidden"><Mobile active={role==='admin'?screen==='cms':role==='senior'?screen==='submissions':(screen==='semesters'||screen==='subject')} onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} icon={<Home/>}>Home</Mobile>{role==='student'?<Mobile active={screen==='saved'} onClick={()=>setScreen('saved')} icon={<Bookmark/>}>Saved</Mobile>:<Mobile active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')} icon={<BookOpen/>}>Library</Mobile>}<Mobile active={screen==='notifications'} onClick={()=>setScreen('notifications')} icon={<Bell/>}>Notices</Mobile></nav>
+    <nav className="fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 gap-1 rounded-full border bg-card p-1.5 shadow-lg md:hidden">
+      <Mobile active={role==='admin'?screen==='cms':role==='senior'?screen==='submissions':(screen==='semesters'||screen==='subject')} onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} icon={<Home/>}>Home</Mobile>
+      {role==='student'?<Mobile active={screen==='saved'} onClick={()=>setScreen('saved')} icon={<Bookmark/>}>Saved</Mobile>:<Mobile active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')} icon={<BookOpen/>}>Library</Mobile>}
+      <Mobile active={screen==='notifications'} onClick={()=>setScreen('notifications')} icon={<Bell/>}>Notices</Mobile>
+    </nav>
   </main>
 }
+
 function Nav({active,onClick,children,layoutId="nav-pill"}:{active:boolean,onClick:()=>void,children:React.ReactNode,layoutId?:string}){return <button onClick={onClick} className={`relative px-5 py-2 text-sm transition-colors rounded-full ${active?'text-foreground font-semibold':'text-muted-foreground hover:text-foreground'}`}>
   {active && <motion.div layoutId={layoutId} className="absolute inset-0 bg-background shadow-sm rounded-full z-0" transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />}
   <span className="relative z-10">{children}</span>
 </button>}
+
 function Mobile({active,onClick,icon,children}:{active:boolean,onClick:()=>void,icon:React.ReactNode,children:React.ReactNode}){return <button onClick={onClick} className={`relative flex min-w-16 flex-col items-center gap-1 rounded-full px-3 py-2 text-[10px] transition-colors ${active?'text-foreground':'text-muted-foreground hover:text-foreground'}`}>
   {active && <motion.div layoutId="mobile-nav-pill" className="absolute inset-0 bg-secondary rounded-full z-0" transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />}
   <span className="relative z-10 flex flex-col items-center gap-1">{icon}<span>{children}</span></span>
@@ -168,36 +223,45 @@ function Login({onLogin}:{onLogin:(email:string, password:string)=>void}){const 
   <section className="flex flex-col justify-center p-7 md:p-12"><div className="mb-10 flex items-center gap-3 md:hidden"><span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground"><BookOpen size={20}/></span><b className="text-xl">Luma</b></div><p className="section-kicker">Welcome back</p><h2 className="text-4xl font-semibold tracking-[-.04em]">Sign in to Luma</h2><p className="mt-2 text-muted-foreground">Your department's notes and notices await.</p><form onSubmit={e=>{e.preventDefault();setError('');onLogin(identity, password)}} className="mt-8 flex flex-col gap-5"><label className="field-label">Email address<input required value={identity} onChange={e=>setIdentity(e.target.value)} type="email" className="field-input" placeholder="student@uet.edu"/></label><label className="field-label">Password<input required value={password} onChange={e=>setPassword(e.target.value)} type="password" className="field-input" placeholder="••••••••"/></label>{error&&<p className="text-sm text-destructive">{error}</p>}<button className="rounded-full bg-primary px-5 py-3.5 font-semibold text-primary-foreground">Continue</button></form><p className="mt-7 text-center text-sm text-muted-foreground">New student? Your department will issue your account.</p></section>
   </div></main>}
 
-
-function SavedNotes({notes,open}:{notes:Note[],open:(n:Note)=>void}){
+function SavedNotes({notes,subjects,open}:{notes:Note[],subjects:SubjectItem[],open:(n:Note)=>void}){
   const [activeFilter, setActiveFilter] = useState('All')
   const [viewMode, setViewMode] = useState<'list'|'grid'>('list')
   const [search, setSearch] = useState('')
 
   const published = useMemo(() => notes.filter(n => !n.status || n.status === 'PUBLISHED'), [notes])
 
-  const FILTERS = [
-    { label: 'All', count: published.length },
-    { label: 'Saved', count: Math.min(3, published.length) },
-    { label: 'Sem 1', count: published.filter(n => n.subject === 'Calculus I' || n.code?.includes('101') || n.code?.includes('MTH')).length },
-    { label: 'Sem 2', count: published.filter(n => n.subject?.includes('II') || n.code?.includes('102')).length },
-    { label: 'Calculus I', count: published.filter(n => n.subject === 'Calculus I').length },
-  ]
+  // Distinct semesters derived dynamically from subjects
+  const semesterNumbers = useMemo(() => {
+    const set = new Set<number>()
+    subjects.forEach(s => set.add(s.semester))
+    return Array.from(set).sort((a, b) => a - b)
+  }, [subjects])
+
+  const FILTERS = useMemo(() => {
+    const items = [
+      { label: 'All', count: published.length }
+    ]
+    semesterNumbers.forEach(sem => {
+      const semSubCodes = new Set(subjects.filter(s => s.semester === sem).map(s => s.code))
+      const count = published.filter(n => semSubCodes.has(n.code) || subjects.some(s => s.semester === sem && s.name === n.subject)).length
+      items.push({ label: `Sem ${sem}`, count })
+    })
+    return items
+  }, [published, semesterNumbers, subjects])
 
   const filtered = useMemo(() => {
     return published.filter(n => {
       const matchSearch = `${n.title} ${n.subject} ${n.author} ${n.code}`.toLowerCase().includes(search.toLowerCase())
       if (!matchSearch) return false
-      if (activeFilter === 'Saved') {
-        const idx = published.indexOf(n)
-        return idx < 3
+
+      if (activeFilter.startsWith('Sem ')) {
+        const semNum = parseInt(activeFilter.replace('Sem ', ''), 10)
+        const noteSem = subjects.find(s => s.code === n.code || s.name === n.subject)?.semester
+        if (noteSem !== semNum) return false
       }
-      if (activeFilter === 'Sem 1') return n.subject === 'Calculus I' || n.code?.includes('101') || n.code?.includes('MTH')
-      if (activeFilter === 'Sem 2') return n.subject?.includes('II') || n.code?.includes('102')
-      if (activeFilter === 'Calculus I') return n.subject === 'Calculus I'
       return true
     })
-  }, [published, search, activeFilter])
+  }, [published, search, activeFilter, subjects])
 
   return (
     <div className="flex flex-col gap-6">
@@ -230,7 +294,7 @@ function SavedNotes({notes,open}:{notes:Note[],open:(n:Note)=>void}){
         </div>
       </div>
 
-      {/* Filter chips scrollable row */}
+      {/* Dynamic Filter chips scrollable row */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
         {FILTERS.map(f => (
           <FilterChip
@@ -253,7 +317,7 @@ function SavedNotes({notes,open}:{notes:Note[],open:(n:Note)=>void}){
           transition={{ duration: 0.2 }}
         >
           {filtered.length === 0 ? (
-            <div className="py-20 text-center text-muted-foreground">
+            <div className="py-20 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40">
               <Bookmark className="h-8 w-8 mx-auto mb-3 opacity-40" />
               <p className="font-semibold text-foreground">No notes found</p>
               <p className="text-sm mt-1">Try adjusting your filters or search terms.</p>
@@ -261,13 +325,13 @@ function SavedNotes({notes,open}:{notes:Note[],open:(n:Note)=>void}){
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filtered.map((n, i) => (
-                <NoteCard key={n.id} note={n} open={() => open(n)} variant="grid" index={i} />
+                <NoteCard key={n.id} note={n} subjects={subjects} open={() => open(n)} variant="grid" index={i} />
               ))}
             </div>
           ) : (
             <div className="flex flex-col gap-3">
               {filtered.map((n, i) => (
-                <NoteCard key={n.id} note={n} open={() => open(n)} variant="list" index={i} />
+                <NoteCard key={n.id} note={n} subjects={subjects} open={() => open(n)} variant="list" index={i} />
               ))}
             </div>
           )}
@@ -276,17 +340,195 @@ function SavedNotes({notes,open}:{notes:Note[],open:(n:Note)=>void}){
     </div>
   )
 }
-function SemesterLibrary({select}:{select:(n:number)=>void}){return <div><Header kicker="Computer Engineering" title="Choose a semester"/><div className="grid gap-4 sm:grid-cols-2">{semesters.map(s=><button key={s.number} onClick={()=>select(s.number)} className={`${s.tone} flex min-h-64 flex-col justify-between rounded-3xl p-7 text-left transition hover:-translate-y-1`}><div className="flex items-start justify-between"><span className="text-sm font-semibold">Semester {s.number}</span><span className="rounded-full bg-background/60 px-3 py-1 text-xs">{s.subjects} subjects</span></div><div><h3 className="text-2xl font-semibold">{s.label}</h3><p className="mt-3 text-sm leading-relaxed text-muted-foreground">{s.items.join(' · ')}</p></div></button>)}</div></div>}
-function SubjectLibrary({semester,notes,query,setQuery,open,onBack}:{semester:number,notes:Note[],query:string,setQuery:(s:string)=>void,open:(n:Note)=>void,onBack:()=>void}){const list=useMemo(()=>notes.filter(n=>n.status === 'PUBLISHED' && `${n.title} ${n.author}`.toLowerCase().includes(query.toLowerCase())),[notes,query]);return <div className="grid gap-8 lg:grid-cols-[250px_1fr]"><aside><button className="mb-5 flex items-center gap-2 text-sm" onClick={onBack}><ArrowLeft size={16}/> Semester {semester}</button><div className="flex flex-col gap-2">{['Calculus I','Reading & Communication','Programming Fundamentals','Applied Physics'].map((s,i)=><button key={s} className={`rounded-2xl p-4 text-left text-sm ${i===0?'bg-primary text-primary-foreground':'hover:bg-secondary'}`}>{s}</button>)}</div></aside><section><div className="rounded-3xl bg-sage p-7"><span className="rounded-full bg-background/60 px-3 py-1 text-xs font-bold">MTH 101</span><h2 className="mt-5 text-3xl font-semibold">Calculus I</h2><p className="mt-2 text-muted-foreground">Foundations, worked examples and past questions shared by your seniors.</p></div><label className="mt-6 flex items-center gap-3 rounded-2xl border bg-card px-4"><Search size={18}/><span className="sr-only">Search notes</span><input value={query} onChange={e=>setQuery(e.target.value)} className="h-14 flex-1 bg-transparent outline-none" placeholder="Search these notes..."/></label><div className="mt-4 flex flex-col gap-3">{list.map((n,i)=><NoteRow key={n.id} note={n} index={i} open={()=>open(n)}/>)}</div></section></div>}
 
-function NoteCard({note,open,variant='list',index=0}:{note:Note,open:()=>void,variant?:'list'|'grid',index?:number}){
+function SemesterLibrary({ subjects, notes, select }: { subjects: SubjectItem[], notes: Note[], select: (n: number) => void }) {
+  // Dynamically derive all available semesters from DB subjects (at least 1 to 8)
+  const semesterNumbers = useMemo(() => {
+    const set = new Set<number>()
+    subjects.forEach(s => set.add(s.semester))
+    const max = Math.max(8, ...Array.from(set))
+    const list: number[] = []
+    for (let i = 1; i <= max; i++) list.push(i)
+    return list
+  }, [subjects])
+
+  return (
+    <div>
+      <Header kicker="Computer Engineering" title="Choose a semester" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
+        {semesterNumbers.map(num => {
+          const semSubjects = subjects.filter(s => s.semester === num)
+          const tone = SEMESTER_COLORS[(num - 1) % SEMESTER_COLORS.length]
+          const label = SEMESTER_LABELS[num] || `Semester ${num}`
+          const previewItems = semSubjects.map(s => s.name).slice(0, 4)
+
+          return (
+            <button
+              key={num}
+              onClick={() => select(num)}
+              className={`${tone} flex min-h-64 flex-col justify-between rounded-3xl p-7 text-left transition hover:-translate-y-1 shadow-xs border border-black/5`}
+            >
+              <div className="flex items-start justify-between">
+                <span className="text-sm font-semibold text-foreground">Semester {num}</span>
+                <span className="rounded-full bg-background/80 px-3 py-1 text-xs font-semibold text-foreground backdrop-blur-sm shadow-xs">
+                  {semSubjects.length} {semSubjects.length === 1 ? 'subject' : 'subjects'}
+                </span>
+              </div>
+              <div>
+                <h3 className="text-2xl font-semibold text-foreground tracking-tight">{label}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                  {previewItems.length > 0 ? previewItems.join(' · ') : 'No courses registered yet.'}
+                </p>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function SubjectLibrary({
+  semester,
+  subjects,
+  notes,
+  query,
+  setQuery,
+  open,
+  onBack,
+  onSelectSubjectName
+}: {
+  semester: number
+  subjects: SubjectItem[]
+  notes: Note[]
+  query: string
+  setQuery: (s: string) => void
+  open: (n: Note) => void
+  onBack: () => void
+  onSelectSubjectName?: (name: string | null) => void
+}) {
+  const semSubjects = useMemo(() => subjects.filter(s => s.semester === semester), [subjects, semester])
+  const [selectedSubject, setSelectedSubject] = useState<SubjectItem | null>(null)
+
+  const activeSubject = selectedSubject || semSubjects[0] || null
+
+  useEffect(() => {
+    if (onSelectSubjectName) {
+      onSelectSubjectName(activeSubject ? activeSubject.name : `Semester ${semester}`)
+    }
+  }, [activeSubject, semester, onSelectSubjectName])
+
+  const list = useMemo(() => {
+    return notes.filter(n => {
+      if (n.status && n.status !== 'PUBLISHED') return false
+      if (activeSubject) {
+        const matches = n.code === activeSubject.code || n.subject === activeSubject.name
+        if (!matches) return false
+      } else {
+        const isThisSem = semSubjects.some(s => s.code === n.code || s.name === n.subject)
+        if (!isThisSem && semSubjects.length > 0) return false
+      }
+      const q = query.toLowerCase()
+      return !q || `${n.title} ${n.author} ${n.subject} ${n.code}`.toLowerCase().includes(q)
+    })
+  }, [notes, activeSubject, semSubjects, query])
+
+  const tone = SEMESTER_COLORS[(semester - 1) % SEMESTER_COLORS.length]
+
+  return (
+    <div className="grid gap-8 lg:grid-cols-[260px_1fr]">
+      <aside>
+        <button 
+          className="mb-5 flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" 
+          onClick={onBack}
+        >
+          <ArrowLeft size={16}/> Semester {semester}
+        </button>
+        <div className="flex flex-col gap-1.5">
+          {semSubjects.length === 0 ? (
+            <div className="p-4 rounded-2xl bg-card border border-dashed text-xs text-muted-foreground">
+              No subjects registered for Semester {semester}.
+            </div>
+          ) : (
+            semSubjects.map((s) => {
+              const isActive = activeSubject?.code === s.code
+              return (
+                <button
+                  key={s.code}
+                  onClick={() => setSelectedSubject(s)}
+                  className={`rounded-2xl p-4 text-left text-sm transition-colors flex items-center justify-between gap-2 ${
+                    isActive ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'hover:bg-secondary text-foreground'
+                  }`}
+                >
+                  <span className="truncate">{s.name}</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-secondary text-muted-foreground'}`}>
+                    {s.code}
+                  </span>
+                </button>
+              )
+            })
+          )}
+        </div>
+      </aside>
+
+      <section>
+        {activeSubject ? (
+          <div className={`rounded-3xl ${tone} p-7 border border-black/5 shadow-xs`}>
+            <span className="rounded-full bg-background/80 px-3 py-1 text-xs font-bold text-foreground">
+              {activeSubject.code}
+            </span>
+            <h2 className="mt-5 text-3xl font-semibold text-foreground tracking-tight">{activeSubject.name}</h2>
+            <p className="mt-2 text-muted-foreground text-sm">
+              Foundations, worked examples and past questions shared by your seniors.
+            </p>
+          </div>
+        ) : (
+          <div className={`rounded-3xl ${tone} p-7 border border-black/5`}>
+            <h2 className="text-3xl font-semibold text-foreground">Semester {semester}</h2>
+            <p className="mt-2 text-muted-foreground text-sm">Select a course to view uploaded notes.</p>
+          </div>
+        )}
+
+        <label className="mt-6 flex items-center gap-3 rounded-2xl border bg-card px-4 focus-within:border-primary/40 transition-colors">
+          <Search size={18} className="text-muted-foreground shrink-0"/>
+          <span className="sr-only">Search notes</span>
+          <input 
+            value={query} 
+            onChange={e=>setQuery(e.target.value)} 
+            className="h-14 flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground" 
+            placeholder={activeSubject ? `Search ${activeSubject.name} notes...` : "Search notes..."}
+          />
+        </label>
+
+        <div className="mt-4 flex flex-col gap-3">
+          {list.length === 0 ? (
+            <div className="py-16 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40">
+              <FileText size={32} className="mx-auto mb-2 opacity-30"/>
+              <p className="font-semibold text-foreground text-sm">No notes available</p>
+              <p className="text-xs mt-1">Be the first senior to contribute notes for {activeSubject?.name || 'this subject'}!</p>
+            </div>
+          ) : (
+            list.map((n,i)=><NoteRow key={n.id} note={n} subjects={subjects} index={i} open={()=>open(n)}/>)
+          )}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function NoteCard({note,subjects,open,variant='list',index=0}:{note:Note,subjects:SubjectItem[],open:()=>void,variant?:'list'|'grid',index?:number}){
+  const semNumber = subjects.find(s => s.code === note.code || s.name === note.subject)?.semester
+  const semLabel = semNumber ? `Semester ${semNumber}` : ''
+
   if (variant === 'grid') {
     return (
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.06, duration: 0.4 }}>
         <button onClick={open} className="w-full text-left bg-card border border-border rounded-2xl p-4 flex flex-col gap-3 hover:border-primary/30 hover:shadow-sm transition-all duration-200 h-full group">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <span className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground">{note.subject} › Sem 1</span>
+              <span className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground">
+                {note.subject} {semLabel ? `› ${semLabel}` : ''}
+              </span>
               <h3 className="text-sm font-semibold text-foreground mt-1 line-clamp-2 leading-snug">{note.title}</h3>
             </div>
             <FileText className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
@@ -309,13 +551,17 @@ function NoteCard({note,open,variant='list',index=0}:{note:Note,open:()=>void,va
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground shrink-0">{note.subject}</span>
-            <span className="text-muted-foreground/40 text-[10px]">›</span>
-            <span className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground truncate">Semester 1</span>
+            {semLabel && (
+              <>
+                <span className="text-muted-foreground/40 text-[10px]">›</span>
+                <span className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground truncate">{semLabel}</span>
+              </>
+            )}
           </div>
           <h3 className="text-sm font-semibold text-foreground leading-snug line-clamp-1">{note.title}</h3>
           <div className="flex items-center gap-4 mt-2">
             <span className="text-xs text-muted-foreground">Created {note.date}</span>
-            <span className="text-xs text-muted-foreground flex items-center gap-1"><Download className="h-3 w-3" /> 142</span>
+            <span className="text-xs text-muted-foreground flex items-center gap-1"><Download className="h-3 w-3" /> {note.pages} pages</span>
           </div>
         </div>
         <div className="flex items-center gap-2 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
@@ -328,8 +574,10 @@ function NoteCard({note,open,variant='list',index=0}:{note:Note,open:()=>void,va
   )
 }
 
-function NoteRow({note,open,index=0}:{note:Note,open:()=>void,index?:number}){
+function NoteRow({note,subjects=[],open,index=0}:{note:Note,subjects?:SubjectItem[],open:()=>void,index?:number}){
   const [expanded, setExpanded] = useState(false);
+  const semNumber = subjects.find(s => s.code === note.code || s.name === note.subject)?.semester
+
   return (
     <motion.article initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} transition={{delay:index*0.05, duration:0.4}} className="flex flex-col rounded-2xl border bg-card p-4 hover:border-primary/30 transition-colors shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -352,7 +600,9 @@ function NoteRow({note,open,index=0}:{note:Note,open:()=>void,index?:number}){
               </button>
             )}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">{note.author} · {note.date} · {note.pages} pages · {note.size}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {note.author} · {note.date} · {semNumber ? `Semester ${semNumber} · ` : ''}{note.pages} pages · {note.size}
+          </p>
         </div>
         <div className="flex gap-2 shrink-0">
           <button onClick={open} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-transform hover:scale-105 active:scale-95">Read</button>
@@ -384,17 +634,43 @@ function NoteRow({note,open,index=0}:{note:Note,open:()=>void,index?:number}){
     </motion.article>
   )
 }
+
 function downloadNote(note:Note){const blob=new Blob([`${note.title}\n${note.subject}\nShared on Luma by ${note.author}`],{type:'text/plain'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${note.title}.txt`;a.click();URL.revokeObjectURL(url)}
 
-function Notifications({alerts,setAlerts}:{alerts:typeof initialAlerts,setAlerts:(a:typeof initialAlerts)=>void}){const [filter,setFilter]=useState<'all'|'unread'>('all');const shown=filter==='all'?alerts:alerts.filter(a=>a.unread);return <section className="max-w-3xl"><div className="mb-6 flex items-center justify-between"><div className="flex rounded-full bg-secondary p-1"><Nav layoutId="notify-nav" active={filter==='all'} onClick={()=>setFilter('all')}>All</Nav><Nav layoutId="notify-nav" active={filter==='unread'} onClick={()=>setFilter('unread')}>Unread</Nav></div><button onClick={()=>setAlerts(alerts.map(a=>({...a,unread:false})))} className="text-sm underline underline-offset-4">Mark all read</button></div><div className="flex flex-col gap-3">
-    <AnimatePresence mode="wait">
-      <motion.div key={filter} initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} transition={{duration:0.2}} className="flex flex-col gap-3">
-        {shown.map(a=><button key={a.id} onClick={()=>setAlerts(alerts.map(x=>x.id===a.id?{...x,unread:false}:x))} className="flex gap-4 rounded-3xl border bg-card p-5 text-left transition hover:shadow-sm hover:border-primary/30"><span className={`mt-1 flex size-10 shrink-0 items-center justify-center rounded-2xl ${a.kind==='Department'?'bg-butter':'bg-sage'}`}>{a.kind==='Department'?<Megaphone size={18}/>:<FileText size={18}/>}</span><span className="flex-1"><span className="flex items-center gap-2"><b>{a.title}</b>{a.unread&&<i className="size-2 rounded-full bg-primary"/>}</span><span className="mt-1 block text-sm text-muted-foreground">{a.body}</span><span className="mt-3 block text-xs text-muted-foreground">{a.kind} · {a.time}</span></span></button>)}
-      </motion.div>
-    </AnimatePresence>
-  </div></section>}
+function Notifications({alerts,setAlerts}:{alerts:any[],setAlerts:(a:any[])=>void}){
+  const [filter,setFilter]=useState<'all'|'unread'>('all');
+  const shown=filter==='all'?alerts:alerts.filter(a=>a.unread);
+  return (
+    <section className="max-w-3xl">
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex rounded-full bg-secondary p-1">
+          <Nav layoutId="notify-nav" active={filter==='all'} onClick={()=>setFilter('all')}>All</Nav>
+          <Nav layoutId="notify-nav" active={filter==='unread'} onClick={()=>setFilter('unread')}>Unread</Nav>
+        </div>
+        <button onClick={()=>setAlerts(alerts.map(a=>({...a,unread:false})))} className="text-sm underline underline-offset-4 text-muted-foreground hover:text-foreground">
+          Mark all read
+        </button>
+      </div>
+      <div className="flex flex-col gap-3">
+        <AnimatePresence mode="wait">
+          <motion.div key={filter} initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} transition={{duration:0.2}} className="flex flex-col gap-3">
+            {shown.length === 0 ? (
+              <div className="py-16 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40">
+                <Bell size={32} className="mx-auto mb-2 opacity-30"/>
+                <p className="font-semibold text-foreground text-sm">No announcements</p>
+                <p className="text-xs mt-1">Official department updates will appear here.</p>
+              </div>
+            ) : (
+              shown.map(a=><button key={a.id} onClick={()=>setAlerts(alerts.map(x=>x.id===a.id?{...x,unread:false}:x))} className="flex gap-4 rounded-3xl border bg-card p-5 text-left transition hover:shadow-sm hover:border-primary/30"><span className={`mt-1 flex size-10 shrink-0 items-center justify-center rounded-2xl ${a.kind==='Department'?'bg-sand':'bg-sage'}`}>{a.kind==='Department'?<Megaphone size={18}/>:<FileText size={18}/>}</span><span className="flex-1"><span className="flex items-center gap-2"><b>{a.title}</b>{a.unread&&<i className="size-2 rounded-full bg-primary"/>}</span><span className="mt-1 block text-sm text-muted-foreground">{a.body}</span><span className="mt-3 block text-xs text-muted-foreground">{a.kind} · {a.time}</span></span></button>)
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </section>
+  )
+}
 
-function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[], subjects:SubjectItem[]}){
+function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:Note)=>void,notes:Note[],subjects:SubjectItem[]}){
   const [open,setOpen]=useState(false);
   const [submitted,setSubmitted]=useState(false);
   const [uploading,setUploading]=useState(false);
@@ -404,7 +680,6 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const lenis = useLenis();
   
-  // Bulletproof body & Lenis scroll lock when dialog is open
   useEffect(() => {
     if (open) {
       lenis?.stop();
@@ -441,16 +716,21 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
       document.documentElement.style.overflow = '';
     };
   }, [open, lenis]);
-  const [subjectCode, setSubjectCode] = useState('MTH 101');
+
+  const [subjectCode, setSubjectCode] = useState('');
   const [customName, setCustomName] = useState('');
   const [customCode, setCustomCode] = useState('');
   const [isCustomSubject, setIsCustomSubject] = useState(false);
   const [seniorAdvice, setSeniorAdvice] = useState('');
-  const supabase = createClient();
 
   const semesterSubjects = useMemo(() => subjects.filter(s => s.semester === selectedSemester), [subjects, selectedSemester]);
 
-  // When semester changes, default to first subject in that semester
+  useEffect(() => {
+    if (semesterSubjects.length > 0 && !subjectCode) {
+      setSubjectCode(semesterSubjects[0].code);
+    }
+  }, [semesterSubjects, subjectCode]);
+
   const handleSemesterChange = (sem: number) => {
     setSelectedSemester(sem);
     const subList = subjects.filter(s => s.semester === sem);
@@ -524,10 +804,11 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
     } else if (res.note) {
       add({
         id: res.note.id,
+        authorId: user?.id,
         title: res.note.title,
         subject: finalSubjectName,
         code: finalCode,
-        author: 'You',
+        author: user?.name || 'You',
         date: 'Just now',
         pages: res.note.pages,
         size: res.note.size,
@@ -544,262 +825,308 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
     setUploading(false);
   };
 
-  const myNotes = notes.filter(n => n.author === 'You' || n.status === 'PENDING' || n.status === 'PUBLISHED');
+  const myNotes = notes.filter(n => (user && n.authorId === user.id) || n.author === user?.name || n.author === 'You');
 
-  return <div className="grid gap-7 lg:grid-cols-[1fr_340px]"><section><div className="rounded-3xl bg-mist p-7"><Upload size={25}/><h2 className="mt-10 text-3xl font-semibold">Share what helped you learn.</h2><p className="mt-2 max-w-xl text-muted-foreground">Every note is reviewed by the department before students can see it.</p><button onClick={()=>setOpen(true)} className="mt-6 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground">Submit a note</button></div><div className="mt-8"><Header kicker="Your contributions" title="Submission history"/>
-  {myNotes.map(x=><div key={x.id} className="mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border bg-card p-4"><div className="flex items-center gap-4 flex-1 min-w-0"><FileText className="shrink-0 text-muted-foreground"/><div className="flex-1 min-w-0"><b className="block truncate">{x.title}</b><p className="text-sm text-muted-foreground truncate">Submitted {x.date} · {x.subject || x.code}</p></div></div><span className={`bg-secondary rounded-full px-3 py-1 text-xs font-semibold whitespace-nowrap w-fit`}>{x.status}</span></div>)}
-  </div></section><aside className="rounded-3xl bg-butter p-6 lg:self-start"><h3 className="font-semibold">Before you submit</h3><ul className="mt-4 flex flex-col gap-3 text-sm leading-relaxed text-muted-foreground"><li>Select your target semester & subject.</li><li>Add helpful exam tips or study advice.</li><li>Only upload material you can share.</li><li>PDF files, up to 100 MB.</li></ul></aside><AnimatePresence>
-      {open&&<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm overscroll-none touch-none" data-lenis-prevent role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={() => setSubjectDropdownOpen(false)}>
-        <motion.form initial={{scale:0.95, y:15, opacity: 0}} animate={{scale:1, y:0, opacity: 1}} exit={{scale:0.95, y:15, opacity: 0}} transition={{type:"spring", bounce:0.15, duration:0.35}} onSubmit={handleUpload} onClick={(e) => e.stopPropagation()} className="relative flex flex-col w-full max-w-lg rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden" data-lenis-prevent>
-          
-          {/* Frosted Sticky Header */}
-          <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-5 bg-card/90 backdrop-blur-xl border-b border-border/40">
-            <div>
-              <p className="section-kicker mb-0.5">New submission</p>
-              <h2 id="submit-title" className="text-xl sm:text-2xl font-bold tracking-tight">Upload your note</h2>
-            </div>
-            <button type="button" onClick={()=>setOpen(false)} className="flex size-9 items-center justify-center rounded-full bg-secondary/70 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
-              <X size={18}/>
-            </button>
-          </div>
-          
-          {/* Body - Inset scroll container so scrollbar never collides with rounded corners */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-5 pb-6 pr-4 mr-2 modal-scroll overscroll-contain" data-lenis-prevent>
-            {submitted?<div className="py-16 text-center">
-              <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-sage text-foreground mb-4">
-                <Check size={26} weight="bold"/>
-              </div>
-              <h3 className="text-xl font-bold">Sent for review</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Thank you! Your note will appear in the library once reviewed.</p>
-            </div>:<div className="flex flex-col gap-5">
-        
-        {/* Note Title */}
-        <label className="field-label">
-          <span>Note Title</span>
-          <input name="title" required className="field-input" placeholder="e.g. Complete Lecture Summary & Past Papers"/>
-        </label>
-        
-        {/* Semester selector */}
-        <div className="flex flex-col gap-2">
-          <label className="field-label mb-0">Target Semester</label>
-          <div className="grid grid-cols-4 gap-2">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => {
-              const isActive = selectedSemester === sem;
-              return (
-                <button
-                  key={sem}
-                  type="button"
-                  onClick={() => {
-                    handleSemesterChange(sem);
-                    setSubjectDropdownOpen(false);
-                  }}
-                  className={`flex items-center justify-center py-2.5 px-3 text-xs font-semibold rounded-2xl border transition-colors ${
-                    isActive
-                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                      : 'bg-secondary/40 hover:bg-secondary text-muted-foreground hover:text-foreground border-border/40'
-                  }`}
-                >
-                  Sem {sem}
-                </button>
-              );
-            })}
-          </div>
+  return (
+    <div className="grid gap-7 lg:grid-cols-[1fr_340px]">
+      <section>
+        <div className="rounded-3xl bg-mist p-7">
+          <Upload size={25}/>
+          <h2 className="mt-10 text-3xl font-semibold">Share what helped you learn.</h2>
+          <p className="mt-2 max-w-xl text-muted-foreground">Every note is reviewed by the department before students can see it.</p>
+          <button onClick={()=>setOpen(true)} className="mt-6 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground">
+            Submit a note
+          </button>
         </div>
-
-        {/* Subject selector (Custom Built-in Dropdown) */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <label className="field-label mb-0">Subject</label>
-            {semesterSubjects.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCustomSubject(!isCustomSubject);
-                  setSubjectDropdownOpen(false);
-                }}
-                className="text-xs font-semibold text-primary hover:underline underline-offset-2 transition-colors"
-              >
-                {isCustomSubject ? 'Choose from list' : '+ Custom subject'}
-              </button>
-            )}
-          </div>
-
-          {isCustomSubject ? (
-            <div className="flex flex-col gap-2">
-              {semesterSubjects.length === 0 && (
-                <div className="flex items-start gap-2.5 rounded-2xl bg-secondary/70 p-3.5 border border-border/40">
-                  <Info size={18} weight="fill" className="text-muted-foreground mt-0.5 shrink-0" />
-                  <span className="text-xs leading-relaxed text-foreground">No standard subjects found for Semester {selectedSemester}. Please enter custom details below.</span>
-                </div>
-              )}
-              <div className="grid gap-2 sm:grid-cols-2">
-                <input
-                  required
-                  value={customName}
-                  onChange={e => setCustomName(e.target.value)}
-                  className="field-input min-w-0"
-                  placeholder="Subject Name (e.g. Signal Processing)"
-                />
-                <input
-                  required
-                  value={customCode}
-                  onChange={e => setCustomCode(e.target.value)}
-                  className="field-input uppercase min-w-0"
-                  placeholder="Code (e.g. EE 301)"
-                />
-              </div>
+        <div className="mt-8">
+          <Header kicker="Your contributions" title="Submission history"/>
+          {myNotes.length === 0 ? (
+            <div className="rounded-2xl border border-dashed p-8 text-center text-muted-foreground bg-card/40">
+              <FileText size={32} className="mx-auto mb-2 opacity-30"/>
+              <p className="font-semibold text-foreground text-sm">No submissions yet</p>
+              <p className="text-xs mt-1">Upload lecture notes, formulas, or summaries to help your peers.</p>
             </div>
           ) : (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setSubjectDropdownOpen(!subjectDropdownOpen)}
-                className="flex h-12 w-full items-center justify-between rounded-2xl border bg-background px-4 text-sm font-medium outline-none transition-colors hover:border-foreground/40 focus:border-foreground"
-              >
-                <span className="truncate">
-                  {semesterSubjects.find(s => s.code === subjectCode)?.name || 'Choose a subject'} ({subjectCode})
-                </span>
-                <CaretDown
-                  size={16}
-                  className={`text-muted-foreground transition-transform duration-200 shrink-0 ml-2 ${
-                    subjectDropdownOpen ? 'rotate-180' : ''
-                  }`}
-                />
-              </button>
+            myNotes.map(x=>(
+              <div key={x.id} className="mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border bg-card p-4">
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                  <FileText className="shrink-0 text-muted-foreground"/>
+                  <div className="flex-1 min-w-0">
+                    <b className="block truncate">{x.title}</b>
+                    <p className="text-sm text-muted-foreground truncate">Submitted {x.date} · {x.subject || x.code}</p>
+                  </div>
+                </div>
+                <span className={`bg-secondary rounded-full px-3 py-1 text-xs font-semibold whitespace-nowrap w-fit`}>{x.status}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
 
-              <AnimatePresence>
-                {subjectDropdownOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-56 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                  >
-                    {semesterSubjects.map(s => {
-                      const isSelected = subjectCode === s.code;
-                      return (
+      {/* Before you submit sidebar - High contrast bg-secondary */}
+      <aside className="rounded-3xl bg-secondary p-6 lg:self-start border border-border/60">
+        <h3 className="font-semibold text-foreground">Before you submit</h3>
+        <ul className="mt-4 flex flex-col gap-3 text-sm leading-relaxed text-muted-foreground">
+          <li>Select your target semester & subject.</li>
+          <li>Add helpful exam tips or study advice.</li>
+          <li>Only upload material you can share.</li>
+          <li>PDF files, up to 100 MB.</li>
+        </ul>
+      </aside>
+
+      <AnimatePresence>
+        {open&&<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm overscroll-none touch-none" data-lenis-prevent role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={() => setSubjectDropdownOpen(false)}>
+          <motion.form initial={{scale:0.95, y:15, opacity: 0}} animate={{scale:1, y:0, opacity: 1}} exit={{scale:0.95, y:15, opacity: 0}} transition={{type:"spring", bounce:0.15, duration:0.35}} onSubmit={handleUpload} onClick={(e) => e.stopPropagation()} className="relative flex flex-col w-full max-w-lg rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden" data-lenis-prevent>
+            
+            {/* Frosted Sticky Header */}
+            <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-5 bg-card/90 backdrop-blur-xl border-b border-border/40">
+              <div>
+                <p className="section-kicker mb-0.5">New submission</p>
+                <h2 id="submit-title" className="text-xl sm:text-2xl font-bold tracking-tight">Upload your note</h2>
+              </div>
+              <button 
+                type="button" 
+                onClick={()=>setOpen(false)} 
+                className="flex size-9 items-center justify-center rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Close dialog"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Scrollable Form Body */}
+            <div className="flex-1 overflow-y-auto modal-scroll px-6 py-5 mr-2 pr-4 space-y-5">
+              {submitted ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground mb-4">
+                    <Check size={28} weight="bold" />
+                  </div>
+                  <h3 className="text-xl font-bold">Uploaded for review!</h3>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-xs">Your note has been submitted to the department.</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <label className="field-label">
+                    Note title
+                    <input required name="title" className="field-input" placeholder="e.g. Week 1–6 Midterm Summary" />
+                  </label>
+
+                  {/* Target Semester Selector */}
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm font-semibold text-foreground">Target semester</span>
+                    <div className="grid grid-cols-4 gap-1.5 p-1 rounded-2xl bg-secondary/70 border border-border/60">
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
                         <button
-                          key={s.code}
+                          key={sem}
                           type="button"
-                          onClick={() => {
-                            setSubjectCode(s.code);
-                            setSubjectDropdownOpen(false);
-                          }}
-                          className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
-                            isSelected
-                              ? 'bg-secondary font-semibold text-foreground'
-                              : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                          onClick={() => handleSemesterChange(sem)}
+                          className={`flex items-center justify-center h-9 rounded-xl text-xs font-semibold transition-colors ${
+                            selectedSemester === sem
+                              ? 'bg-primary text-primary-foreground shadow-xs'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                           }`}
                         >
-                          <span className="truncate">{s.name} ({s.code})</span>
-                          {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                          Sem {sem}
                         </button>
-                      );
-                    })}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
-        </div>
+                      ))}
+                    </div>
+                  </div>
 
-        {/* Senior Advice / Study Tips */}
-        <label className="field-label flex flex-col gap-1.5">
-          <span className="flex items-center gap-1.5 font-semibold text-foreground">
-            <GraduationCap size={16} className="text-primary" />
-            Senior Advice & Study Tips (Optional)
-          </span>
-          <div className="flex h-28 rounded-2xl border bg-background overflow-hidden focus-within:border-foreground transition-colors">
-            <textarea
-              value={seniorAdvice}
-              onChange={e => setSeniorAdvice(e.target.value)}
-              className="w-full h-full bg-transparent px-4 py-3 text-sm outline-none resize-none modal-scroll"
-              placeholder="e.g. Focus heavily on Chapter 4 formulas for midterms. Past exam solutions included on page 14!"
-            />
-          </div>
-        </label>
+                  {/* Subject Dropdown */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-foreground">Course / Subject</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomSubject(!isCustomSubject)}
+                        className="text-xs text-primary font-semibold hover:underline"
+                      >
+                        {isCustomSubject ? 'Select from list' : '+ Custom subject'}
+                      </button>
+                    </div>
 
-        {/* PDF File Upload */}
-        <label className={`relative flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border transition-all p-4 ${
-          selectedFile
-            ? 'border-primary/40 bg-secondary/80 hover:bg-secondary'
-            : 'border-dashed border-border/80 bg-secondary/40 hover:border-primary/40 hover:bg-secondary/70'
-        }`}>
-          {selectedFile ? (
-            <div className="flex w-full items-center gap-3.5">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-                <FileText size={22} weight="fill" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <span className="block font-semibold text-sm text-foreground truncate">{selectedFile.name}</span>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB · Ready for Cloudflare upload
-                </p>
-              </div>
-              <span className="text-xs font-semibold text-primary px-3 py-1.5 rounded-full bg-background border border-border/60 shadow-xs shrink-0">
-                Change
-              </span>
-            </div>
-          ) : (
-            <>
-              <Upload size={22} className="text-muted-foreground mb-1.5" />
-              <span className="font-semibold text-foreground">Choose PDF document</span>
-              <span className="text-xs text-muted-foreground mt-0.5">PDF files up to 100 MB</span>
-            </>
-          )}
-          <input
-            type="file"
-            name="file"
-            accept="application/pdf"
-            className="sr-only"
-            required
-            onChange={(e) => {
-              if (e.target.files && e.target.files[0]) {
-                const f = e.target.files[0];
-                if (f.type !== 'application/pdf') {
-                  alert('Please select a valid PDF file.');
-                  return;
-                }
-                if (f.size > 100 * 1024 * 1024) {
-                  alert('File size exceeds 100 MB limit.');
-                  return;
-                }
-                setSelectedFile(f);
-              }
-            }}
-          />
-        </label>
+                    {isCustomSubject ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          value={customName}
+                          onChange={e => setCustomName(e.target.value)}
+                          placeholder="Subject Name"
+                          className="field-input"
+                          required={isCustomSubject}
+                        />
+                        <input
+                          value={customCode}
+                          onChange={e => setCustomCode(e.target.value.toUpperCase())}
+                          placeholder="Code (e.g. CE 101)"
+                          className="field-input uppercase"
+                          required={isCustomSubject}
+                        />
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setSubjectDropdownOpen(!subjectDropdownOpen)}
+                          className="flex h-12 w-full items-center justify-between rounded-2xl border bg-background px-4 text-sm font-medium focus:border-foreground transition-colors text-left"
+                        >
+                          <span className="truncate">
+                            {subjects.find(s => s.code === subjectCode)
+                              ? `${subjects.find(s => s.code === subjectCode)?.name} (${subjectCode})`
+                              : semesterSubjects.length > 0
+                              ? 'Select a course'
+                              : 'No courses for this semester'}
+                          </span>
+                          <CaretDown
+                            size={16}
+                            weight="bold"
+                            className={`text-muted-foreground transition-transform duration-200 shrink-0 ml-2 ${
+                              subjectDropdownOpen ? 'rotate-180' : ''
+                            }`}
+                          />
+                        </button>
 
-        {uploading ? (
-          <div className="flex flex-col gap-2 mt-1">
-            <div className="flex justify-between text-xs font-semibold text-muted-foreground px-1">
-              <span>Uploading to Cloudflare...</span>
-              <span>{uploadProgress}%</span>
-            </div>
-            <div className="h-2.5 w-full rounded-full bg-secondary overflow-hidden">
-              <motion.div 
-                className="h-full bg-primary rounded-full" 
-                initial={{ width: 0 }} 
-                animate={{ width: `${uploadProgress}%` }} 
-                transition={{ ease: "linear", duration: 0.2 }}
-              />
-            </div>
-          </div>
-        ) : (
-          <button className="rounded-full bg-primary p-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity mt-1">
-            Submit note for review
-          </button>
-        )}
-      </div>}
-            </div>
-          {/* Bottom cushion to lift scrollbar well above the bottom rounded corner */}
-          <div className="h-4 w-full bg-card shrink-0 pointer-events-none" />
-        </motion.form>
-      </motion.div>}
-    </AnimatePresence></div>}
+                        <AnimatePresence>
+                          {subjectDropdownOpen && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-56 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                            >
+                              {semesterSubjects.length === 0 ? (
+                                <p className="text-xs text-muted-foreground p-3 text-center">No subjects in Semester {selectedSemester}. Click "+ Custom subject" above.</p>
+                              ) : (
+                                semesterSubjects.map(s => {
+                                  const isSelected = subjectCode === s.code;
+                                  return (
+                                    <button
+                                      key={s.code}
+                                      type="button"
+                                      onClick={() => {
+                                        setSubjectCode(s.code);
+                                        setSubjectDropdownOpen(false);
+                                      }}
+                                      className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
+                                        isSelected
+                                          ? 'bg-secondary font-semibold text-foreground'
+                                          : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                                      }`}
+                                    >
+                                      <span className="truncate">{s.name} ({s.code})</span>
+                                      {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+                  </div>
 
-function AdminCms({notes,subjects,setSubjects,publish}:{notes:Note[],subjects:SubjectItem[],setSubjects:(s:SubjectItem[])=>void,publish:(n:Note)=>void}){
+                  {/* Senior Advice / Study Tips */}
+                  <label className="field-label flex flex-col gap-1.5">
+                    <span className="flex items-center gap-1.5 font-semibold text-foreground">
+                      <GraduationCap size={16} className="text-primary" />
+                      Senior Advice & Study Tips (Optional)
+                    </span>
+                    <div className="flex h-28 rounded-2xl border bg-background overflow-hidden focus-within:border-foreground transition-colors">
+                      <textarea
+                        value={seniorAdvice}
+                        onChange={e => setSeniorAdvice(e.target.value)}
+                        className="h-full w-full bg-transparent px-4 py-3 text-sm outline-none resize-none placeholder:text-muted-foreground"
+                        placeholder="e.g. Focus on Chapter 3 formulas and past midterm questions."
+                      />
+                    </div>
+                  </label>
+
+                  {/* PDF File Upload Dropzone */}
+                  <label className={`relative flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border transition-all p-4 ${
+                    selectedFile
+                      ? 'border-primary/40 bg-secondary/80 hover:bg-secondary'
+                      : 'border-dashed border-border/80 bg-secondary/40 hover:border-primary/40 hover:bg-secondary/70'
+                  }`}>
+                    {selectedFile ? (
+                      <div className="flex w-full items-center gap-3.5">
+                        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+                          <FileText size={22} weight="fill" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="block font-semibold text-sm text-foreground truncate">{selectedFile.name}</span>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB · Ready for Cloudflare upload
+                          </p>
+                        </div>
+                        <span className="text-xs font-semibold text-primary px-3 py-1.5 rounded-full bg-background border border-border/60 shadow-xs shrink-0">
+                          Change
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload size={22} className="text-muted-foreground mb-1.5" />
+                        <span className="font-semibold text-foreground">Choose PDF document</span>
+                        <span className="text-xs text-muted-foreground mt-0.5">PDF files up to 100 MB</span>
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      name="file"
+                      accept="application/pdf"
+                      className="sr-only"
+                      required
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          const f = e.target.files[0];
+                          if (f.type !== 'application/pdf') {
+                            alert('Please select a valid PDF file.');
+                            return;
+                          }
+                          if (f.size > 100 * 1024 * 1024) {
+                            alert('File size exceeds 100 MB limit.');
+                            return;
+                          }
+                          setSelectedFile(f);
+                        }
+                      }}
+                    />
+                  </label>
+
+                  {uploading ? (
+                    <div className="flex flex-col gap-2 mt-1">
+                      <div className="flex justify-between text-xs font-semibold text-muted-foreground px-1">
+                        <span>Uploading to Cloudflare...</span>
+                        <span>{uploadProgress}%</span>
+                      </div>
+                      <div className="h-2.5 w-full rounded-full bg-secondary overflow-hidden">
+                        <motion.div 
+                          className="h-full bg-primary rounded-full" 
+                          initial={{ width: 0 }} 
+                          animate={{ width: `${uploadProgress}%` }} 
+                          transition={{ ease: "linear", duration: 0.2 }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <button className="rounded-full bg-primary p-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity mt-1">
+                      Submit note for review
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Bottom cushion spacer */}
+            <div className="h-4 w-full bg-card shrink-0 pointer-events-none" />
+          </motion.form>
+        </motion.div>}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function AdminCms({notes,subjects,setSubjects,publish,addAnnouncement}:{notes:Note[],subjects:SubjectItem[],setSubjects:(s:SubjectItem[])=>void,publish:(n:Note)=>void,addAnnouncement:(a:any)=>void}){
   const [tab,setTab]=useState<'queue'|'content'|'curriculum'|'notices'>('queue');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [doneId,setDoneId]=useState<any>(null);
@@ -956,7 +1283,7 @@ function AdminCms({notes,subjects,setSubjects,publish}:{notes:Note[],subjects:Su
       {/* Review queue */}
       {tab==='queue'&&<div className="flex flex-col gap-5">
         {pending.length === 0 && <p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed bg-card/50">No notes currently pending review. Submissions from seniors will appear here.</p>}
-        {pending.map(candidate => <div key={candidate.id} className="grid gap-5 lg:grid-cols-[1fr_340px]"><section className="rounded-3xl border bg-card p-6"><div className="flex flex-col sm:flex-row sm:items-start gap-4"><span className="flex size-12 items-center justify-center rounded-2xl bg-blush shrink-0"><Inbox/></span><div className="flex-1 min-w-0"><span className="rounded-full bg-butter px-3 py-1 text-xs font-semibold">Awaiting review</span><h2 className="mt-3 text-2xl font-semibold">{candidate.title}</h2><p className="mt-1 text-sm text-muted-foreground">{candidate.subject} ({candidate.code}) · {candidate.pages} pages · {candidate.size}</p>
+        {pending.map(candidate => <div key={candidate.id} className="grid gap-5 lg:grid-cols-[1fr_340px]"><section className="rounded-3xl border bg-card p-6"><div className="flex flex-col sm:flex-row sm:items-start gap-4"><span className="flex size-12 items-center justify-center rounded-2xl bg-blush shrink-0"><Inbox/></span><div className="flex-1 min-w-0"><span className="rounded-full bg-sand px-3 py-1 text-xs font-semibold text-foreground">Awaiting review</span><h2 className="mt-3 text-2xl font-semibold">{candidate.title}</h2><p className="mt-1 text-sm text-muted-foreground">{candidate.subject} ({candidate.code}) · {candidate.pages} pages · {candidate.size}</p>
         
         {candidate.description && (
           <div className="mt-4 rounded-2xl bg-sage/30 border border-primary/20 p-3.5 text-sm">
@@ -969,7 +1296,7 @@ function AdminCms({notes,subjects,setSubjects,publish}:{notes:Note[],subjects:Su
       </div>}
 
       {/* Published content */}
-      {tab==='content'&&<div className="flex flex-col gap-3">{published.length===0?<p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed">No published notes yet.</p>:published.map((n,i)=><NoteRow key={n.id} note={n} index={i} open={()=>{}}/>)}</div>}
+      {tab==='content'&&<div className="flex flex-col gap-3">{published.length===0?<p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed bg-card/40">No published notes yet.</p>:published.map((n,i)=><NoteRow key={n.id} note={n} subjects={subjects} index={i} open={()=>{}}/>)}</div>}
 
       {/* Curriculum & Subjects Management */}
       {tab==='curriculum'&&<div className="flex flex-col gap-7">
@@ -1084,12 +1411,93 @@ function AdminCms({notes,subjects,setSubjects,publish}:{notes:Note[],subjects:Su
         </div>
       </div>}
 
-      {/* Announcements */}
-      {tab==='notices'&&<Announcement/>}
+      {/* Announcements Studio */}
+      {tab==='notices'&&<Announcement onPublish={addAnnouncement}/>}
     </motion.div>
   </AnimatePresence></div>}
 
-function Announcement(){const [sent,setSent]=useState(false);return <form onSubmit={e=>{e.preventDefault();setSent(true)}} className="max-w-2xl rounded-3xl border bg-card p-6 md:p-8"><Megaphone/><h2 className="mt-5 text-2xl font-semibold">Create an announcement</h2><div className="mt-7 flex flex-col gap-4"><label className="field-label">Title<input required className="field-input" placeholder="What should students know?"/></label><label className="field-label">Audience<select className="field-input"><option>All students</option><option>Semester 1</option><option>Calculus I</option></select></label><label className="field-label">Message<textarea required className="field-input min-h-32 py-3" placeholder="Write a clear, friendly update..."/></label><button className="flex items-center justify-center gap-2 rounded-full bg-primary p-3 font-semibold text-primary-foreground"><Send size={17}/>{sent?'Published':'Publish announcement'}</button></div></form>}
+function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
+  const [audience, setAudience] = useState('All students')
+  const [submitting, setSubmitting] = useState(false)
+  const [sent, setSent] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+    const res = await createAnnouncement({
+      title,
+      body,
+      audience: audience === 'All students' ? 'ALL' : audience
+    })
+    if (res.error) {
+      alert(res.error)
+    } else if (res.announcement) {
+      if (onPublish) onPublish(res.announcement)
+      setSent(true)
+      setTitle('')
+      setBody('')
+      setTimeout(() => setSent(false), 3000)
+    }
+    setSubmitting(false)
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="max-w-2xl rounded-3xl border bg-card p-6 md:p-8">
+      <Megaphone size={24} className="text-primary mb-2" />
+      <h2 className="text-2xl font-semibold">Create an announcement</h2>
+      <div className="mt-7 flex flex-col gap-4">
+        <label className="field-label">
+          Title
+          <input 
+            required 
+            value={title} 
+            onChange={e => setTitle(e.target.value)} 
+            className="field-input" 
+            placeholder="What should students know?" 
+          />
+        </label>
+        <label className="field-label">
+          Audience
+          <select 
+            value={audience} 
+            onChange={e => setAudience(e.target.value)} 
+            className="field-input"
+          >
+            <option value="All students">All students</option>
+            <option value="Semester 1">Semester 1</option>
+            <option value="Semester 2">Semester 2</option>
+            <option value="Semester 3">Semester 3</option>
+            <option value="Semester 4">Semester 4</option>
+            <option value="Semester 5">Semester 5</option>
+            <option value="Semester 6">Semester 6</option>
+            <option value="Semester 7">Semester 7</option>
+            <option value="Semester 8">Semester 8</option>
+          </select>
+        </label>
+        <label className="field-label">
+          Message
+          <textarea 
+            required 
+            value={body} 
+            onChange={e => setBody(e.target.value)} 
+            className="field-input min-h-32 py-3" 
+            placeholder="Write a clear, friendly update..." 
+          />
+        </label>
+        <button 
+          type="submit" 
+          disabled={submitting} 
+          className="flex items-center justify-center gap-2 rounded-full bg-primary p-3 font-semibold text-primary-foreground hover:opacity-95 transition-opacity"
+        >
+          <Send size={17}/>
+          {sent ? 'Published!' : submitting ? 'Publishing...' : 'Publish announcement'}
+        </button>
+      </div>
+    </form>
+  )
+}
 
 function PdfReader({note,onBack}:{note:Note,onBack:()=>void}){
   return (

@@ -181,3 +181,28 @@ export async function getTotalStorage() {
   });
   return { success: true, totalBytes };
 }
+
+export async function createAnnouncement(data: {
+  title: string
+  body: string
+  audience?: string
+}) {
+  const user = await getCurrentUser()
+  if (!user || user.role !== 'ADMIN') {
+    return { error: 'Unauthorized. Only admins can publish announcements.' }
+  }
+
+  try {
+    const announcement = await prisma.announcement.create({
+      data: {
+        title: data.title,
+        body: data.body,
+        audience: data.audience || 'ALL',
+      }
+    })
+    return { success: true, announcement }
+  } catch (err) {
+    return { error: (err as Error).message }
+  }
+}
+
