@@ -1,6 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
+import { useLenis } from 'lenis/react'
 
 import { useMemo, useState, useEffect } from 'react'
 import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDown, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, DotsThree as MoreHorizontal, Link, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info } from '@phosphor-icons/react'
@@ -398,10 +399,12 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedSemester, setSelectedSemester] = useState(1);
   const [subjectDropdownOpen, setSubjectDropdownOpen] = useState(false);
+  const lenis = useLenis();
   
-  // Bulletproof body scroll lock when dialog is open
+  // Bulletproof body & Lenis scroll lock when dialog is open
   useEffect(() => {
     if (open) {
+      lenis?.stop();
       const scrollY = window.scrollY;
       document.body.style.position = 'fixed';
       document.body.style.top = `-${scrollY}px`;
@@ -411,6 +414,7 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
       document.body.style.overflow = 'hidden';
       document.documentElement.style.overflow = 'hidden';
     } else {
+      lenis?.start();
       const scrollY = document.body.style.top;
       document.body.style.position = '';
       document.body.style.top = '';
@@ -424,6 +428,7 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
       }
     }
     return () => {
+      lenis?.start();
       document.body.style.position = '';
       document.body.style.top = '';
       document.body.style.left = '';
@@ -432,7 +437,7 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
       document.body.style.overflow = '';
       document.documentElement.style.overflow = '';
     };
-  }, [open]);
+  }, [open, lenis]);
   const [subjectCode, setSubjectCode] = useState('MTH 101');
   const [customName, setCustomName] = useState('');
   const [customCode, setCustomCode] = useState('');
@@ -540,8 +545,8 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
   return <div className="grid gap-7 lg:grid-cols-[1fr_340px]"><section><div className="rounded-3xl bg-mist p-7"><Upload size={25}/><h2 className="mt-10 text-3xl font-semibold">Share what helped you learn.</h2><p className="mt-2 max-w-xl text-muted-foreground">Every note is reviewed by the department before students can see it.</p><button onClick={()=>setOpen(true)} className="mt-6 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground">Submit a note</button></div><div className="mt-8"><Header kicker="Your contributions" title="Submission history"/>
   {myNotes.map(x=><div key={x.id} className="mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border bg-card p-4"><div className="flex items-center gap-4 flex-1 min-w-0"><FileText className="shrink-0 text-muted-foreground"/><div className="flex-1 min-w-0"><b className="block truncate">{x.title}</b><p className="text-sm text-muted-foreground truncate">Submitted {x.date} · {x.subject || x.code}</p></div></div><span className={`bg-secondary rounded-full px-3 py-1 text-xs font-semibold whitespace-nowrap w-fit`}>{x.status}</span></div>)}
   </div></section><aside className="rounded-3xl bg-butter p-6 lg:self-start"><h3 className="font-semibold">Before you submit</h3><ul className="mt-4 flex flex-col gap-3 text-sm leading-relaxed text-muted-foreground"><li>Select your target semester & subject.</li><li>Add helpful exam tips or study advice.</li><li>Only upload material you can share.</li><li>PDF files, up to 100 MB.</li></ul></aside><AnimatePresence>
-      {open&&<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm overscroll-none touch-none" role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={() => setSubjectDropdownOpen(false)}>
-        <motion.form initial={{scale:0.95, y:15, opacity: 0}} animate={{scale:1, y:0, opacity: 1}} exit={{scale:0.95, y:15, opacity: 0}} transition={{type:"spring", bounce:0.15, duration:0.35}} onSubmit={handleUpload} onClick={(e) => e.stopPropagation()} className="relative flex flex-col w-full max-w-lg rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden">
+      {open&&<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm overscroll-none touch-none" data-lenis-prevent role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={() => setSubjectDropdownOpen(false)}>
+        <motion.form initial={{scale:0.95, y:15, opacity: 0}} animate={{scale:1, y:0, opacity: 1}} exit={{scale:0.95, y:15, opacity: 0}} transition={{type:"spring", bounce:0.15, duration:0.35}} onSubmit={handleUpload} onClick={(e) => e.stopPropagation()} className="relative flex flex-col w-full max-w-lg rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden" data-lenis-prevent>
           
           {/* Frosted Sticky Header */}
           <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-5 bg-card/90 backdrop-blur-xl border-b border-border/40">
@@ -554,8 +559,8 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
             </button>
           </div>
           
-          {/* Body - Clean smooth scrolling with sleek custom scrollbar */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 modal-scroll overscroll-contain">
+          {/* Body - Inset scroll container so scrollbar never collides with rounded corners */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 pr-4 mr-1.5 modal-scroll overscroll-contain" data-lenis-prevent>
             {submitted?<div className="py-16 text-center">
               <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-sage text-foreground mb-4">
                 <Check size={26} weight="bold"/>
