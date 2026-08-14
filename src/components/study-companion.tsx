@@ -331,7 +331,7 @@ function NoteCard({note,open,variant='list',index=0}:{note:Note,open:()=>void,va
 function NoteRow({note,open,index=0}:{note:Note,open:()=>void,index?:number}){
   const [expanded, setExpanded] = useState(false);
   return (
-    <motion.article initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} transition={{delay:index*0.05, duration:0.4}} className="flex flex-col gap-3 rounded-2xl border bg-card p-4 hover:border-primary/30 transition-all shadow-sm">
+    <motion.article initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} transition={{delay:index*0.05, duration:0.4}} className="flex flex-col rounded-2xl border bg-card p-4 hover:border-primary/30 transition-colors shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <span className={`flex size-12 shrink-0 items-center justify-center rounded-2xl ${note.tone}`}><FileText size={20}/></span>
         <div className="min-w-0 flex-1">
@@ -341,13 +341,13 @@ function NoteRow({note,open,index=0}:{note:Note,open:()=>void,index?:number}){
               <button
                 type="button"
                 onClick={() => setExpanded(!expanded)}
-                className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full border transition-all ${
+                className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors ${
                   expanded
                     ? 'bg-primary/10 border-primary text-primary'
-                    : 'bg-secondary border-border text-muted-foreground hover:text-foreground hover:border-primary/40'
+                    : 'bg-secondary border-border/80 text-muted-foreground hover:text-foreground hover:border-primary/40'
                 }`}
               >
-                <Sparkle size={12} className="text-primary" />
+                <GraduationCap size={14} className="text-primary" />
                 <span>{expanded ? 'Hide advice' : 'Senior advice'}</span>
               </button>
             )}
@@ -359,22 +359,24 @@ function NoteRow({note,open,index=0}:{note:Note,open:()=>void,index?:number}){
           <button onClick={()=>downloadNote(note)} className="icon-button border transition-transform hover:scale-105 active:scale-95" aria-label={`Download ${note.title}`}><Download size={18}/></button>
         </div>
       </div>
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {expanded && note.description && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.22, ease: 'easeInOut' }}
+            transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
             className="overflow-hidden"
           >
-            <div className="mt-1 rounded-xl bg-sage/40 border border-primary/20 p-3.5 text-sm">
-              <div className="flex items-center gap-2 font-semibold text-foreground mb-1">
-                <Sparkle size={14} className="text-primary shrink-0" />
-                <span>Senior Contributor Advice & Tips</span>
-                <span className="text-xs text-muted-foreground font-normal ml-auto">by {note.author}</span>
+            <div className="pt-3">
+              <div className="rounded-xl bg-sage/40 border border-primary/20 p-3.5 text-sm">
+                <div className="flex items-center gap-2 font-semibold text-foreground mb-1">
+                  <GraduationCap size={16} className="text-primary shrink-0" />
+                  <span>Senior Contributor Advice & Tips</span>
+                  <span className="text-xs text-muted-foreground font-normal ml-auto">by {note.author}</span>
+                </div>
+                <p className="text-muted-foreground leading-relaxed pl-6 whitespace-pre-wrap">{note.description}</p>
               </div>
-              <p className="text-muted-foreground leading-relaxed pl-5 whitespace-pre-wrap">{note.description}</p>
             </div>
           </motion.div>
         )}
@@ -705,7 +707,7 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
         {/* Senior Advice / Study Tips */}
         <label className="field-label flex flex-col gap-1.5">
           <span className="flex items-center gap-1.5 font-semibold text-foreground">
-            <Sparkle size={14} className="text-primary" />
+            <GraduationCap size={16} className="text-primary" />
             Senior Advice & Study Tips (Optional)
           </span>
           <div className="flex h-28 rounded-2xl border bg-background overflow-hidden focus-within:border-foreground transition-colors">
@@ -958,7 +960,7 @@ function AdminCms({notes,subjects,setSubjects,publish}:{notes:Note[],subjects:Su
         
         {candidate.description && (
           <div className="mt-4 rounded-2xl bg-sage/30 border border-primary/20 p-3.5 text-sm">
-            <b className="flex items-center gap-1.5 text-foreground"><Sparkle size={14} className="text-primary"/> Contributor Advice:</b>
+            <b className="flex items-center gap-1.5 text-foreground"><GraduationCap size={16} className="text-primary"/> Contributor Advice:</b>
             <p className="mt-1 text-muted-foreground leading-relaxed">{candidate.description}</p>
           </div>
         )}
