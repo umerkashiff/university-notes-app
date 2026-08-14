@@ -1091,34 +1091,24 @@ function Announcement(){const [sent,setSent]=useState(false);return <form onSubm
 
 function PdfReader({note,onBack}:{note:Note,onBack:()=>void}){
   return (
-    <main className="min-h-screen bg-background text-foreground flex flex-col">
-      <header className="sticky top-0 z-40 border-b border-border/50 bg-background/80 backdrop-blur-xl shadow-sm">
-        <div className="flex items-center justify-between px-4 py-3 md:px-8">
-          <button onClick={onBack} className="flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium hover:bg-secondary transition-colors">
-            <ArrowLeft size={18}/>
-            <span>Back to Library</span>
-          </button>
-          <div className="min-w-0 text-center px-4">
-            <b className="block max-w-48 truncate text-sm sm:max-w-md mx-auto">{note.title}</b>
-            <span className="text-xs text-muted-foreground">{note.code} · {note.author}</span>
-          </div>
-          <button onClick={()=>downloadNote(note)} className="icon-button shrink-0" aria-label="Download">
-            <Download size={18}/>
+    <div className="min-h-screen bg-background text-foreground">
+      {note.fileUrl ? (
+        <PDFViewer 
+          url={note.fileUrl} 
+          title={note.title} 
+          author={note.author} 
+          code={note.code || note.subject} 
+          onBack={onBack} 
+        />
+      ) : (
+        <div className="flex flex-col items-center justify-center min-h-screen text-muted-foreground p-8">
+          <FileText size={48} className="mb-4 opacity-20"/>
+          <p className="text-base font-medium">No PDF attached to this note.</p>
+          <button onClick={onBack} className="mt-4 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground">
+            Back to Library
           </button>
         </div>
-      </header>
-      <div className="flex-1 p-4 md:p-8 flex justify-center">
-        {note.fileUrl ? (
-          <div className="w-full max-w-5xl">
-            <PDFViewer url={note.fileUrl} title={note.title} />
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-muted-foreground">
-            <FileText size={48} className="mb-4 opacity-20"/>
-            <p>No PDF attached to this note.</p>
-          </div>
-        )}
-      </div>
-    </main>
+      )}
+    </div>
   );
 }

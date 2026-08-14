@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, Maximize2, Minimize2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, Maximize2, Minimize2, ArrowLeft } from 'lucide-react'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 
@@ -12,9 +12,12 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/b
 interface PDFViewerProps {
   url: string
   title: string
+  author?: string
+  code?: string
+  onBack?: () => void
 }
 
-export function PDFViewer({ url, title }: PDFViewerProps) {
+export function PDFViewer({ url, title, author, code, onBack }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number | null>(null)
   const [pageNumber, setPageNumber] = useState(1)
   const [scale, setScale] = useState(1.0)
@@ -31,14 +34,33 @@ export function PDFViewer({ url, title }: PDFViewerProps) {
     setPageNumber(prev => Math.min(Math.max(1, prev + offset), numPages || 1))
   }
 
+  // True HTML5 Fullscreen API
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {})
+      setIsFullscreen(true)
+    } else {
+      document.exitFullscreen?.().catch(() => {})
+      setIsFullscreen(false)
+    }
+  }
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener('fullscreenchange', handleFsChange)
+    return () => document.removeEventListener('fullscreenchange', handleFsChange)
+  }, [])
+
   // Measure container and auto-scale PDF slides/documents to fit width perfectly
   useEffect(() => {
     const updateWidth = () => {
       if (!containerRef.current) return
       const elWidth = containerRef.current.clientWidth
       if (elWidth > 0) {
-        const padding = window.innerWidth < 640 ? 24 : 64
-        const target = Math.max(300, Math.min(elWidth - padding, 1050))
+        const padding = window.innerWidth < 640 ? 20 : 64
+        const target = Math.max(300, Math.min(elWidth - padding, isFullscreen ? 1400 : 1050))
         setPageWidth(target)
       }
     }
@@ -49,12 +71,29 @@ export function PDFViewer({ url, title }: PDFViewerProps) {
   }, [isFullscreen])
 
   return (
-    <div className={`flex flex-col relative bg-card ${isFullscreen ? 'fixed inset-0 z-50 rounded-none' : 'w-full min-h-[650px] rounded-3xl border border-border/80 shadow-sm overflow-hidden'}`}>
+    <div className="flex flex-col w-full min-h-screen bg-background text-foreground">
       
-      {/* Top Navigation Bar */}
-      <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 bg-card/90 backdrop-blur-md border-b border-border/60 z-10">
-        <h2 className="text-sm font-semibold text-foreground truncate max-w-[50%]">{title}</h2>
-        <div className="flex items-center gap-1 sm:gap-1.5">
+      {/* Unified Clean Top Bar */}
+      <header className="sticky top-0 z-40 flex items-center justify-between px-4 sm:px-8 py-3.5 bg-background/80 backdrop-blur-xl border-b border-border/50 shadow-xs">
+        <div className="flex items-center gap-3 min-w-0">
+          {onBack && (
+            <button 
+              onClick={onBack} 
+              className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium hover:bg-secondary transition-colors shrink-0"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">Back</span>
+            </button>
+          )}
+          <div className="min-w-0">
+            <h1 className="text-sm sm:text-base font-semibold text-foreground truncate max-w-52 sm:max-w-md">{title}</h1>
+            {(code || author) && (
+              <p className="text-xs text-muted-foreground truncate">{[code, author].filter(Boolean).join(' · ')}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
           <button 
             onClick={() => setScale(prev => Math.max(prev - 0.2, 0.6))} 
             className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
@@ -86,19 +125,19 @@ export function PDFViewer({ url, title }: PDFViewerProps) {
             <Download className="h-4 w-4" />
           </a>
           <button 
-            onClick={() => setIsFullscreen(!isFullscreen)} 
+            onClick={toggleFullscreen} 
             className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
             title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
           >
             {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </button>
         </div>
-      </div>
+      </header>
 
       {/* PDF Viewer Canvas Body */}
       <div 
         ref={containerRef}
-        className="flex-1 overflow-auto bg-[#F7F5F0] dark:bg-[#18181B] flex justify-center py-6 sm:py-10 px-3 sm:px-6 overscroll-contain"
+        className="flex-1 overflow-auto bg-[#F7F5F0] dark:bg-[#121214] flex justify-center py-6 sm:py-10 px-3 sm:px-6 overscroll-contain"
       >
         <Document
           file={url}
@@ -137,7 +176,7 @@ export function PDFViewer({ url, title }: PDFViewerProps) {
       </div>
 
       {/* Bottom Page Navigation (Apple Books Style) */}
-      <div className="flex items-center justify-center gap-4 px-6 py-3.5 bg-card/90 backdrop-blur-md border-t border-border/60 z-10">
+      <div className="sticky bottom-0 z-30 flex items-center justify-center gap-4 px-6 py-3.5 bg-background/80 backdrop-blur-xl border-t border-border/50">
         <button
           onClick={() => changePage(-1)}
           disabled={pageNumber <= 1}
