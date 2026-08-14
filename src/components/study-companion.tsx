@@ -1,7 +1,9 @@
 'use client'
 
+import dynamic from 'next/dynamic'
+
 import { useMemo, useState, useEffect } from 'react'
-import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, DotsThree as MoreHorizontal, Link, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info } from '@phosphor-icons/react'
+import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDown, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, DotsThree as MoreHorizontal, Link, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info } from '@phosphor-icons/react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { login, logout } from '@/app/actions/auth'
 import type { User as PrismaUser } from '@prisma/client'
@@ -9,6 +11,11 @@ import { createClient } from '@/utils/supabase/client'
 import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage } from '@/app/actions/notes'
 import { getPresignedUrl } from '@/app/actions/upload'
 import React from 'react'
+
+const PDFViewer = dynamic(() => import('@/components/pdf-viewer').then(mod => mod.PDFViewer), {
+  ssr: false,
+  loading: () => <div className="flex h-96 items-center justify-center text-sm text-muted-foreground">Loading PDF reader...</div>
+})
 
 type Role = 'student' | 'senior' | 'admin'
 type Screen = 'semesters' | 'subject' | 'notifications' | 'submissions' | 'cms' | 'saved'
@@ -390,12 +397,21 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
   const [uploading,setUploading]=useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedSemester, setSelectedSemester] = useState(1);
+  const [subjectDropdownOpen, setSubjectDropdownOpen] = useState(false);
   
   // Prevent body scroll when dialog is open
   useEffect(() => {
-    if (open) document.body.style.overflow = 'hidden';
-    else document.body.style.overflow = 'unset';
-    return () => { document.body.style.overflow = 'unset'; };
+    if (open) {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+      document.documentElement.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+      document.documentElement.style.overflow = 'unset';
+    };
   }, [open]);
   const [subjectCode, setSubjectCode] = useState('MTH 101');
   const [customName, setCustomName] = useState('');
@@ -504,61 +520,94 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
   return <div className="grid gap-7 lg:grid-cols-[1fr_340px]"><section><div className="rounded-3xl bg-mist p-7"><Upload size={25}/><h2 className="mt-10 text-3xl font-semibold">Share what helped you learn.</h2><p className="mt-2 max-w-xl text-muted-foreground">Every note is reviewed by the department before students can see it.</p><button onClick={()=>setOpen(true)} className="mt-6 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground">Submit a note</button></div><div className="mt-8"><Header kicker="Your contributions" title="Submission history"/>
   {myNotes.map(x=><div key={x.id} className="mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border bg-card p-4"><div className="flex items-center gap-4 flex-1 min-w-0"><FileText className="shrink-0 text-muted-foreground"/><div className="flex-1 min-w-0"><b className="block truncate">{x.title}</b><p className="text-sm text-muted-foreground truncate">Submitted {x.date} · {x.subject || x.code}</p></div></div><span className={`bg-secondary rounded-full px-3 py-1 text-xs font-semibold whitespace-nowrap w-fit`}>{x.status}</span></div>)}
   </div></section><aside className="rounded-3xl bg-butter p-6 lg:self-start"><h3 className="font-semibold">Before you submit</h3><ul className="mt-4 flex flex-col gap-3 text-sm leading-relaxed text-muted-foreground"><li>Select your target semester & subject.</li><li>Add helpful exam tips or study advice.</li><li>Only upload material you can share.</li><li>PDF files, up to 100 MB.</li></ul></aside><AnimatePresence>
-      {open&&<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} className="dialog-backdrop overscroll-none" role="dialog" aria-modal="true" aria-labelledby="submit-title">
-        <motion.form initial={{scale:0.95, y:20}} animate={{scale:1, y:0}} exit={{scale:0.95, y:20}} transition={{type:"spring", bounce:0.2, duration:0.4}} onSubmit={handleUpload} className="dialog-panel flex flex-col w-full max-w-lg rounded-[2rem] bg-card border shadow-2xl max-h-[90vh] overflow-hidden">
+      {open&&<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm overscroll-none" role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={() => setSubjectDropdownOpen(false)}>
+        <motion.form initial={{scale:0.95, y:15, opacity: 0}} animate={{scale:1, y:0, opacity: 1}} exit={{scale:0.95, y:15, opacity: 0}} transition={{type:"spring", bounce:0.15, duration:0.35}} onSubmit={handleUpload} onClick={(e) => e.stopPropagation()} className="relative flex flex-col w-full max-w-lg rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden">
           
-          <div className="flex-1 overflow-y-auto custom-scrollbar overscroll-contain relative">
-            <div className="sticky top-0 z-10 flex items-start justify-between p-5 sm:p-7 pb-4 bg-card/85 backdrop-blur-xl border-b border-border/50">
-              <div><p className="section-kicker">New submission</p><h2 id="submit-title" className="text-2xl sm:text-3xl font-semibold">Upload your note</h2></div>
-              <button type="button" onClick={()=>setOpen(false)} className="icon-button bg-secondary/50 hover:bg-secondary"><X/></button>
+          {/* Frosted Sticky Header */}
+          <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-5 bg-card/90 backdrop-blur-xl border-b border-border/40">
+            <div>
+              <p className="section-kicker mb-0.5">New submission</p>
+              <h2 id="submit-title" className="text-xl sm:text-2xl font-bold tracking-tight">Upload your note</h2>
             </div>
-            
-            <div className="p-5 sm:p-7 pt-4">
-              {submitted?<div className="py-16 text-center"><Check className="mx-auto"/><h3 className="mt-4 text-xl font-semibold">Sent for review</h3></div>:<div className="flex flex-col gap-6">
+            <button type="button" onClick={()=>setOpen(false)} className="flex size-9 items-center justify-center rounded-full bg-secondary/70 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
+              <X size={18}/>
+            </button>
+          </div>
+          
+          {/* Body - Clean scrolling without scrollbar corner clipping */}
+          <div className="flex-1 overflow-y-auto px-6 py-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden overscroll-contain">
+            {submitted?<div className="py-16 text-center">
+              <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-sage text-foreground mb-4">
+                <Check size={26} weight="bold"/>
+              </div>
+              <h3 className="text-xl font-bold">Sent for review</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Thank you! Your note will appear in the library once reviewed.</p>
+            </div>:<div className="flex flex-col gap-5">
         
-        <label className="field-label">Note Title<input name="title" required className="field-input" placeholder="e.g. Complete Lecture Summary & Past Papers"/></label>
+        {/* Note Title */}
+        <label className="field-label">
+          <span>Note Title</span>
+          <input name="title" required className="field-input" placeholder="e.g. Complete Lecture Summary & Past Papers"/>
+        </label>
         
         {/* Semester selector */}
-        <div className="flex flex-col gap-1.5">
-          <label className="field-label">Target Semester</label>
-          <div className="flex flex-wrap gap-1.5 rounded-[1.25rem] bg-secondary p-1.5">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
-              <button
-                key={sem}
-                type="button"
-                onClick={() => handleSemesterChange(sem)}
-                className={`flex-1 min-w-[60px] py-2 sm:py-1.5 text-[13px] font-semibold rounded-xl transition-all ${
-                  selectedSemester === sem
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Sem {sem}
-              </button>
-            ))}
+        <div className="flex flex-col gap-2">
+          <label className="field-label mb-0">Target Semester</label>
+          <div className="grid grid-cols-4 gap-2">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => {
+              const isActive = selectedSemester === sem;
+              return (
+                <button
+                  key={sem}
+                  type="button"
+                  onClick={() => {
+                    handleSemesterChange(sem);
+                    setSubjectDropdownOpen(false);
+                  }}
+                  className={`relative flex items-center justify-center py-2.5 px-3 text-xs font-semibold rounded-2xl border transition-all duration-200 ${
+                    isActive
+                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                      : 'bg-secondary/40 hover:bg-secondary text-muted-foreground hover:text-foreground border-border/40'
+                  }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="active-sem-dialog"
+                      className="absolute inset-0 rounded-2xl bg-primary z-0"
+                      transition={{ type: "spring", bounce: 0.15, duration: 0.4 }}
+                    />
+                  )}
+                  <span className="relative z-10">Sem {sem}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Subject selector */}
-        <div className="flex flex-col gap-1.5">
+        {/* Subject selector (Custom Built-in Dropdown) */}
+        <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <label className="field-label">Subject</label>
+            <label className="field-label mb-0">Subject</label>
             {semesterSubjects.length > 0 && (
               <button
                 type="button"
-                onClick={() => setIsCustomSubject(!isCustomSubject)}
-                className="text-xs text-primary underline underline-offset-2"
+                onClick={() => {
+                  setIsCustomSubject(!isCustomSubject);
+                  setSubjectDropdownOpen(false);
+                }}
+                className="text-xs font-semibold text-primary hover:underline underline-offset-2 transition-colors"
               >
                 {isCustomSubject ? 'Choose from list' : '+ Custom subject'}
               </button>
             )}
           </div>
+
           {isCustomSubject ? (
             <div className="flex flex-col gap-2">
               {semesterSubjects.length === 0 && (
-                <div className="flex items-start gap-2 rounded-xl bg-secondary/80 p-3 mb-1">
-                  <Info size={16} weight="fill" className="text-muted-foreground mt-0.5 shrink-0" />
-                  <span className="text-[13px] leading-relaxed text-foreground">No standard subjects found for Semester {selectedSemester}. Please enter custom details below.</span>
+                <div className="flex items-start gap-2.5 rounded-2xl bg-secondary/70 p-3.5 border border-border/40">
+                  <Info size={18} weight="fill" className="text-muted-foreground mt-0.5 shrink-0" />
+                  <span className="text-xs leading-relaxed text-foreground">No standard subjects found for Semester {selectedSemester}. Please enter custom details below.</span>
                 </div>
               )}
               <div className="grid gap-2 sm:grid-cols-2">
@@ -579,17 +628,57 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
               </div>
             </div>
           ) : (
-            <select
-              value={subjectCode}
-              onChange={e => setSubjectCode(e.target.value)}
-              className="field-input pr-10"
-            >
-              {semesterSubjects.map(s => (
-                <option key={s.code} value={s.code}>
-                  {s.name} ({s.code})
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setSubjectDropdownOpen(!subjectDropdownOpen)}
+                className="flex h-12 w-full items-center justify-between rounded-2xl border bg-background px-4 text-sm font-medium outline-none transition-colors hover:border-foreground/40 focus:border-foreground"
+              >
+                <span className="truncate">
+                  {semesterSubjects.find(s => s.code === subjectCode)?.name || 'Choose a subject'} ({subjectCode})
+                </span>
+                <CaretDown
+                  size={16}
+                  className={`text-muted-foreground transition-transform duration-200 shrink-0 ml-2 ${
+                    subjectDropdownOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              <AnimatePresence>
+                {subjectDropdownOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-56 overflow-y-auto rounded-2xl border bg-card p-1.5 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  >
+                    {semesterSubjects.map(s => {
+                      const isSelected = subjectCode === s.code;
+                      return (
+                        <button
+                          key={s.code}
+                          type="button"
+                          onClick={() => {
+                            setSubjectCode(s.code);
+                            setSubjectDropdownOpen(false);
+                          }}
+                          className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
+                            isSelected
+                              ? 'bg-secondary font-semibold text-foreground'
+                              : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
+                          }`}
+                        >
+                          <span className="truncate">{s.name} ({s.code})</span>
+                          {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                        </button>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           )}
         </div>
 
@@ -599,33 +688,33 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
             <Sparkle size={14} className="text-primary" />
             Senior Advice & Study Tips (Optional)
           </span>
-          <div className="flex h-28 rounded-2xl border bg-background overflow-hidden focus-within:border-foreground">
+          <div className="flex h-28 rounded-2xl border bg-background overflow-hidden focus-within:border-foreground transition-colors">
             <textarea
               value={seniorAdvice}
               onChange={e => setSeniorAdvice(e.target.value)}
-              className="w-full h-full bg-transparent px-4 py-3 text-sm outline-none resize-none custom-scrollbar"
+              className="w-full h-full bg-transparent px-4 py-3 text-sm outline-none resize-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               placeholder="e.g. Focus heavily on Chapter 4 formulas for midterms. Past exam solutions included on page 14!"
             />
           </div>
         </label>
 
         {/* PDF File Upload */}
-        <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed bg-secondary text-sm hover:border-primary/40 transition-colors">
-          <Upload size={20} className="text-muted-foreground mb-1" />
+        <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed bg-secondary/40 p-4 text-sm hover:border-primary/40 hover:bg-secondary/70 transition-all">
+          <Upload size={22} className="text-muted-foreground mb-1.5" />
           <span className="font-semibold text-foreground">Choose PDF document</span>
           <span className="text-xs text-muted-foreground mt-0.5">Maximum size 100 MB</span>
           <input type="file" name="file" accept="application/pdf" className="sr-only" required />
         </label>
 
         {uploading ? (
-          <div className="flex flex-col gap-2 mt-2">
+          <div className="flex flex-col gap-2 mt-1">
             <div className="flex justify-between text-xs font-semibold text-muted-foreground px-1">
               <span>Uploading to Cloudflare...</span>
               <span>{uploadProgress}%</span>
             </div>
-            <div className="h-3 w-full rounded-full bg-secondary overflow-hidden">
+            <div className="h-2.5 w-full rounded-full bg-secondary overflow-hidden">
               <motion.div 
-                className="h-full bg-primary" 
+                className="h-full bg-primary rounded-full" 
                 initial={{ width: 0 }} 
                 animate={{ width: `${uploadProgress}%` }} 
                 transition={{ ease: "linear", duration: 0.2 }}
@@ -633,13 +722,12 @@ function ContributorDesk({add, notes, subjects}:{add:(n:Note)=>void, notes:Note[
             </div>
           </div>
         ) : (
-          <button className="rounded-full bg-primary p-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity mt-2">
+          <button className="rounded-full bg-primary p-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity mt-1">
             Submit note for review
           </button>
         )}
       </div>}
             </div>
-          </div>
         </motion.form>
       </motion.div>}
     </AnimatePresence></div>}
@@ -937,90 +1025,35 @@ function AdminCms({notes,subjects,setSubjects,publish}:{notes:Note[],subjects:Su
 function Announcement(){const [sent,setSent]=useState(false);return <form onSubmit={e=>{e.preventDefault();setSent(true)}} className="max-w-2xl rounded-3xl border bg-card p-6 md:p-8"><Megaphone/><h2 className="mt-5 text-2xl font-semibold">Create an announcement</h2><div className="mt-7 flex flex-col gap-4"><label className="field-label">Title<input required className="field-input" placeholder="What should students know?"/></label><label className="field-label">Audience<select className="field-input"><option>All students</option><option>Semester 1</option><option>Calculus I</option></select></label><label className="field-label">Message<textarea required className="field-input min-h-32 py-3" placeholder="Write a clear, friendly update..."/></label><button className="flex items-center justify-center gap-2 rounded-full bg-primary p-3 font-semibold text-primary-foreground"><Send size={17}/>{sent?'Published':'Publish announcement'}</button></div></form>}
 
 function PdfReader({note,onBack}:{note:Note,onBack:()=>void}){
-  const [numPages, setNumPages] = useState<number>(0);
-  const [page, setPage] = useState(1);
-  const [zoom, setZoom] = useState(100);
-
-  function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
-    setNumPages(numPages);
-  }
-
   return (
-    <main className="min-h-screen bg-secondary text-foreground">
-      <header className="sticky top-0 z-40 border-b border-white/30 bg-white/40 backdrop-blur-xl shadow-sm supports-[backdrop-filter]:bg-white/30 transform-gpu will-change-transform">
-        <div className="flex items-center justify-between px-3 py-3 md:px-6">
-          <button onClick={onBack} className="flex items-center gap-2 rounded-full px-3 py-2 hover:bg-secondary"><ArrowLeft size={18}/><span className="hidden sm:inline">Back</span></button>
+    <main className="min-h-screen bg-background text-foreground flex flex-col">
+      <header className="sticky top-0 z-40 border-b border-border/50 bg-background/80 backdrop-blur-xl shadow-sm">
+        <div className="flex items-center justify-between px-4 py-3 md:px-8">
+          <button onClick={onBack} className="flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium hover:bg-secondary transition-colors">
+            <ArrowLeft size={18}/>
+            <span>Back to Library</span>
+          </button>
           <div className="min-w-0 text-center px-4">
             <b className="block max-w-48 truncate text-sm sm:max-w-md mx-auto">{note.title}</b>
-            <span className="text-xs text-muted-foreground">{note.code} · {note.author} · Page {page} of {numPages || '?'}</span>
+            <span className="text-xs text-muted-foreground">{note.code} · {note.author}</span>
           </div>
-          <button onClick={()=>downloadNote(note)} className="icon-button shrink-0" aria-label="Download"><Download size={18}/></button>
+          <button onClick={()=>downloadNote(note)} className="icon-button shrink-0" aria-label="Download">
+            <Download size={18}/>
+          </button>
         </div>
       </header>
-      <div className="grid min-h-[calc(100vh-65px)] md:grid-cols-[180px_1fr]">
-        <aside className="hidden border-r bg-background p-4 md:block overflow-y-auto max-h-[calc(100vh-65px)] scrollbar-none">
-          <p className="mb-4 text-xs font-bold uppercase tracking-wider text-muted-foreground sticky top-0 bg-background py-2 z-10">Pages</p>
-          {note.fileUrl ? (
-            <Document file={note.fileUrl} className="flex flex-col gap-3">
-              {Array.from({length: numPages}, (_, i) => (
-                <button key={i} onClick={()=>setPage(i+1)} className={`relative rounded-xl border p-2 flex-col items-center transition-colors w-full overflow-hidden ${page===i+1?'border-primary bg-sage':'bg-card hover:border-primary/40'}`}>
-                  <div className="w-full bg-background shadow-sm overflow-hidden flex items-center justify-center mb-1 pointer-events-none">
-                    <Page pageNumber={i+1} width={130} renderTextLayer={false} renderAnnotationLayer={false} />
-                  </div>
-                  <span className="block text-xs font-medium text-center">{i+1}</span>
-                </button>
-              ))}
-            </Document>
-          ) : (
-            <div className="text-xs text-muted-foreground">Loading...</div>
-          )}
-        </aside>
-        <section className="overflow-auto p-4 pb-28 md:p-8 flex justify-center bg-[#e4e4e7] dark:bg-zinc-900/5 min-h-[calc(100vh-65px)] relative">
-          {note.fileUrl ? (
-             <Document
-               file={note.fileUrl}
-               onLoadSuccess={onDocumentLoadSuccess}
-               onLoadError={(err) => console.error("PDF Load Error:", err)}
-               onPassword={(callback) => { alert("This PDF is password protected and cannot be viewed here."); }}
-               loading={<div className="animate-pulse flex items-center justify-center p-20 text-muted-foreground">Loading PDF...</div>}
-               error={
-                 <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-muted-foreground">
-                   <FileText size={48} className="mb-4 opacity-20 text-destructive"/>
-                   <p className="font-semibold text-foreground">Failed to load PDF</p>
-                   <p className="text-xs mt-2 text-center max-w-xs">The file might be corrupted, or the network connection dropped. Please try again.</p>
-                 </div>
-               }
-               noData={
-                 <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-muted-foreground">
-                   <FileText size={48} className="mb-4 opacity-20"/>
-                   <p>No PDF file provided.</p>
-                 </div>
-               }
-               className="flex flex-col items-center"
-             >
-               <Page 
-                 pageNumber={page} 
-                 scale={zoom / 100}  
-                 className="shadow-xl bg-white transition-transform transform-gpu"
-                 renderTextLayer={true}
-                 renderAnnotationLayer={true}
-               />
-             </Document>
-          ) : (
-             <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-muted-foreground">
-               <FileText size={48} className="mb-4 opacity-20"/>
-               <p>No PDF attached to this note.</p>
-             </div>
-          )}
-        </section>
-      </div>
-      <div className="fixed bottom-5 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border bg-card p-1.5 shadow-lg">
-        <button disabled={page<=1} onClick={()=>setPage(Math.max(1,page-1))} className="icon-button disabled:opacity-30"><ChevronLeft/></button>
-        <button onClick={()=>setZoom(Math.max(50,zoom-25))} className="icon-button"><Minus/></button>
-        <span className="w-12 text-center text-xs font-medium">{zoom}%</span>
-        <button onClick={()=>setZoom(Math.min(250,zoom+25))} className="icon-button"><Plus/></button>
-        <button disabled={page>=numPages} onClick={()=>setPage(Math.min(numPages,page+1))} className="icon-button disabled:opacity-30"><ChevronRight/></button>
+      <div className="flex-1 p-4 md:p-8 flex justify-center">
+        {note.fileUrl ? (
+          <div className="w-full max-w-5xl">
+            <PDFViewer url={note.fileUrl} title={note.title} />
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-muted-foreground">
+            <FileText size={48} className="mb-4 opacity-20"/>
+            <p>No PDF attached to this note.</p>
+          </div>
+        )}
       </div>
     </main>
-  )
+  );
 }
