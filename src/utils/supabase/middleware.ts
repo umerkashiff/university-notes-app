@@ -15,7 +15,7 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({
             request,
           })
@@ -32,7 +32,7 @@ export async function updateSession(request: NextRequest) {
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('dummy')) {
       await supabase.auth.getUser()
     }
-  } catch (e) {
+  } catch {
     // Ignore network errors in middleware so the app doesn't crash
   }
 
