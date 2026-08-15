@@ -94,8 +94,8 @@ export function StudyCompanion({
   // Real Bookmark / Saved Notes State from PostgreSQL per user
   const [savedNoteIds, setSavedNoteIds] = useState<string[]>(initialBookmarks)
 
-  // Dark Mode / Appearance Theme State
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
+  // Dark Mode / Appearance Theme State (Default: light)
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('light')
 
   const applyTheme = (t: 'light' | 'dark' | 'system') => {
     const root = document.documentElement
@@ -125,7 +125,8 @@ export function StudyCompanion({
         setTheme(saved)
         applyTheme(saved)
       } else {
-        applyTheme('system')
+        setTheme('light')
+        applyTheme('light')
       }
     } catch {}
   }, [])
