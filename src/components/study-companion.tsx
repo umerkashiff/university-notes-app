@@ -641,7 +641,7 @@ function Notifications({alerts,setAlerts}:{alerts:any[],setAlerts:(a:any[])=>voi
       </div>
 
       {audienceOptions.length > 2 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-4 scrollbar-none">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-4 modal-scroll touch-pan-x">
           {audienceOptions.map(opt => (
             <button
               key={opt}
@@ -751,9 +751,6 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
   }, [open, lenis]);
 
   const [subjectCode, setSubjectCode] = useState('');
-  const [customName, setCustomName] = useState('');
-  const [customCode, setCustomCode] = useState('');
-  const [isCustomSubject, setIsCustomSubject] = useState(false);
   const [seniorAdvice, setSeniorAdvice] = useState('');
 
   const semesterSubjects = useMemo(() => subjects.filter(s => s.semester === selectedSemester), [subjects, selectedSemester]);
@@ -767,12 +764,7 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
   const handleSemesterChange = (sem: number) => {
     setSelectedSemester(sem);
     const subList = subjects.filter(s => s.semester === sem);
-    if (subList.length > 0) {
-      setSubjectCode(subList[0].code);
-      setIsCustomSubject(false);
-    } else {
-      setIsCustomSubject(true);
-    }
+    setSubjectCode(subList.length > 0 ? subList[0].code : '');
   };
 
   const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -782,9 +774,10 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
     const file = form.get('file') as File;
     const title = String(form.get('title'));
     
-    const finalCode = isCustomSubject ? customCode.trim() : subjectCode;
-    const matchedSubject = subjects.find(s => s.code === finalCode);
-    const finalSubjectName = matchedSubject ? matchedSubject.name : (customName.trim() || finalCode);
+    const matchedSubject = subjects.find(s => s.code === subjectCode);
+    if (!matchedSubject) { alert('Please select a course for this semester.'); setUploading(false); return; }
+    const finalCode = matchedSubject.code;
+    const finalSubjectName = matchedSubject.name;
 
     if (!file || file.size === 0) { alert('Please select a PDF file'); setUploading(false); return; }
     if (file.type !== 'application/pdf') { alert('Only PDF files are allowed'); setUploading(false); return; }
@@ -944,10 +937,10 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
                     <input required name="title" className="field-input" placeholder="e.g. Week 1–6 Midterm Summary" />
                   </label>
 
-                  {/* Target Semester Selector */}
+                  {/* Target Semester Selector with visible scrollbar */}
                   <div className="flex flex-col gap-2">
                     <span className="text-sm font-semibold text-foreground">Target semester</span>
-                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-2 modal-scroll touch-pan-x">
                       {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => {
                         const isActive = selectedSemester === sem
                         return (
@@ -955,7 +948,7 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
                             key={sem}
                             type="button"
                             onClick={() => handleSemesterChange(sem)}
-                            className={`relative px-4 py-2 text-xs sm:text-sm font-semibold rounded-full whitespace-nowrap transition-colors select-none ${
+                            className={`relative px-4 py-2 text-xs sm:text-sm font-semibold rounded-full whitespace-nowrap transition-colors select-none shrink-0 ${
                               isActive
                                 ? 'text-primary-foreground'
                                 : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
@@ -975,35 +968,12 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
                     </div>
                   </div>
 
-                  {/* Subject Dropdown */}
+                  {/* Course / Subject Dropdown */}
                   <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-foreground">Course / Subject</span>
-                      <button
-                        type="button"
-                        onClick={() => setIsCustomSubject(!isCustomSubject)}
-                        className="text-xs text-primary font-semibold hover:underline"
-                      >
-                        {isCustomSubject ? 'Select from list' : '+ Custom subject'}
-                      </button>
-                    </div>
-
-                    {isCustomSubject ? (
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          value={customName}
-                          onChange={e => setCustomName(e.target.value)}
-                          placeholder="Subject Name"
-                          className="field-input"
-                          required={isCustomSubject}
-                        />
-                        <input
-                          value={customCode}
-                          onChange={e => setCustomCode(e.target.value.toUpperCase())}
-                          placeholder="Code (e.g. CE 101)"
-                          className="field-input uppercase"
-                          required={isCustomSubject}
-                        />
+                    <span className="text-sm font-semibold text-foreground">Course / Subject</span>
+                    {semesterSubjects.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed p-4 text-center text-xs text-muted-foreground bg-secondary/30">
+                        No courses registered for Semester {selectedSemester} yet.
                       </div>
                     ) : (
                       <div className="relative">
@@ -1015,9 +985,7 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
                           <span className="truncate">
                             {subjects.find(s => s.code === subjectCode)
                               ? `${subjects.find(s => s.code === subjectCode)?.name} (${subjectCode})`
-                              : semesterSubjects.length > 0
-                              ? 'Select a course'
-                              : 'No courses for this semester'}
+                              : 'Select a course'}
                           </span>
                           <CaretDown
                             size={16}
@@ -1030,17 +998,19 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
 
                         <AnimatePresence>
                           {subjectDropdownOpen && (
-                            <motion.div
-                              initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                              transition={{ duration: 0.15 }}
-                              className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-56 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                            >
-                              {semesterSubjects.length === 0 ? (
-                                <p className="text-xs text-muted-foreground p-3 text-center">No subjects in Semester {selectedSemester}. Click "+ Custom subject" above.</p>
-                              ) : (
-                                semesterSubjects.map(s => {
+                            <>
+                              <div 
+                                className="fixed inset-0 z-20" 
+                                onClick={() => setSubjectDropdownOpen(false)} 
+                              />
+                              <motion.div
+                                initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                                transition={{ duration: 0.15 }}
+                                className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-56 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                              >
+                                {semesterSubjects.map(s => {
                                   const isSelected = subjectCode === s.code;
                                   return (
                                     <button
@@ -1060,9 +1030,9 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
                                       {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
                                     </button>
                                   );
-                                })
-                              )}
-                            </motion.div>
+                                })}
+                              </motion.div>
+                            </>
                           )}
                         </AnimatePresence>
                       </div>
@@ -1352,7 +1322,7 @@ function AdminCms({notes,subjects,setSubjects,publish,addAnnouncement}:{notes:No
         </div>
 
         {/* Semester Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 modal-scroll touch-pan-x">
           {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
             <button
               key={sem}
