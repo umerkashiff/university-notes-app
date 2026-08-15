@@ -3,7 +3,25 @@
 import { createClient } from '@/utils/supabase/server'
 import { prisma } from '@/lib/prisma'
 
-export async function login(email: string, password?: string) {
+export async function login(
+  credentials: FormData | { email: string; password?: string } | string,
+  maybePassword?: string
+) {
+  let email = ''
+  let password = ''
+
+  if (credentials instanceof FormData) {
+    email = String(credentials.get('email') || '').trim()
+    password = String(credentials.get('password') || '')
+  } else if (typeof credentials === 'object' && credentials !== null) {
+    email = String(credentials.email || '').trim()
+    password = String(credentials.password || '')
+  } else {
+    email = String(credentials || '').trim()
+    password = String(maybePassword || '')
+  }
+
+  if (!email) return { error: 'Email is required' }
   if (!password) return { error: 'Password is required' }
 
   const supabase = await createClient()

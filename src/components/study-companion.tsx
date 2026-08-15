@@ -154,8 +154,8 @@ export function StudyCompanion({
     return `${timeStr}, ${firstName}`
   }, [user])
 
-  const signIn = async (email: string, password?: string): Promise<string | void> => {
-    const res = await login(email, password)
+  const signIn = async (credentials: FormData | { email: string; password?: string }): Promise<string | void> => {
+    const res = await login(credentials)
     if (res.error) {
       return res.error
     } else if (res.user) {
@@ -616,18 +616,19 @@ function SettingsPage({
   )
 }
 
-function Login({ onLogin }: { onLogin: (email: string, password?: string) => Promise<string | void> | void }) {
+function Login({ onLogin }: { onLogin: (credentials: FormData | { email: string; password?: string }) => Promise<string | void> | void }) {
   const [identity, setIdentity] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
     setLoading(true)
+    const formData = new FormData(e.currentTarget)
     try {
-      const err = await onLogin(identity, password)
+      const err = await onLogin(formData)
       if (err) setError(err)
     } catch (e: any) {
       setError(e?.message || 'Login failed. Please check your credentials.')
@@ -685,6 +686,7 @@ function Login({ onLogin }: { onLogin: (email: string, password?: string) => Pro
               Email address
               <input 
                 required 
+                name="email"
                 value={identity} 
                 onChange={e => setIdentity(e.target.value)} 
                 type="email" 
@@ -697,6 +699,7 @@ function Login({ onLogin }: { onLogin: (email: string, password?: string) => Pro
               Password
               <input 
                 required 
+                name="password"
                 value={password} 
                 onChange={e => setPassword(e.target.value)} 
                 type="password" 
