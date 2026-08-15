@@ -338,3 +338,36 @@ export async function createAnnouncement(data: {
   }
 }
 
+export async function toggleBookmark(noteId: string) {
+  const user = await getCurrentUser()
+  if (!user) return { error: 'Please sign in to save notes.' }
+
+  try {
+    const existing = await prisma.bookmark.findUnique({
+      where: {
+        userId_noteId: {
+          userId: user.id,
+          noteId: noteId
+        }
+      }
+    })
+
+    if (existing) {
+      await prisma.bookmark.delete({
+        where: { id: existing.id }
+      })
+      return { success: true, isBookmarked: false }
+    } else {
+      await prisma.bookmark.create({
+        data: {
+          userId: user.id,
+          noteId: noteId
+        }
+      })
+      return { success: true, isBookmarked: true }
+    }
+  } catch (err) {
+    return { error: (err as Error).message }
+  }
+}
+

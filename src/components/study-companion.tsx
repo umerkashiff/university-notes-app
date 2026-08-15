@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { login, logout } from '@/app/actions/auth'
 import type { User as PrismaUser } from '@prisma/client'
 import { createClient } from '@/utils/supabase/client'
-import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage, createAnnouncement, deleteNote, updateNote } from '@/app/actions/notes'
+import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage, createAnnouncement, deleteNote, updateNote, toggleBookmark } from '@/app/actions/notes'
 import { getPresignedUrl } from '@/app/actions/upload'
 import React from 'react'
 
@@ -45,32 +45,34 @@ const SEMESTER_LABELS: Record<number, string> = {
   8: 'Eighth semester',
 }
 
-export function StudyCompanion({ initialUser, initialNotes = [], initialAnnouncements = [], initialSubjects = [] }: { initialUser: PrismaUser | null, initialNotes?: any[], initialAnnouncements?: any[], initialSubjects?: any[] }){
+export function StudyCompanion({ 
+  initialUser, 
+  initialNotes = [], 
+  initialAnnouncements = [], 
+  initialSubjects = [],
+  initialBookmarks = []
+}: { 
+  initialUser: PrismaUser | null, 
+  initialNotes?: any[], 
+  initialAnnouncements?: any[], 
+  initialSubjects?: any[],
+  initialBookmarks?: string[]
+}){
   const [user, setUser] = useState<PrismaUser | null>(initialUser)
   const role = (user?.role?.toLowerCase() as Role) || null
   const [screen,setScreen]=useState<Screen>(role === 'admin' ? 'cms' : role === 'senior' ? 'submissions' : 'semesters')
   const [reader,setReader]=useState<Note|null>(null)
   const [selectedSubjectName, setSelectedSubjectName] = useState<string | null>(null)
 
-  // Real Bookmark / Saved Notes State with Local Storage persistence
-  const [savedNoteIds, setSavedNoteIds] = useState<string[]>([])
+  // Real Bookmark / Saved Notes State from PostgreSQL per user
+  const [savedNoteIds, setSavedNoteIds] = useState<string[]>(initialBookmarks)
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('luma_saved_notes')
-      if (stored) setSavedNoteIds(JSON.parse(stored))
-    } catch {}
-  }, [])
-
-  const toggleSave = (noteId: string | number) => {
+  const toggleSave = async (noteId: string | number) => {
     const idStr = String(noteId)
     setSavedNoteIds(prev => {
-      const next = prev.includes(idStr) ? prev.filter(x => x !== idStr) : [...prev, idStr]
-      try {
-        localStorage.setItem('luma_saved_notes', JSON.stringify(next))
-      } catch {}
-      return next
+      return prev.includes(idStr) ? prev.filter(x => x !== idStr) : [...prev, idStr]
     })
+    await toggleBookmark(idStr)
   }
 
   const mapNote = (n: any): Note => ({
@@ -386,6 +388,8 @@ function SubjectLibrary({
   }, [activeSubject, semester, onSelectSubjectName])
 
   const list = useMemo(() => {
+    if (semSubjects.length === 0) return []
+
     return notes.filter(n => {
       if (n.status && n.status !== 'PUBLISHED') return false
       if (activeSubject) {
@@ -393,7 +397,7 @@ function SubjectLibrary({
         if (!matches) return false
       } else {
         const isThisSem = semSubjects.some(s => s.code === n.code || s.name === n.subject)
-        if (!isThisSem && semSubjects.length > 0) return false
+        if (!isThisSem) return false
       }
       const q = query.toLowerCase()
       return !q || `${n.title} ${n.author} ${n.subject} ${n.code}`.toLowerCase().includes(q)

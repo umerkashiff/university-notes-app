@@ -9,11 +9,19 @@ export default async function Page() {
   let notes: any[] = []
   let announcements: any[] = []
   let subjects: any[] = []
+  let bookmarks: string[] = []
 
   try {
     user = await getCurrentUser()
+    if (user) {
+      const userBookmarks = await prisma.bookmark.findMany({
+        where: { userId: user.id },
+        select: { noteId: true }
+      })
+      bookmarks = userBookmarks.map(b => b.noteId)
+    }
   } catch (err) {
-    console.error('Failed to get current user:', err)
+    console.error('Failed to get current user/bookmarks:', err)
   }
 
   try {
@@ -45,6 +53,7 @@ export default async function Page() {
       initialNotes={notes} 
       initialAnnouncements={announcements} 
       initialSubjects={subjects} 
+      initialBookmarks={bookmarks}
     />
   )
 }
