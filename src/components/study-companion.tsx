@@ -300,6 +300,17 @@ function SettingsPage({
   const [reqLoading, setReqLoading] = useState(false)
   const [reqSuccess, setReqSuccess] = useState(false)
 
+  const [typeDropdownOpen, setTypeDropdownOpen] = useState(false)
+  const [semDropdownOpen, setSemDropdownOpen] = useState(false)
+
+  const REQUEST_TYPES = [
+    'Missing Course / Subject',
+    'Request Lecture Notes',
+    'Past Papers & Solutions',
+    'Report Broken File / Typo',
+    'General Feedback'
+  ]
+
   const handleFeedbackSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!reqMsg.trim()) return
@@ -413,33 +424,91 @@ function SettingsPage({
 
         <form onSubmit={handleFeedbackSubmit} className="flex flex-col gap-4">
           <div className="grid sm:grid-cols-2 gap-4">
-            <label className="field-label">
-              Request Type
-              <select
-                value={reqType}
-                onChange={e => setReqType(e.target.value)}
-                className="field-input bg-background"
-              >
-                <option value="Missing Course / Subject">Missing Course / Subject</option>
-                <option value="Request Lecture Notes">Request Lecture Notes</option>
-                <option value="Past Papers & Solutions">Past Papers & Solutions</option>
-                <option value="Report Broken File / Typo">Report Broken File / Typo</option>
-                <option value="General Feedback">General Suggestion</option>
-              </select>
-            </label>
+            {/* Custom Request Type Dropdown */}
+            <div className="flex flex-col gap-2 text-sm font-medium">
+              <span>Request Type</span>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => { setTypeDropdownOpen(!typeDropdownOpen); setSemDropdownOpen(false); }}
+                  className="flex h-12 w-full items-center justify-between rounded-2xl border bg-background px-4 text-sm font-medium focus:border-foreground transition-colors text-left"
+                >
+                  <span className="truncate">{reqType}</span>
+                  <CaretDown size={16} weight="bold" className={`text-muted-foreground transition-transform shrink-0 ml-2 ${typeDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
 
-            <label className="field-label">
-              Relevant Semester
-              <select
-                value={reqSem}
-                onChange={e => setReqSem(Number(e.target.value))}
-                className="field-input bg-background"
-              >
-                {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
-                  <option key={s} value={s}>Semester {s}</option>
-                ))}
-              </select>
-            </label>
+                <AnimatePresence>
+                  {typeDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-20" onClick={() => setTypeDropdownOpen(false)} />
+                      <motion.div
+                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-56 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-1.5 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                      >
+                        {REQUEST_TYPES.map(t => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => { setReqType(t); setTypeDropdownOpen(false); }}
+                            className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
+                              reqType === t ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                            }`}
+                          >
+                            <span>{t}</span>
+                            {reqType === t && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                          </button>
+                        ))}
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            {/* Custom Relevant Semester Dropdown */}
+            <div className="flex flex-col gap-2 text-sm font-medium">
+              <span>Relevant Semester</span>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => { setSemDropdownOpen(!semDropdownOpen); setTypeDropdownOpen(false); }}
+                  className="flex h-12 w-full items-center justify-between rounded-2xl border bg-background px-4 text-sm font-medium focus:border-foreground transition-colors text-left"
+                >
+                  <span className="truncate">Semester {reqSem}</span>
+                  <CaretDown size={16} weight="bold" className={`text-muted-foreground transition-transform shrink-0 ml-2 ${semDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                <AnimatePresence>
+                  {semDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-20" onClick={() => setSemDropdownOpen(false)} />
+                      <motion.div
+                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-56 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-1.5 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                      >
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => { setReqSem(s); setSemDropdownOpen(false); }}
+                            className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
+                              reqSem === s ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                            }`}
+                          >
+                            <span>Semester {s}</span>
+                            {reqSem === s && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                          </button>
+                        ))}
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
           </div>
 
           <label className="field-label">
