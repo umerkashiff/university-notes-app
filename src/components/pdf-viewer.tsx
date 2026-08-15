@@ -95,16 +95,17 @@ export function PDFViewer({ url, title, author, code, onBack }: PDFViewerProps) 
         </div>
 
         <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-          {/* Fallback to Google Viewer */}
+          {/* Google Viewer Button (Visible on phone and desktop) */}
           <a
             href={`https://docs.google.com/viewer?url=${encodeURIComponent(url)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary/60 hover:bg-secondary rounded-xl transition-colors mr-1"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary/80 hover:bg-secondary rounded-xl transition-colors shrink-0"
             title="Open in Google Docs Viewer"
           >
             <ExternalLink className="h-3.5 w-3.5" />
-            <span>Google Viewer</span>
+            <span className="hidden sm:inline">Google Viewer</span>
+            <span className="sm:hidden">Google</span>
           </a>
 
           <button 
