@@ -412,9 +412,9 @@ function SubjectLibrary({
         </span>
       </div>
 
-      {/* Mobile Horizontal Pill Bar */}
+      {/* Mobile Horizontal Pill Bar (Phone only) */}
       {semSubjects.length > 0 && (
-        <div className="lg:hidden">
+        <div className="md:hidden">
           <div className="flex items-center gap-2 overflow-x-auto pb-2 modal-scroll touch-pan-x min-w-0 max-w-full">
             {semSubjects.map(s => {
               const isActive = activeSubject?.code === s.code
@@ -437,9 +437,9 @@ function SubjectLibrary({
         </div>
       )}
 
-      <div className="grid gap-8 lg:grid-cols-[260px_1fr] items-start">
-        {/* Desktop Sticky Sidebar */}
-        <aside className="hidden lg:block sticky top-24 self-start w-full">
+      <div className="grid gap-8 md:grid-cols-[240px_1fr] lg:grid-cols-[260px_1fr] items-start">
+        {/* Desktop Sticky Sidebar (PC/Tablet only) */}
+        <aside className="hidden md:block sticky top-24 self-start w-full">
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 px-1">Courses</p>
           <div className="flex flex-col gap-1.5">
             {semSubjects.length === 0 ? (
