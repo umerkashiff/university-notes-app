@@ -947,21 +947,31 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
                   {/* Target Semester Selector */}
                   <div className="flex flex-col gap-2">
                     <span className="text-sm font-semibold text-foreground">Target semester</span>
-                    <div className="grid grid-cols-4 gap-1.5 p-1 rounded-2xl bg-secondary/70 border border-border/60">
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
-                        <button
-                          key={sem}
-                          type="button"
-                          onClick={() => handleSemesterChange(sem)}
-                          className={`flex items-center justify-center h-9 rounded-xl text-xs font-semibold transition-colors ${
-                            selectedSemester === sem
-                              ? 'bg-primary text-primary-foreground shadow-xs'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
-                          }`}
-                        >
-                          Sem {sem}
-                        </button>
-                      ))}
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => {
+                        const isActive = selectedSemester === sem
+                        return (
+                          <button
+                            key={sem}
+                            type="button"
+                            onClick={() => handleSemesterChange(sem)}
+                            className={`relative px-4 py-2 text-xs sm:text-sm font-semibold rounded-full whitespace-nowrap transition-colors select-none ${
+                              isActive
+                                ? 'text-primary-foreground'
+                                : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+                            }`}
+                          >
+                            {isActive && (
+                              <motion.div
+                                layoutId="upload-sem-pill"
+                                className="absolute inset-0 bg-primary rounded-full z-0 shadow-sm"
+                                transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                              />
+                            )}
+                            <span className="relative z-10">Semester {sem}</span>
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
 
@@ -1521,11 +1531,8 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
               onClick={() => setDropdownOpen(!dropdownOpen)}
               className="flex h-12 w-full items-center justify-between rounded-2xl border bg-background px-4 text-sm font-medium focus:border-foreground transition-colors text-left"
             >
-              <span className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">{audience}</span>
-                <span className="text-xs text-muted-foreground">
-                  {audience === 'All students' ? '(Department-wide)' : `(Targeted to ${audience})`}
-                </span>
+              <span className="truncate">
+                {audience === 'All students' ? 'All students (Department-wide)' : audience}
               </span>
               <CaretDown
                 size={16}
@@ -1538,59 +1545,43 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
 
             <AnimatePresence>
               {dropdownOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-60 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                >
-                  {AUDIENCE_CHOICES.map(item => {
-                    const isSelected = audience === item;
-                    return (
-                      <button
-                        key={item}
-                        type="button"
-                        onClick={() => {
-                          setAudience(item);
-                          setDropdownOpen(false);
-                        }}
-                        className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
-                          isSelected
-                            ? 'bg-secondary font-semibold text-foreground'
-                            : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                        }`}
-                      >
-                        <span>{item}</span>
-                        {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
-                      </button>
-                    );
-                  })}
-                </motion.div>
+                <>
+                  <div 
+                    className="fixed inset-0 z-20" 
+                    onClick={() => setDropdownOpen(false)} 
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-56 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  >
+                    {AUDIENCE_CHOICES.map(item => {
+                      const isSelected = audience === item;
+                      return (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => {
+                            setAudience(item);
+                            setDropdownOpen(false);
+                          }}
+                          className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
+                            isSelected
+                              ? 'bg-secondary font-semibold text-foreground'
+                              : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                          }`}
+                        >
+                          <span className="truncate">{item}</span>
+                          {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                        </button>
+                      );
+                    })}
+                  </motion.div>
+                </>
               )}
             </AnimatePresence>
-          </div>
-
-          {/* Quick Select Semester Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pt-1.5 pb-1 scrollbar-none">
-            {['All students', 'Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5', 'Sem 6', 'Sem 7', 'Sem 8'].map((pill) => {
-              const fullVal = pill === 'All students' ? 'All students' : `Semester ${pill.replace('Sem ', '')}`
-              const isActive = audience === fullVal
-              return (
-                <button
-                  key={pill}
-                  type="button"
-                  onClick={() => setAudience(fullVal)}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
-                    isActive
-                      ? 'bg-primary text-primary-foreground shadow-xs'
-                      : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
-                  }`}
-                >
-                  {pill}
-                </button>
-              )
-            })}
           </div>
         </div>
 
