@@ -63,6 +63,30 @@
   --radius: 1rem;
 }
 
+.dark {
+  color-scheme: dark;
+  --background: #121316;
+  --foreground: #f3f3f4;
+  --card: #1a1b1f;
+  --card-foreground: #f3f3f4;
+  --popover: #1a1b1f;
+  --popover-foreground: #f3f3f4;
+  --primary: #f3f3f4;
+  --primary-foreground: #121316;
+  --secondary: #25272c;
+  --secondary-foreground: #f3f3f4;
+  --muted-foreground: #96989d;
+  --border: #2c2e35;
+  --sage: #1e3328;
+  --mist: #1d2c3c;
+  --blush: #3a2522;
+  --sand: #382c1e;
+  --lavender: #2c233a;
+  --mint: #1a3525;
+  --peach: #3a2220;
+  --sky: #1b2f3f;
+}
+
 @layer base {
   * { @apply border-border outline-ring/40; }
   html { @apply bg-background scroll-smooth; scrollbar-gutter: stable; }

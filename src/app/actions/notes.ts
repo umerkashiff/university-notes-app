@@ -371,3 +371,30 @@ export async function toggleBookmark(noteId: string) {
   }
 }
 
+export async function submitContentRequest(data: {
+  type: string
+  semester?: number
+  subject?: string
+  message: string
+}) {
+  const user = await getCurrentUser()
+  if (!user) return { error: 'Please sign in to submit a request.' }
+
+  try {
+    const title = `Request: ${data.type} (${user.name || user.email})`
+    const body = `Semester ${data.semester || 'N/A'}${data.subject ? ` · ${data.subject}` : ''}: ${data.message}`
+    
+    await prisma.announcement.create({
+      data: {
+        title,
+        body,
+        audience: 'ADMIN'
+      }
+    })
+
+    return { success: true }
+  } catch (err) {
+    return { error: (err as Error).message }
+  }
+}
+

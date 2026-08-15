@@ -4,12 +4,12 @@ import dynamic from 'next/dynamic'
 import { useLenis } from 'lenis/react'
 
 import { useMemo, useState, useEffect } from 'react'
-import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDown, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info, PencilSimple } from '@phosphor-icons/react'
+import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDown, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info, PencilSimple, Moon, Sun, Desktop, UserCircle } from '@phosphor-icons/react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { login, logout } from '@/app/actions/auth'
 import type { User as PrismaUser } from '@prisma/client'
 import { createClient } from '@/utils/supabase/client'
-import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage, createAnnouncement, deleteNote, updateNote, toggleBookmark } from '@/app/actions/notes'
+import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage, createAnnouncement, deleteNote, updateNote, toggleBookmark, submitContentRequest } from '@/app/actions/notes'
 import { getPresignedUrl } from '@/app/actions/upload'
 import React from 'react'
 
@@ -19,7 +19,7 @@ const PDFViewer = dynamic(() => import('@/components/pdf-viewer').then(mod => mo
 })
 
 type Role = 'student' | 'senior' | 'admin'
-type Screen = 'semesters' | 'subject' | 'notifications' | 'submissions' | 'cms' | 'saved'
+type Screen = 'semesters' | 'subject' | 'notifications' | 'submissions' | 'cms' | 'saved' | 'settings'
 type SubjectItem = { id:string; name:string; code:string; semester:number }
 type Note = { id:string|number; authorId?:string; fileUrl?:string; status?:string; title:string; subject:string; code:string; author:string; date:string; pages:number; size:string; tone:string; description?:string }
 
@@ -66,6 +66,42 @@ export function StudyCompanion({
 
   // Real Bookmark / Saved Notes State from PostgreSQL per user
   const [savedNoteIds, setSavedNoteIds] = useState<string[]>(initialBookmarks)
+
+  // Dark Mode / Appearance Theme State
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
+
+  const applyTheme = (t: 'light' | 'dark' | 'system') => {
+    const root = document.documentElement
+    if (t === 'dark') {
+      root.classList.add('dark')
+    } else if (t === 'light') {
+      root.classList.remove('dark')
+    } else {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      if (prefersDark) root.classList.add('dark')
+      else root.classList.remove('dark')
+    }
+  }
+
+  const changeTheme = (t: 'light' | 'dark' | 'system') => {
+    setTheme(t)
+    try {
+      localStorage.setItem('luma_theme', t)
+    } catch {}
+    applyTheme(t)
+  }
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('luma_theme') as 'light' | 'dark' | 'system' | null
+      if (saved) {
+        setTheme(saved)
+        applyTheme(saved)
+      } else {
+        applyTheme('system')
+      }
+    } catch {}
+  }, [])
 
   const toggleSave = async (noteId: string | number) => {
     const idStr = String(noteId)
@@ -148,10 +184,14 @@ export function StudyCompanion({
     ? `Semester ${selectedSemester}`
     : screen==='saved'
     ? 'Saved notes'
+    : screen==='settings'
+    ? 'Settings'
     : greeting
 
+  const roleLabel = role === 'admin' ? 'Administrator' : role === 'senior' ? 'Senior Contributor' : 'Student'
+
   return <main className="min-h-screen bg-background text-foreground">
-    <header className="sticky top-0 z-40 border-b border-white/30 bg-white/40 backdrop-blur-xl shadow-sm supports-[backdrop-filter]:bg-white/30 transform-gpu will-change-transform">
+    <header className="sticky top-0 z-40 border-b border-white/30 bg-white/40 dark:bg-card/40 backdrop-blur-xl shadow-sm supports-[backdrop-filter]:bg-white/30 transform-gpu will-change-transform">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
         <button onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} className="flex items-center gap-3" aria-label="Luma home">
           <span className="flex size-9 -rotate-3 items-center justify-center rounded-xl bg-primary text-primary-foreground"><BookOpen size={18}/></span>
@@ -159,10 +199,11 @@ export function StudyCompanion({
           <span className="hidden rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground sm:inline">Computer Engineering</span>
         </button>
         <nav className="hidden items-center gap-1 rounded-full bg-secondary p-1 md:flex" aria-label="Primary">
-          {role==='student'&&<><Nav active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')}>Home</Nav><Nav active={screen==='saved'} onClick={()=>setScreen('saved')}>Saved ({savedNoteIds.length})</Nav></>}
+          {role==='student'&&<><Nav active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')}>Home</Nav><Nav active={screen==='saved'} onClick={()=>setScreen('saved')}>Saved</Nav></>}
           {role==='senior'&&<><Nav active={screen==='submissions'} onClick={()=>setScreen('submissions')}>My notes</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}
           {role==='admin'&&<><Nav active={screen==='cms'} onClick={()=>setScreen('cms')}>Studio</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}
           <Nav active={screen==='notifications'} onClick={()=>setScreen('notifications')}>Notices</Nav>
+          <Nav active={screen==='settings'} onClick={()=>setScreen('settings')}>Settings</Nav>
         </nav>
         <div className="flex items-center gap-2">
           <button onClick={()=>setScreen('notifications')} className="icon-button relative" aria-label={`${unread} unread notifications`}>
@@ -170,17 +211,27 @@ export function StudyCompanion({
             {unread>0&&<span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground">{unread}</span>}
           </button>
           <div className="relative">
-            <button onClick={()=>setShowRole(!showRole)} className="flex size-10 items-center justify-center rounded-full bg-mist text-sm font-bold">
+            <button onClick={()=>setShowRole(!showRole)} className="flex size-10 items-center justify-center rounded-full bg-mist text-sm font-bold shadow-xs">
               {user?.avatar || (user?.name ? user.name.slice(0, 2).toUpperCase() : "ST")}
             </button>
             <AnimatePresence>
               {showRole&&<motion.div initial={{opacity:0, scale:0.95, y:5}} animate={{opacity:1, scale:1, y:0}} exit={{opacity:0, scale:0.95, y:5}} transition={{duration:0.15}} className="popover right-0 w-64 p-2 origin-top-right">
                 <div className="border-b p-3">
-                  <b>{user?.name || user?.email}</b>
-                  <p className="text-xs capitalize text-muted-foreground">{role} preview</p>
+                  <b className="block truncate text-foreground">{user?.name || user?.email}</b>
+                  <p className="text-xs capitalize text-muted-foreground mt-0.5">{roleLabel}</p>
                 </div>
-                {(['student','senior','admin'] as Role[]).map(r=><button key={r} onClick={()=>{signIn(r + '@uet.edu');setShowRole(false)}} className="flex w-full items-center gap-2 rounded-xl p-3 text-sm capitalize hover:bg-secondary">{r===role&&<Check size={15}/>} {r}</button>)}
-                <button onClick={handleLogout} className="flex w-full items-center gap-2 rounded-xl p-3 text-sm text-muted-foreground hover:bg-secondary"><LogOut size={16}/> Sign out</button>
+                <button 
+                  onClick={() => { setScreen('settings'); setShowRole(false); }} 
+                  className="flex w-full items-center gap-2.5 rounded-xl p-3 text-sm font-medium hover:bg-secondary text-foreground transition-colors"
+                >
+                  <Settings size={17}/> Settings & Preferences
+                </button>
+                <button 
+                  onClick={handleLogout} 
+                  className="flex w-full items-center gap-2.5 rounded-xl p-3 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <LogOut size={17}/> Sign out
+                </button>
               </motion.div>}
             </AnimatePresence>
           </div>
@@ -191,7 +242,7 @@ export function StudyCompanion({
     <div className="mx-auto max-w-7xl px-5 py-8 pb-28 md:px-8 md:py-12">
       <div className="mb-8 flex items-end justify-between">
         <div>
-          <p className="section-kicker">{role==='admin'?'Department CMS':role==='senior'?'Senior contributor':'Your study library'}</p>
+          <p className="section-kicker">{screen==='settings'?'Account & Preferences':role==='admin'?'Department CMS':role==='senior'?'Senior contributor':'Your study library'}</p>
           <h1 className="text-balance text-4xl font-semibold tracking-[-.04em] md:text-5xl">{title}</h1>
         </div>
       </div>
@@ -203,6 +254,7 @@ export function StudyCompanion({
           {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts}/>} 
           {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])}/>} 
           {screen==='cms'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),audience: note.subject || 'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
+          {screen==='settings'&&<SettingsPage user={user} theme={theme} onChangeTheme={changeTheme} onLogout={handleLogout} onNavigate={setScreen}/>}
         </motion.div>
       </AnimatePresence>
     </div>
@@ -210,6 +262,7 @@ export function StudyCompanion({
       <Mobile active={role==='admin'?screen==='cms':role==='senior'?screen==='submissions':(screen==='semesters'||screen==='subject')} onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} icon={<Home/>}>Home</Mobile>
       {role==='student'?<Mobile active={screen==='saved'} onClick={()=>setScreen('saved')} icon={<Bookmark/>}>Saved</Mobile>:<Mobile active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')} icon={<BookOpen/>}>Library</Mobile>}
       <Mobile active={screen==='notifications'} onClick={()=>setScreen('notifications')} icon={<Bell/>}>Notices</Mobile>
+      <Mobile active={screen==='settings'} onClick={()=>setScreen('settings')} icon={<Settings/>}>Settings</Mobile>
     </nav>
   </main>
 }
@@ -219,12 +272,232 @@ function Nav({active,onClick,children,layoutId="nav-pill"}:{active:boolean,onCli
   <span className="relative z-10">{children}</span>
 </button>}
 
-function Mobile({active,onClick,icon,children}:{active:boolean,onClick:()=>void,icon:React.ReactNode,children:React.ReactNode}){return <button onClick={onClick} className={`relative flex min-w-16 flex-col items-center gap-1 rounded-full px-3 py-2 text-[10px] transition-colors ${active?'text-foreground':'text-muted-foreground hover:text-foreground'}`}>
+function Mobile({active,onClick,icon,children}:{active:boolean,onClick:()=>void,icon:React.ReactNode,children:React.ReactNode}){return <button onClick={onClick} className={`relative flex min-w-14 flex-col items-center gap-1 rounded-full px-3 py-2 text-[10px] transition-colors ${active?'text-foreground':'text-muted-foreground hover:text-foreground'}`}>
   {active && <motion.div layoutId="mobile-nav-pill" className="absolute inset-0 bg-secondary rounded-full z-0" transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />}
   <span className="relative z-10 flex flex-col items-center gap-1">{icon}<span>{children}</span></span>
 </button>}
 
 function Header({kicker,title}:{kicker:string,title:string}){return <div className="mb-6"><p className="section-kicker">{kicker}</p><h2 className="text-3xl font-semibold">{title}</h2></div>}
+
+function SettingsPage({
+  user,
+  theme,
+  onChangeTheme,
+  onLogout,
+  onNavigate
+}: {
+  user: PrismaUser | null
+  theme: 'light' | 'dark' | 'system'
+  onChangeTheme: (t: 'light' | 'dark' | 'system') => void
+  onLogout: () => void
+  onNavigate: (s: Screen) => void
+}) {
+  const role = (user?.role?.toLowerCase() as Role) || 'student'
+  const roleLabel = role === 'admin' ? 'Administrator' : role === 'senior' ? 'Senior Contributor' : 'Student'
+
+  const [reqType, setReqType] = useState('Missing Course / Subject')
+  const [reqSem, setReqSem] = useState(1)
+  const [reqCourse, setReqCourse] = useState('')
+  const [reqMsg, setReqMsg] = useState('')
+  const [reqLoading, setReqLoading] = useState(false)
+  const [reqSuccess, setReqSuccess] = useState(false)
+
+  const handleFeedbackSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!reqMsg.trim()) return
+    setReqLoading(true)
+    const res = await submitContentRequest({
+      type: reqType,
+      semester: reqSem,
+      subject: reqCourse.trim() || undefined,
+      message: reqMsg.trim()
+    })
+    if (res.error) {
+      alert(res.error)
+    } else {
+      setReqSuccess(true)
+      setReqMsg('')
+      setReqCourse('')
+      setTimeout(() => setReqSuccess(false), 4000)
+    }
+    setReqLoading(false)
+  }
+
+  const joinDate = user?.createdAt 
+    ? new Date(user.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    : 'Active'
+
+  return (
+    <div className="flex flex-col gap-8 max-w-4xl">
+      {/* Header Description */}
+      <div>
+        <p className="text-muted-foreground text-sm">
+          Customize your display theme, inspect your university account details, and request lecture notes or courses directly from department administrators.
+        </p>
+      </div>
+
+      {/* 1. Appearance / Dark Mode */}
+      <section className="rounded-3xl border bg-card p-6 sm:p-7 shadow-xs">
+        <div className="flex items-center gap-2 mb-1">
+          <Sun size={20} className="text-primary" />
+          <h3 className="text-lg font-semibold text-foreground">Appearance</h3>
+        </div>
+        <p className="text-xs text-muted-foreground mb-5">
+          Select a display theme for Luma on this device.
+        </p>
+
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { id: 'light', label: 'Light', icon: <Sun size={20} /> },
+            { id: 'dark', label: 'Dark', icon: <Moon size={20} /> },
+            { id: 'system', label: 'System', icon: <Desktop size={20} /> }
+          ].map(opt => (
+            <button
+              key={opt.id}
+              onClick={() => onChangeTheme(opt.id as any)}
+              className={`flex flex-col items-center justify-center gap-2.5 rounded-2xl p-4 border transition-all text-sm font-medium ${
+                theme === opt.id
+                  ? 'border-primary bg-secondary/80 text-foreground font-semibold shadow-xs'
+                  : 'border-border bg-card hover:bg-secondary/40 text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className={theme === opt.id ? 'text-primary' : 'text-muted-foreground'}>{opt.icon}</span>
+              <span>{opt.label}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* 2. Account Information */}
+      <section className="rounded-3xl border bg-card p-6 sm:p-7 shadow-xs">
+        <div className="flex items-center gap-2 mb-1">
+          <UserCircle size={20} className="text-primary" />
+          <h3 className="text-lg font-semibold text-foreground">Account Information</h3>
+        </div>
+        <p className="text-xs text-muted-foreground mb-5">
+          Verified university portal credentials.
+        </p>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="rounded-2xl bg-secondary/60 p-4 border border-border/50">
+            <span className="text-xs text-muted-foreground block font-medium">Full Name</span>
+            <b className="text-sm font-semibold text-foreground mt-0.5 block">{user?.name || 'Student'}</b>
+          </div>
+          <div className="rounded-2xl bg-secondary/60 p-4 border border-border/50">
+            <span className="text-xs text-muted-foreground block font-medium">Email Address</span>
+            <b className="text-sm font-semibold text-foreground mt-0.5 block truncate">{user?.email || 'student@uet.edu'}</b>
+          </div>
+          <div className="rounded-2xl bg-secondary/60 p-4 border border-border/50">
+            <span className="text-xs text-muted-foreground block font-medium">Department</span>
+            <b className="text-sm font-semibold text-foreground mt-0.5 block">Computer Engineering (UET)</b>
+          </div>
+          <div className="rounded-2xl bg-secondary/60 p-4 border border-border/50 flex items-center justify-between">
+            <div>
+              <span className="text-xs text-muted-foreground block font-medium">Account Role</span>
+              <b className="text-sm font-semibold text-foreground mt-0.5 block">{roleLabel}</b>
+            </div>
+            <span className="text-[10px] uppercase tracking-wider font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-full border border-primary/20">
+              {role}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. Request Content / Feedback */}
+      <section className="rounded-3xl border bg-card p-6 sm:p-7 shadow-xs">
+        <div className="flex items-center gap-2 mb-1">
+          <ChatText size={20} className="text-primary" />
+          <h3 className="text-lg font-semibold text-foreground">Request Content or Report Changes</h3>
+        </div>
+        <p className="text-xs text-muted-foreground mb-5">
+          Need lecture notes for a specific course, past papers, or want to report an issue to department admins?
+        </p>
+
+        <form onSubmit={handleFeedbackSubmit} className="flex flex-col gap-4">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <label className="field-label">
+              Request Type
+              <select
+                value={reqType}
+                onChange={e => setReqType(e.target.value)}
+                className="field-input bg-background"
+              >
+                <option value="Missing Course / Subject">Missing Course / Subject</option>
+                <option value="Request Lecture Notes">Request Lecture Notes</option>
+                <option value="Past Papers & Solutions">Past Papers & Solutions</option>
+                <option value="Report Broken File / Typo">Report Broken File / Typo</option>
+                <option value="General Feedback">General Suggestion</option>
+              </select>
+            </label>
+
+            <label className="field-label">
+              Relevant Semester
+              <select
+                value={reqSem}
+                onChange={e => setReqSem(Number(e.target.value))}
+                className="field-input bg-background"
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                  <option key={s} value={s}>Semester {s}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <label className="field-label">
+            Course Name or Code (Optional)
+            <input
+              value={reqCourse}
+              onChange={e => setReqCourse(e.target.value)}
+              className="field-input"
+              placeholder="e.g. Digital Logic Design (CE 201)"
+            />
+          </label>
+
+          <label className="field-label">
+            Details & Specific Topics
+            <textarea
+              required
+              value={reqMsg}
+              onChange={e => setReqMsg(e.target.value)}
+              className="field-input min-h-28 py-3 resize-none"
+              placeholder="Describe the notes, syllabus, or past papers you are looking for..."
+            />
+          </label>
+
+          {reqSuccess && (
+            <div className="rounded-2xl bg-sage/40 border border-primary/20 p-3.5 text-center text-xs font-semibold text-foreground flex items-center justify-center gap-1.5">
+              <Check size={16} className="text-primary" /> Thank you! Your request has been forwarded to department administrators.
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={reqLoading}
+            className="rounded-full bg-primary px-6 py-3.5 font-semibold text-primary-foreground text-sm hover:opacity-95 transition-opacity shadow-sm self-start"
+          >
+            {reqLoading ? 'Submitting request...' : 'Send request to department'}
+          </button>
+        </form>
+      </section>
+
+      {/* 4. Session Actions */}
+      <section className="rounded-3xl border bg-card p-6 sm:p-7 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-base font-semibold text-foreground">Sign Out</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">End your current session on this device.</p>
+        </div>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="rounded-full border border-destructive/30 text-destructive hover:bg-destructive/10 px-5 py-2.5 text-sm font-semibold transition-colors flex items-center gap-2"
+        >
+          <LogOut size={16} /> Sign out
+        </button>
+      </section>
+    </div>
+  )
+}
 
 function Login({onLogin}:{onLogin:(email:string, password:string)=>void}){const [identity,setIdentity]=useState('');const [password,setPassword]=useState('');const [error,setError]=useState('');return <main className="login-shell min-h-screen bg-background p-5 md:p-8"><div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl overflow-hidden rounded-[2rem] border bg-card shadow-sm md:grid-cols-[1.05fr_.95fr]">
   <section className="relative hidden flex-col justify-between overflow-hidden bg-sage p-12 md:flex"><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground"><BookOpen size={20}/></span><b className="text-xl">Luma</b></div><div className="max-w-md"><span className="eyebrow"><ShieldCheck size={15}/> Made for your department</span><h1 className="mt-5 text-balance text-5xl font-semibold leading-[1.05] tracking-[-.05em]">Every useful note, in one calm place.</h1><p className="mt-5 text-lg leading-relaxed text-muted-foreground">Browse by semester, read beautifully, and never miss what matters.</p></div><div className="grid grid-cols-2 gap-3"><div className="rounded-3xl bg-background/60 p-5"><FileText/><b className="mt-8 block">Shared by seniors</b><p className="text-sm text-muted-foreground">Reviewed before publishing.</p></div><div className="rounded-3xl bg-background/60 p-5"><Bell/><b className="mt-8 block">Department updates</b><p className="text-sm text-muted-foreground">Clear, timely announcements.</p></div></div></section>
