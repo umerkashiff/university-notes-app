@@ -112,14 +112,14 @@ export function StudyCompanion({
   const changeTheme = (t: 'light' | 'dark' | 'system') => {
     setTheme(t)
     try {
-      localStorage.setItem('luma_theme', t)
+      localStorage.setItem('semstack_theme', t)
     } catch {}
     applyTheme(t)
   }
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('luma_theme') as 'light' | 'dark' | 'system' | null
+      const saved = localStorage.getItem('semstack_theme') as 'light' | 'dark' | 'system' | null
       if (saved) {
         setTheme(saved)
         applyTheme(saved)
@@ -302,9 +302,9 @@ export function StudyCompanion({
         >
           <header className="sticky top-0 z-40 border-b border-white/30 bg-white/40 dark:bg-card/40 backdrop-blur-xl shadow-sm supports-[backdrop-filter]:bg-white/30 transform-gpu will-change-transform">
             <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
-              <button onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} className="flex items-center gap-3" aria-label="Luma home">
+              <button onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} className="flex items-center gap-3" aria-label="Semstack home">
                 <span className="flex size-9 -rotate-3 items-center justify-center rounded-xl bg-primary text-primary-foreground"><BookOpen size={18}/></span>
-                <span className="text-xl font-bold tracking-tight">Luma</span>
+                <span className="text-xl font-bold tracking-tight">Semstack</span>
                 <span className="hidden rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground sm:inline">Computer Engineering</span>
               </button>
               <nav className="hidden items-center gap-1 rounded-full bg-secondary p-1 md:flex" aria-label="Primary">
@@ -493,7 +493,7 @@ function SettingsPage({
           <h3 className="text-lg font-semibold text-foreground">Appearance</h3>
         </div>
         <p className="text-xs text-muted-foreground mb-5">
-          Select a display theme for Luma on this device.
+          Select a display theme for Semstack on this device.
         </p>
 
         <div className="grid grid-cols-3 gap-3">
@@ -811,7 +811,7 @@ function Login({
             <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <BookOpen size={20}/>
             </span>
-            <b className="text-xl">Luma</b>
+            <b className="text-xl">Semstack</b>
           </div>
           <div className="max-w-md">
             <h1 className="mt-5 text-balance text-5xl font-semibold leading-[1.05] tracking-[-.05em]">
@@ -841,12 +841,12 @@ function Login({
               <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
                 <BookOpen size={20}/>
               </span>
-              <b className="text-xl">Luma</b>
+              <b className="text-xl">Semstack</b>
             </div>
           </div>
 
           <p className="section-kicker">Welcome back</p>
-          <h2 className="text-4xl font-semibold tracking-[-.04em]">Sign in to Luma</h2>
+          <h2 className="text-4xl font-semibold tracking-[-.04em]">Sign in to Semstack</h2>
           <p className="mt-2 text-muted-foreground">Your department's notes and notices await.</p>
 
           <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
@@ -904,7 +904,7 @@ function Login({
           </form>
           
           <div className="mt-7 text-center text-sm text-muted-foreground">
-            <span>New to Luma? </span>
+            <span>New to Semstack? </span>
             <button 
               type="button" 
               onClick={onSwitchToSignUp}
@@ -1370,7 +1370,7 @@ function NoteRow({
   )
 }
 
-function downloadNote(note:Note){const blob=new Blob([`${note.title}\n${note.subject}\nShared on Luma by ${note.author}`],{type:'text/plain'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${note.title}.txt`;a.click();URL.revokeObjectURL(url)}
+function downloadNote(note:Note){const blob=new Blob([`${note.title}\n${note.subject}\nShared on Semstack by ${note.author}`],{type:'text/plain'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${note.title}.txt`;a.click();URL.revokeObjectURL(url)}
 
 function Notifications({alerts,setAlerts,user}:{alerts:any[],setAlerts:(a:any[])=>void,user:PrismaUser|null}){
   const [filter, setFilter] = useState<'dept' | 'app' | 'all' | 'unread'>('dept')

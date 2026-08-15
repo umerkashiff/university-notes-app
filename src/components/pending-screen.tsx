@@ -38,12 +38,12 @@ export function PendingScreen({ user, onLogout }: PendingScreenProps) {
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
         className="w-full max-w-xl rounded-3xl sm:rounded-[2.5rem] border bg-card p-6 sm:p-8 md:p-10 shadow-sm text-center flex flex-col items-center my-auto"
       >
-        {/* Luma Brand Header */}
+        {/* Semstack Brand Header */}
         <div className="flex items-center gap-2.5 mb-8">
           <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-2xs">
             <BookOpen size={18}/>
           </span>
-          <b className="text-xl tracking-tight">Luma</b>
+          <b className="text-xl tracking-tight">Semstack</b>
           <span className="rounded-full bg-secondary px-2.5 py-0.5 text-[11px] text-muted-foreground font-medium">
             Computer Engineering
           </span>

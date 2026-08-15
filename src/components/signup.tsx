@@ -280,7 +280,7 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
             <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-xs">
               <BookOpen size={20}/>
             </span>
-            <b className="text-xl tracking-tight">Luma</b>
+            <b className="text-xl tracking-tight">Semstack</b>
           </div>
 
           <div className="max-w-md my-8">
@@ -322,7 +322,7 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
               <span className="flex size-8 items-center justify-center rounded-xl bg-primary text-primary-foreground">
                 <BookOpen size={16}/>
               </span>
-              <b className="text-base tracking-tight">Luma</b>
+              <b className="text-base tracking-tight">Semstack</b>
             </div>
             <button 
               type="button"

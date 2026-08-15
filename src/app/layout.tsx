@@ -6,8 +6,8 @@ const manrope = Manrope({ subsets: ['latin'], variable: '--font-manrope' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-mono' })
 
 export const metadata: Metadata = {
-  title: 'CE Notes — Your study companion',
-  description: 'A calm, friendly home for your subjects, notes, and learning.',
+  title: 'Semstack — UET Computer Engineering Notes & Portal',
+  description: 'Official academic repository, semester notes, and department notices for UET Computer Engineering.',
 }
 
 export const viewport: Viewport = {
