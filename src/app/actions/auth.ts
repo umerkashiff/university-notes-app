@@ -92,6 +92,15 @@ export async function register(formData: FormData) {
 
     // Parse batch year from registration number
     const batchYear = parseInt(regNumber.split('-')[0], 10)
+    if (isNaN(batchYear)) {
+      return { error: 'Invalid registration number year format.' }
+    }
+    if (batchYear > 2026) {
+      return { error: `Batch ${batchYear} has not commenced yet. Current freshman session is Batch 2026.` }
+    }
+    if (batchYear < 2018) {
+      return { error: 'Registration number must be for batches 2018 to 2026.' }
+    }
 
     // Calculate expected batch semester from active academic calendar
     const activePeriod = await prisma.academicPeriod.findFirst({

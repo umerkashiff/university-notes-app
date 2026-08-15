@@ -137,20 +137,26 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
     return yearMatch ? parseInt(yearMatch[1], 10) : null
   }, [regNumber])
 
-  const showRegWarning = regNumber.length > 3 && !isRegValid
+  // Batch Year Validity Checks
+  const isFutureBatch = parsedBatchYear ? parsedBatchYear > 2026 : false
+  const isTooOldBatch = parsedBatchYear ? parsedBatchYear < 2018 : false
+  const isInvalidBatchYear = isFutureBatch || isTooOldBatch
+  const isAlumni = parsedBatchYear ? (parsedBatchYear <= 2022 && parsedBatchYear >= 2018) : false
+
+  const showRegWarning = regNumber.length > 3 && (!isRegValid || isInvalidBatchYear)
 
   // Auto-derived semester from academic calendar and batch year
   const autoDerivedSemester = useMemo(() => {
-    if (!parsedBatchYear) return 1
+    if (!parsedBatchYear || isInvalidBatchYear) return 1
     if (parsedBatchYear >= 2026) return 1
     if (parsedBatchYear === 2025) return 3
     if (parsedBatchYear === 2024) return 5
     if (parsedBatchYear === 2023) return 7
     if (parsedBatchYear <= 2022) return 8
     return Math.max(1, Math.min(8, (2026 - parsedBatchYear) * 2 + 1))
-  }, [parsedBatchYear])
+  }, [parsedBatchYear, isInvalidBatchYear])
 
-  const effectiveSemester = (isRepeating && isRegValid && autoDerivedSemester > 1) ? repeatSemester : autoDerivedSemester
+  const effectiveSemester = (isRepeating && isRegValid && !isInvalidBatchYear && autoDerivedSemester > 1) ? repeatSemester : autoDerivedSemester
 
   const sectionOptions = useMemo(() => [
     { value: 'A', label: 'Section A' },
@@ -174,6 +180,16 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
     // Validate registration number format
     if (!regPattern.test(regNumber.trim())) {
       setError('Registration number must follow format YYYY-CE-XX (e.g. 2024-CE-15) or YYYY-CE-XXX.')
+      return
+    }
+
+    if (parsedBatchYear && parsedBatchYear > 2026) {
+      setError(`Batch ${parsedBatchYear} has not commenced yet. Current freshman session is Batch 2026.`)
+      return
+    }
+
+    if (parsedBatchYear && parsedBatchYear < 2018) {
+      setError('Registration number batch year must be between 2018 and 2026.')
       return
     }
 
@@ -360,19 +376,19 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
                 />
                 
                 {/* Clean inline Batch Pill with Checkmark */}
-                {isRegValid && parsedBatchYear && (
+                {isRegValid && parsedBatchYear && !isInvalidBatchYear && (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 px-2.5 py-1 rounded-full text-xs font-bold pointer-events-none"
                   >
                     <CheckCircle2 size={13} className="text-primary" />
-                    <span>Batch {parsedBatchYear}</span>
+                    <span>{isAlumni ? `Alumni (Batch ${parsedBatchYear})` : `Batch ${parsedBatchYear}`}</span>
                   </motion.div>
                 )}
               </div>
 
-              {/* Temporary warning when typing improperly */}
+              {/* Warning when typing improperly or entering invalid year */}
               <AnimatePresence>
                 {showRegWarning && (
                   <motion.p
@@ -383,7 +399,13 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
                     className="text-[11px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5 mt-1"
                   >
                     <AlertCircle size={13} className="shrink-0" />
-                    <span>Please write format as <b>YEAR-CE-XX</b> (e.g. 2024-CE-15 or 2024-CE-102)</span>
+                    <span>
+                      {isFutureBatch
+                        ? `Batch ${parsedBatchYear} has not commenced yet. Current freshman session is Batch 2026.`
+                        : isTooOldBatch
+                        ? 'Please enter a valid batch year between 2018 and 2026.'
+                        : <>Please write format as <b>YEAR-CE-XX</b> (e.g. 2024-CE-15 or 2024-CE-102)</>}
+                    </span>
                   </motion.p>
                 )}
               </AnimatePresence>
@@ -394,12 +416,14 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
               <div className="field-label">
                 <span>Current Semester</span>
                 <div className="flex h-11 w-full items-center justify-between rounded-2xl border bg-secondary/40 px-3.5 text-sm select-none border-border/70">
-                  {isRegValid && parsedBatchYear ? (
-                    <span className="font-semibold text-foreground">Semester {effectiveSemester}</span>
+                  {isRegValid && parsedBatchYear && !isInvalidBatchYear ? (
+                    <span className="font-semibold text-foreground truncate">
+                      {isAlumni && !isRepeating ? 'Graduated Alumni (Semester 8)' : `Semester ${effectiveSemester}`}
+                    </span>
                   ) : (
                     <span className="text-muted-foreground text-xs">Enter registration number</span>
                   )}
-                  <Lock size={14} className="text-muted-foreground/60 shrink-0" />
+                  <Lock size={14} className="text-muted-foreground/60 shrink-0 ml-2" />
                 </div>
               </div>
 
