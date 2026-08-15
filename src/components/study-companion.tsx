@@ -12,6 +12,7 @@ import { getAdminUsersData, approveUser, rejectUser, updateUserSemester, toggleH
 import { getAcademicPeriods, createAcademicPeriod, getPreAdvancementSummary, advanceSemestersForPeriod, setPeriodStatus } from '@/app/actions/academic'
 import { SignUp } from '@/components/signup'
 import { PendingScreen } from '@/components/pending-screen'
+import { SemstackLogo } from '@/components/logo'
 import type { User as PrismaUser } from '@prisma/client'
 import { createClient } from '@/utils/supabase/client'
 import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage, createAnnouncement, deleteNote, updateNote, toggleBookmark, submitContentRequest } from '@/app/actions/notes'
@@ -302,8 +303,8 @@ export function StudyCompanion({
         >
           <header className="sticky top-0 z-40 border-b border-white/30 bg-white/40 dark:bg-card/40 backdrop-blur-xl shadow-sm supports-[backdrop-filter]:bg-white/30 transform-gpu will-change-transform">
             <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
-              <button onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} className="flex items-center gap-3" aria-label="Semstack home">
-                <span className="flex size-9 -rotate-3 items-center justify-center rounded-xl bg-primary text-primary-foreground"><BookOpen size={18}/></span>
+              <button onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} className="flex items-center gap-2.5" aria-label="Semstack home">
+                <SemstackLogo size={34} className="size-[34px] -rotate-2" />
                 <span className="text-xl font-bold tracking-tight">Semstack</span>
                 <span className="hidden rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground sm:inline">Computer Engineering</span>
               </button>
@@ -808,9 +809,7 @@ function Login({
       <div className="mx-auto grid w-full max-w-6xl rounded-3xl sm:rounded-[2.2rem] border bg-card shadow-sm md:grid-cols-[1.05fr_.95fr] overflow-hidden my-auto">
         <section className="relative hidden flex-col justify-between overflow-hidden bg-sage p-12 md:flex">
           <div className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <BookOpen size={20}/>
-            </span>
+            <SemstackLogo size={42} className="size-[42px]" />
             <b className="text-xl">Semstack</b>
           </div>
           <div className="max-w-md">
@@ -818,7 +817,7 @@ function Login({
               Every useful note, in one calm place.
             </h1>
             <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
-              Browse by semester, read beautifully, and never miss what matters.
+              Browse by semester, read beautifully, and never miss what matters — built for UET.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -838,9 +837,7 @@ function Login({
         <section className="flex flex-col justify-center p-7 md:p-12">
           <div className="mb-8 flex items-center justify-between md:hidden">
             <div className="flex items-center gap-3">
-              <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-                <BookOpen size={20}/>
-              </span>
+              <SemstackLogo size={38} className="size-[38px]" />
               <b className="text-xl">Semstack</b>
             </div>
           </div>

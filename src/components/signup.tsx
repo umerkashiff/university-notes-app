@@ -14,6 +14,7 @@ import {
   Check,
   Lock
 } from 'lucide-react'
+import { SemstackLogo } from '@/components/logo'
 
 interface SignUpProps {
   onRegister: (formData: FormData) => Promise<string | void>
@@ -277,9 +278,7 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
         {/* Left Side: Brand Story & Criteria */}
         <section className="relative hidden flex-col justify-between overflow-hidden bg-sage p-8 lg:p-12 md:flex min-h-full">
           <div className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-xs">
-              <BookOpen size={20}/>
-            </span>
+            <SemstackLogo size={42} className="size-[42px]" />
             <b className="text-xl tracking-tight">Semstack</b>
           </div>
 
@@ -318,10 +317,8 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
         {/* Right Side: Sign-Up Form */}
         <section className="flex flex-col justify-center p-5 sm:p-8 lg:p-10 w-full">
           <div className="mb-5 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 md:hidden">
-              <span className="flex size-8 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-                <BookOpen size={16}/>
-              </span>
+            <div className="flex items-center gap-2.5 md:hidden">
+              <SemstackLogo size={34} className="size-[34px]" />
               <b className="text-base tracking-tight">Semstack</b>
             </div>
             <button 

@@ -13,6 +13,7 @@ import {
   GraduationCap,
   RefreshCw
 } from 'lucide-react'
+import { SemstackLogo } from '@/components/logo'
 
 interface PendingScreenProps {
   user: {
@@ -40,9 +41,7 @@ export function PendingScreen({ user, onLogout }: PendingScreenProps) {
       >
         {/* Semstack Brand Header */}
         <div className="flex items-center gap-2.5 mb-8">
-          <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-2xs">
-            <BookOpen size={18}/>
-          </span>
+          <SemstackLogo size={36} className="size-9" />
           <b className="text-xl tracking-tight">Semstack</b>
           <span className="rounded-full bg-secondary px-2.5 py-0.5 text-[11px] text-muted-foreground font-medium">
             Computer Engineering
