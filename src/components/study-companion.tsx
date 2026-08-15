@@ -611,22 +611,27 @@ function SettingsPage({
                         initial={{ opacity: 0, y: -6, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                        data-lenis-prevent
-                        className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-52 overflow-y-auto overscroll-contain flex flex-col gap-1 rounded-2xl border bg-card p-1.5 shadow-xl"
+                        className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
                       >
-                        {REQUEST_TYPES.map(t => (
-                          <button
-                            key={t}
-                            type="button"
-                            onClick={() => { setReqType(t); setTypeDropdownOpen(false); }}
-                            className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
-                              reqType === t ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                            }`}
-                          >
-                            <span>{t}</span>
-                            {reqType === t && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
-                          </button>
-                        ))}
+                        <div 
+                          data-lenis-prevent="true"
+                          className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
+                          style={{ overscrollBehavior: 'contain' }}
+                        >
+                          {REQUEST_TYPES.map(t => (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => { setReqType(t); setTypeDropdownOpen(false); }}
+                              className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
+                                reqType === t ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                              }`}
+                            >
+                              <span>{t}</span>
+                              {reqType === t && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                            </button>
+                          ))}
+                        </div>
                       </motion.div>
                     </>
                   )}
@@ -655,22 +660,27 @@ function SettingsPage({
                         initial={{ opacity: 0, y: -6, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                        data-lenis-prevent
-                        className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-52 overflow-y-auto overscroll-contain flex flex-col gap-1 rounded-2xl border bg-card p-1.5 shadow-xl"
+                        className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
                       >
-                        {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
-                          <button
-                            key={s}
-                            type="button"
-                            onClick={() => { setReqSem(s); setSemDropdownOpen(false); }}
-                            className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
-                              reqSem === s ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                            }`}
-                          >
-                            <span>Semester {s}</span>
-                            {reqSem === s && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
-                          </button>
-                        ))}
+                        <div 
+                          data-lenis-prevent="true"
+                          className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
+                          style={{ overscrollBehavior: 'contain' }}
+                        >
+                          {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={() => { setReqSem(s); setSemDropdownOpen(false); }}
+                              className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
+                                reqSem === s ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                              }`}
+                            >
+                              <span>Semester {s}</span>
+                              {reqSem === s && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                            </button>
+                          ))}
+                        </div>
                       </motion.div>
                     </>
                   )}
@@ -1763,30 +1773,33 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
                                     animate={{ opacity: 1, y: 0, scale: 1 }}
                                     exit={{ opacity: 0, y: -6, scale: 0.98 }}
                                     transition={{ duration: 0.15 }}
-                                    data-lenis-prevent
-                                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-52 overflow-y-auto overscroll-contain flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl"
+                                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
                                   >
-                                    {semesterSubjects.map(s => {
-                                      const isSelected = subjectCode === s.code;
-                                      return (
-                                        <button
-                                          key={s.code}
-                                          type="button"
-                                          onClick={() => {
-                                            setSubjectCode(s.code);
-                                            setSubjectDropdownOpen(false);
-                                          }}
-                                          className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
-                                            isSelected
-                                              ? 'bg-secondary font-semibold text-foreground'
-                                              : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                                          }`}
-                                        >
-                                          <span className="truncate">{s.name} ({s.code})</span>
-                                          {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
-                                        </button>
-                                      );
-                                    })}
+                                    <div 
+                                      data-lenis-prevent="true"
+                                      className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
+                                      style={{ overscrollBehavior: 'contain' }}
+                                    >
+                                      {semesterSubjects.map(s => {
+                                        const isSelected = subjectCode === s.code;
+                                        return (
+                                          <button
+                                            key={s.code}
+                                            type="button"
+                                            onClick={() => {
+                                              setSubjectCode(s.code);
+                                              setSubjectDropdownOpen(false);
+                                            }}
+                                            className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2 text-left text-sm transition-colors ${
+                                              isSelected ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                                            }`}
+                                          >
+                                            <span className="truncate">{s.name} ({s.code})</span>
+                                            {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
                                   </motion.div>
                                 </>
                               )}
@@ -2045,22 +2058,27 @@ function ReviewQueueCard({
                           initial={{ opacity: 0, y: -6, scale: 0.98 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                          data-lenis-prevent
-                          className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-48 overflow-y-auto overscroll-contain flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl"
+                          className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
                         >
-                          {semSubjects.map(s => (
-                            <button
-                              key={s.code}
-                              type="button"
-                              onClick={() => { setSelectedCode(s.code); setDropdownOpen(false); }}
-                              className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2 text-left text-sm transition-colors ${
-                                selectedCode === s.code ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                              }`}
-                            >
-                              <span className="truncate">{s.name} ({s.code})</span>
-                              {selectedCode === s.code && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
-                            </button>
-                          ))}
+                          <div 
+                            data-lenis-prevent="true"
+                            className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
+                            style={{ overscrollBehavior: 'contain' }}
+                          >
+                            {semSubjects.map(s => (
+                              <button
+                                key={s.code}
+                                type="button"
+                                onClick={() => { setSelectedCode(s.code); setDropdownOpen(false); }}
+                                className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2 text-left text-sm transition-colors ${
+                                  selectedCode === s.code ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                                }`}
+                              >
+                                <span className="truncate">{s.name} ({s.code})</span>
+                                {selectedCode === s.code && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                              </button>
+                            ))}
+                          </div>
                         </motion.div>
                       </>
                     )}
@@ -3822,30 +3840,35 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.98 }}
                     transition={{ duration: 0.15 }}
-                    data-lenis-prevent
-                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-52 overflow-y-auto overscroll-contain flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl"
+                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
                   >
-                    {AUDIENCE_CHOICES.map(item => {
-                      const isSelected = audience === item;
-                      return (
-                        <button
-                          key={item}
-                          type="button"
-                          onClick={() => {
-                            setAudience(item);
-                            setDropdownOpen(false);
-                          }}
-                          className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
-                            isSelected
-                              ? 'bg-secondary font-semibold text-foreground'
-                              : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                          }`}
-                        >
-                          <span className="truncate">{item}</span>
-                          {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
-                        </button>
-                      );
-                    })}
+                    <div 
+                      data-lenis-prevent="true"
+                      className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
+                      style={{ overscrollBehavior: 'contain' }}
+                    >
+                      {AUDIENCE_CHOICES.map(item => {
+                        const isSelected = audience === item;
+                        return (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => {
+                              setAudience(item);
+                              setDropdownOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
+                              isSelected
+                                ? 'bg-secondary font-semibold text-foreground'
+                                : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                            }`}
+                          >
+                            <span className="truncate">{item}</span>
+                            {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </motion.div>
                 </>
               )}
