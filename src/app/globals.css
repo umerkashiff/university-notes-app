@@ -137,7 +137,32 @@
   .modal-scroll::-webkit-scrollbar-thumb:hover {
     background: var(--muted-foreground);
   }
-  .modal-scroll::-webkit-scrollbar-thumb:hover {
+
+  /* Dropdown scrollbar that stays neatly within rounded containers */
+  .dropdown-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  .dropdown-scroll::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  .dropdown-scroll::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+  .dropdown-scroll::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 6px 0;
+  }
+  .dropdown-scroll::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 9999px;
+  }
+  .dropdown-scroll::-webkit-scrollbar-thumb:hover {
     background: var(--muted-foreground);
   }
 }
@@ -148,12 +173,12 @@
   .section-kicker { @apply mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground; }
   .section-title { @apply text-2xl font-semibold tracking-tight md:text-3xl; }
   .popover { @apply absolute top-12 z-40 rounded-2xl border bg-popover text-popover-foreground shadow-lg; animation: pop-in 180ms ease-out both; }
-  .dialog-backdrop { @apply fixed inset-0 z-50 flex items-start justify-center bg-foreground/30 px-4 py-6; backdrop-filter: blur(4px); }
+  .dialog-backdrop { @apply fixed inset-0 z-50 flex items-center justify-center bg-foreground/30 px-4 py-6; backdrop-filter: blur(4px); }
   .dialog-panel { @apply w-full overflow-hidden rounded-3xl border bg-card text-card-foreground shadow-xl; animation: dialog-in 220ms ease-out both; }
   .mobile-nav { @apply flex min-w-16 flex-col items-center gap-1 rounded-full px-3 py-2 text-[10px] text-muted-foreground; }
   .mobile-nav.active { @apply bg-secondary text-foreground; }
   .field-label { @apply flex flex-col gap-2 text-sm font-medium; }
-  .field-input { @apply h-12 rounded-2xl border bg-background px-4 text-sm outline-none focus:border-foreground; }
+  .field-input { @apply w-full h-12 rounded-2xl border bg-background px-4 text-sm outline-none focus:border-foreground; }
   .document-page { @apply min-h-[800px] w-full max-w-[720px] bg-card p-8 shadow-md transition-transform md:min-h-[920px] md:p-16; }
 }
 

@@ -4,9 +4,14 @@ import dynamic from 'next/dynamic'
 import { useLenis } from 'lenis/react'
 
 import { useMemo, useState, useEffect } from 'react'
-import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDown, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info, PencilSimple, Moon, Sun, Desktop, UserCircle } from '@phosphor-icons/react'
+import { createPortal } from 'react-dom'
+import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDown, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info, PencilSimple, Moon, Sun, Desktop, UserCircle, Lock, Calendar, CheckCircle, Warning, WarningCircle, UserPlus, Eye, Clock, UserCheck, ShieldWarning } from '@phosphor-icons/react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { login, logout } from '@/app/actions/auth'
+import { login, logout, register } from '@/app/actions/auth'
+import { getAdminUsersData, approveUser, rejectUser, updateUserSemester, toggleHeldBack, changeUserRole, submitHeldBackSelfReport } from '@/app/actions/admin'
+import { getAcademicPeriods, createAcademicPeriod, getPreAdvancementSummary, advanceSemestersForPeriod, setPeriodStatus } from '@/app/actions/academic'
+import { SignUp } from '@/components/signup'
+import { PendingScreen } from '@/components/pending-screen'
 import type { User as PrismaUser } from '@prisma/client'
 import { createClient } from '@/utils/supabase/client'
 import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage, createAnnouncement, deleteNote, updateNote, toggleBookmark, submitContentRequest } from '@/app/actions/notes'
@@ -138,7 +143,7 @@ export function StudyCompanion({
     title: n.title,
     subject: n.subject?.name || n.subject || '',
     code: n.subject?.code || n.code || '',
-    author: n.author?.name || n.author?.email || 'Senior Contributor',
+    author: n.author?.name || n.author?.email || 'Note Contributor',
     date: formatRelativeDate(n.createdAt),
     pages: n.pages || 1,
     size: n.size || '1.0 MB',
@@ -148,15 +153,29 @@ export function StudyCompanion({
     description: n.description || undefined
   })
   
-  const mapAlert = (a: any) => ({
-    id: a.id,
-    audience: a.audience || 'ALL',
-    kind: a.audience === 'ALL' || !a.audience ? 'Department' : a.audience,
-    title: a.title,
-    body: a.body,
-    time: formatRelativeDate(a.createdAt),
-    unread: a.unread ?? true
-  })
+  const mapAlert = (a: any) => {
+    const isApp = a.kind === 'New note' ||
+                  a.title?.toLowerCase().includes('notes published') || 
+                  a.title?.toLowerCase().includes('note published') ||
+                  a.title?.toLowerCase().includes('account activated') || 
+                  a.title?.toLowerCase().includes('account application') ||
+                  a.title?.toLowerCase().includes('submission') ||
+                  a.type === 'APP_ACTIVITY'
+
+    // Sanitize any legacy 'Senior' wording
+    const cleanBody = (a.body || '').replace(/senior contributor/gi, 'Note Contributor').replace(/senior/gi, 'Contributor')
+    const cleanTitle = (a.title || '').replace(/senior contributor/gi, 'Note Contributor')
+
+    return {
+      id: a.id,
+      audience: a.audience || 'ALL',
+      kind: isApp ? 'New note' : 'Department',
+      title: cleanTitle,
+      body: cleanBody,
+      time: formatRelativeDate(a.createdAt),
+      unread: a.unread ?? true
+    }
+  }
 
   const [notes, setNotes] = useState<Note[]>(() => (initialNotes && initialNotes.length > 0) ? initialNotes.map(mapNote) : [])
   const [alerts, setAlerts] = useState<any[]>(() => (initialAnnouncements && initialAnnouncements.length > 0) ? initialAnnouncements.map(mapAlert) : [])
@@ -166,6 +185,7 @@ export function StudyCompanion({
   const [query,setQuery]=useState('')
   const [showRole,setShowRole]=useState(false)
   const [isLoggingOut,setIsLoggingOut]=useState(false)
+  const [authView,setAuthView]=useState<'login'|'signup'>('login')
   const unread = alerts.filter(a=>a.unread).length
 
   const greeting = useMemo(() => {
@@ -186,15 +206,26 @@ export function StudyCompanion({
     }
   }
 
+  const handleRegister = async (formData: FormData): Promise<string | void> => {
+    const res = await register(formData)
+    if (res.error) {
+      return res.error
+    } else if (res.user) {
+      setUser(res.user as any)
+    }
+  }
+
   const handleLogout = async () => {
     setIsLoggingOut(true)
     await logout()
     setUser(null)
+    setScreen('semesters')
     setShowRole(false)
     setIsLoggingOut(false)
+    setAuthView('login')
   }
 
-  const roleLabel = role === 'admin' ? 'Administrator' : role === 'senior' ? 'Senior Contributor' : 'Student'
+  const roleLabel = role === 'admin' ? 'Administrator' : role === 'senior' ? 'Note Contributor' : 'Student'
 
   const title = screen==='cms'
     ? 'Content studio'
@@ -214,16 +245,40 @@ export function StudyCompanion({
 
   return (
     <AnimatePresence mode="wait">
-      {!role ? (
+      {!user ? (
+        authView === 'signup' ? (
+          <motion.div
+            key="signup-screen"
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.05, filter: 'blur(8px)' }}
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            className="w-full min-h-screen"
+          >
+            <SignUp onRegister={handleRegister} onSwitchToLogin={() => setAuthView('login')} />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="login-screen"
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.05, filter: 'blur(8px)' }}
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            className="w-full min-h-screen"
+          >
+            <Login onLogin={signIn} onSwitchToSignUp={() => setAuthView('signup')} />
+          </motion.div>
+        )
+      ) : ((user.status === 'PENDING' || user.status === 'REJECTED') && user.role !== 'ADMIN') ? (
         <motion.div
-          key="login-screen"
+          key="pending-screen"
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 1.05, filter: 'blur(8px)' }}
           transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
           className="w-full min-h-screen"
         >
-          <Login onLogin={signIn} />
+          <PendingScreen user={user} onLogout={handleLogout} />
         </motion.div>
       ) : reader ? (
         <motion.div
@@ -264,34 +319,55 @@ export function StudyCompanion({
                   {unread>0&&<span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground">{unread}</span>}
                 </button>
                 <div className="relative">
-                  <button onClick={()=>setShowRole(!showRole)} className="flex size-10 items-center justify-center rounded-full bg-mist text-sm font-bold shadow-xs">
+                  <button 
+                    onClick={()=>setShowRole(!showRole)} 
+                    className="flex size-10 items-center justify-center rounded-full bg-mist text-sm font-bold shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
+                    aria-label="User account menu"
+                  >
                     {user?.avatar || (user?.name ? user.name.slice(0, 2).toUpperCase() : "ST")}
                   </button>
                   <AnimatePresence>
-                    {showRole&&<motion.div initial={{opacity:0, scale:0.95, y:5}} animate={{opacity:1, scale:1, y:0}} exit={{opacity:0, scale:0.95, y:5}} transition={{duration:0.15}} className="popover right-0 w-64 p-2 origin-top-right">
-                      <div className="border-b p-3">
-                        <b className="block truncate text-foreground">{user?.name || user?.email}</b>
-                        <p className="text-xs capitalize text-muted-foreground mt-0.5">{roleLabel}</p>
-                      </div>
-                      <button 
-                        onClick={() => { setScreen('settings'); setShowRole(false); }} 
-                        className="flex w-full items-center gap-2.5 rounded-xl p-3 text-sm font-medium hover:bg-secondary text-foreground transition-colors cursor-pointer"
-                      >
-                        <Settings size={17}/> Settings & Preferences
-                      </button>
-                      <button 
-                        onClick={handleLogout} 
-                        disabled={isLoggingOut}
-                        className="flex w-full items-center gap-2.5 rounded-xl p-3 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        {isLoggingOut ? (
-                          <div className="size-4 border-2 border-destructive/30 border-t-destructive animate-spin rounded-full" />
-                        ) : (
-                          <LogOut size={17}/>
-                        )}
-                        <span>{isLoggingOut ? 'Signing out...' : 'Sign out'}</span>
-                      </button>
-                    </motion.div>}
+                    {showRole && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-30" 
+                          onClick={() => setShowRole(false)} 
+                        />
+                        <motion.div 
+                          initial={{opacity:0, scale:0.95, y:4}} 
+                          animate={{opacity:1, scale:1, y:0}} 
+                          exit={{opacity:0, scale:0.95, y:4}} 
+                          transition={{duration:0.15}} 
+                          className="popover right-0 w-60 overflow-hidden shadow-xl rounded-2xl origin-top-right border bg-card p-0 z-40"
+                        >
+                          <div className="px-4 py-3 border-b bg-secondary/30">
+                            <b className="block truncate text-sm font-bold text-foreground">{user?.name || user?.email}</b>
+                            <p className="text-xs text-muted-foreground mt-0.5">{roleLabel}</p>
+                          </div>
+                          <div className="p-1.5 flex flex-col gap-0.5">
+                            <button 
+                              onClick={() => { setScreen('settings'); setShowRole(false); }} 
+                              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium hover:bg-secondary text-foreground transition-colors cursor-pointer"
+                            >
+                              <Settings size={16} className="text-muted-foreground shrink-0" /> 
+                              <span>Settings & Preferences</span>
+                            </button>
+                            <button 
+                              onClick={handleLogout} 
+                              disabled={isLoggingOut}
+                              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              {isLoggingOut ? (
+                                <div className="size-4 border-2 border-destructive/30 border-t-destructive animate-spin rounded-full shrink-0" />
+                              ) : (
+                                <LogOut size={16} className="shrink-0" />
+                              )}
+                              <span>{isLoggingOut ? 'Signing out...' : 'Sign out'}</span>
+                            </button>
+                          </div>
+                        </motion.div>
+                      </>
+                    )}
                   </AnimatePresence>
                 </div>
               </div>
@@ -301,18 +377,18 @@ export function StudyCompanion({
           <div className="mx-auto max-w-7xl px-5 py-8 pb-28 md:px-8 md:py-12">
             <div className="mb-8 flex items-end justify-between">
               <div>
-                <p className="section-kicker">{screen==='settings'?'Account & Preferences':role==='admin'?'Department CMS':role==='senior'?'Senior contributor':'Your study library'}</p>
+                <p className="section-kicker">{screen==='settings'?'Account & Preferences':role==='admin'?'Department CMS':role==='senior'?'Contributor desk':'Your study library'}</p>
                 <h1 className="text-balance text-4xl font-semibold tracking-[-.04em] md:text-5xl">{title}</h1>
               </div>
             </div>
             <AnimatePresence mode="wait">
               <motion.div key={screen} initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} transition={{duration:0.2}}>
                 {screen==='saved'&&<SavedNotes notes={notes} subjects={subjectsList} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader}/>} 
-                {screen==='semesters'&&<SemesterLibrary subjects={subjectsList} notes={notes} select={(n)=>{setSelectedSemester(n);setScreen('subject')}}/>}
+                {screen==='semesters'&&<SemesterLibrary user={user} role={role} subjects={subjectsList} notes={notes} select={(n)=>{setSelectedSemester(n);setScreen('subject')}}/>} 
                 {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')}/>} 
-                {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts}/>} 
+                {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts} user={user}/>} 
                 {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])}/>} 
-                {screen==='cms'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),audience: note.subject || 'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
+                {screen==='cms'&&role==='admin'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),audience: note.subject || 'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
                 {screen==='settings'&&<SettingsPage user={user} theme={theme} onChangeTheme={changeTheme} onLogout={handleLogout} onNavigate={setScreen} isLoggingOut={isLoggingOut}/>}
               </motion.div>
             </AnimatePresence>
@@ -356,7 +432,7 @@ function SettingsPage({
   isLoggingOut?: boolean
 }) {
   const role = (user?.role?.toLowerCase() as Role) || 'student'
-  const roleLabel = role === 'admin' ? 'Administrator' : role === 'senior' ? 'Senior Contributor' : 'Student'
+  const roleLabel = role === 'admin' ? 'Administrator' : role === 'senior' ? 'Note Contributor' : 'Student'
 
   const [reqType, setReqType] = useState('Missing Course / Subject')
   const [reqSem, setReqSem] = useState(1)
@@ -462,16 +538,39 @@ function SettingsPage({
             <b className="text-sm font-semibold text-foreground mt-0.5 block truncate">{user?.email || 'student@uet.edu'}</b>
           </div>
           <div className="rounded-2xl bg-secondary/60 p-4 border border-border/50">
+            <span className="text-xs text-muted-foreground block font-medium">Registration Number</span>
+            <b className="text-sm font-semibold text-foreground font-mono mt-0.5 block">{user?.regNumber || 'Not assigned'}</b>
+          </div>
+          <div className="rounded-2xl bg-secondary/60 p-4 border border-border/50 flex items-center justify-between">
+            <div>
+              <span className="text-xs text-muted-foreground block font-medium">Academic Cohort</span>
+              <b className="text-sm font-semibold text-foreground mt-0.5 block">
+                Semester {user?.semester || 1} {user?.section ? `(Sec ${user.section})` : ''}
+              </b>
+            </div>
+            {user?.batchYear && (
+              <span className="text-[11px] font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-full border border-primary/20">
+                Batch {user.batchYear}
+              </span>
+            )}
+          </div>
+          <div className="rounded-2xl bg-secondary/60 p-4 border border-border/50">
             <span className="text-xs text-muted-foreground block font-medium">Department</span>
             <b className="text-sm font-semibold text-foreground mt-0.5 block">Computer Engineering (UET)</b>
           </div>
           <div className="rounded-2xl bg-secondary/60 p-4 border border-border/50 flex items-center justify-between">
             <div>
-              <span className="text-xs text-muted-foreground block font-medium">Account Role</span>
-              <b className="text-sm font-semibold text-foreground mt-0.5 block">{roleLabel}</b>
+              <span className="text-xs text-muted-foreground block font-medium">Account Role & Standing</span>
+              <b className="text-sm font-semibold text-foreground mt-0.5 block">
+                {roleLabel} {user?.heldBack ? '· Held Back (Re-take)' : user?.status === 'GRADUATED' ? '· Graduated 🎓' : ''}
+              </b>
             </div>
-            <span className="text-[10px] uppercase tracking-wider font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-full border border-primary/20">
-              {role}
+            <span className={`text-[10px] uppercase tracking-wider font-bold px-2.5 py-1 rounded-full border ${
+              user?.heldBack 
+                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' 
+                : 'bg-primary/10 text-primary border-primary/20'
+            }`}>
+              {user?.heldBack ? 'Re-take' : role}
             </span>
           </div>
         </div>
@@ -613,6 +712,46 @@ function SettingsPage({
         </form>
       </section>
 
+      {/* 3b. Re-take / Academic Standing Self-Report (For Students) */}
+      {role === 'student' && (
+        <section className="rounded-3xl border bg-card p-6 sm:p-7 shadow-xs">
+          <div className="flex items-center gap-2 mb-1">
+            <GraduationCap size={20} className="text-primary" />
+            <h3 className="text-lg font-semibold text-foreground">Academic Progression & Re-take Report</h3>
+          </div>
+          <p className="text-xs text-muted-foreground mb-4">
+            Repeating coursework or need a semester paused? Submit a report so department administrators can verify your status during batch advancement.
+          </p>
+
+          <div className="rounded-2xl bg-secondary/60 p-4 border border-border/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <b className="text-xs font-semibold text-foreground">Current Standing:</b>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {user?.heldBack ? 'Paused / Held Back for Re-take (Will not auto-advance)' : 'Normal Batch Progression'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                const note = prompt('Please specify which courses or semester you are repeating:');
+                if (note === null) return;
+                try {
+                  const res = await submitHeldBackSelfReport(note);
+                  if (res.success) {
+                    alert('Thank you! Your repeat report has been sent to department administrators for review.');
+                  }
+                } catch (e: any) {
+                  alert(e?.message || 'Failed to submit report.');
+                }
+              }}
+              className="rounded-full bg-secondary hover:bg-secondary/80 border text-foreground px-4 py-2 text-xs font-semibold transition-colors cursor-pointer shrink-0"
+            >
+              Report Repeating Coursework
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* 4. Session Actions */}
       <section className="rounded-3xl border bg-card p-6 sm:p-7 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -637,7 +776,13 @@ function SettingsPage({
   )
 }
 
-function Login({ onLogin }: { onLogin: (credentials: FormData | { email: string; password?: string }) => Promise<string | void> | void }) {
+function Login({ 
+  onLogin, 
+  onSwitchToSignUp 
+}: { 
+  onLogin: (credentials: FormData | { email: string; password?: string }) => Promise<string | void> | void
+  onSwitchToSignUp?: () => void 
+}) {
   const [identity, setIdentity] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -659,8 +804,8 @@ function Login({ onLogin }: { onLogin: (credentials: FormData | { email: string;
   }
 
   return (
-    <main className="login-shell min-h-screen bg-background p-5 md:p-8">
-      <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl overflow-hidden rounded-[2rem] border bg-card shadow-sm md:grid-cols-[1.05fr_.95fr]">
+    <main className="login-shell min-h-screen bg-background py-6 sm:py-10 md:py-14 px-3 sm:px-6 md:px-8 flex flex-col justify-center items-center">
+      <div className="mx-auto grid w-full max-w-6xl rounded-3xl sm:rounded-[2.2rem] border bg-card shadow-sm md:grid-cols-[1.05fr_.95fr] overflow-hidden my-auto">
         <section className="relative hidden flex-col justify-between overflow-hidden bg-sage p-12 md:flex">
           <div className="flex items-center gap-3">
             <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
@@ -669,7 +814,6 @@ function Login({ onLogin }: { onLogin: (credentials: FormData | { email: string;
             <b className="text-xl">Luma</b>
           </div>
           <div className="max-w-md">
-            <span className="eyebrow"><ShieldCheck size={15}/> Made for your department</span>
             <h1 className="mt-5 text-balance text-5xl font-semibold leading-[1.05] tracking-[-.05em]">
               Every useful note, in one calm place.
             </h1>
@@ -680,7 +824,7 @@ function Login({ onLogin }: { onLogin: (credentials: FormData | { email: string;
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-3xl bg-background/60 p-5">
               <FileText/>
-              <b className="mt-8 block">Shared by seniors</b>
+              <b className="mt-8 block">Shared by contributors</b>
               <p className="text-sm text-muted-foreground">Reviewed before publishing.</p>
             </div>
             <div className="rounded-3xl bg-background/60 p-5">
@@ -692,12 +836,15 @@ function Login({ onLogin }: { onLogin: (credentials: FormData | { email: string;
         </section>
 
         <section className="flex flex-col justify-center p-7 md:p-12">
-          <div className="mb-10 flex items-center gap-3 md:hidden">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <BookOpen size={20}/>
-            </span>
-            <b className="text-xl">Luma</b>
+          <div className="mb-8 flex items-center justify-between md:hidden">
+            <div className="flex items-center gap-3">
+              <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                <BookOpen size={20}/>
+              </span>
+              <b className="text-xl">Luma</b>
+            </div>
           </div>
+
           <p className="section-kicker">Welcome back</p>
           <h2 className="text-4xl font-semibold tracking-[-.04em]">Sign in to Luma</h2>
           <p className="mt-2 text-muted-foreground">Your department's notes and notices await.</p>
@@ -731,9 +878,14 @@ function Login({ onLogin }: { onLogin: (credentials: FormData | { email: string;
             </label>
 
             {error && (
-              <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive font-medium">
-                {error}
-              </div>
+              <motion.div 
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-xs text-destructive font-medium flex items-center gap-2.5 leading-relaxed shadow-xs"
+              >
+                <WarningCircle size={17} weight="bold" className="shrink-0 text-destructive" />
+                <span>{error}</span>
+              </motion.div>
             )}
 
             <button 
@@ -750,9 +902,17 @@ function Login({ onLogin }: { onLogin: (credentials: FormData | { email: string;
               )}
             </button>
           </form>
-          <p className="mt-7 text-center text-sm text-muted-foreground">
-            New student? Your department will issue your account.
-          </p>
+          
+          <div className="mt-7 text-center text-sm text-muted-foreground">
+            <span>New to Luma? </span>
+            <button 
+              type="button" 
+              onClick={onSwitchToSignUp}
+              className="font-semibold text-foreground underline underline-offset-4 hover:text-primary transition-colors cursor-pointer"
+            >
+              Sign up for departmental review
+            </button>
+          </div>
         </section>
       </div>
     </main>
@@ -834,7 +994,19 @@ function SavedNotes({
   )
 }
 
-function SemesterLibrary({ subjects, notes, select }: { subjects: SubjectItem[], notes: Note[], select: (n: number) => void }) {
+function SemesterLibrary({ 
+  subjects, 
+  notes, 
+  select,
+  user,
+  role
+}: { 
+  subjects: SubjectItem[]
+  notes: Note[]
+  select: (n: number) => void
+  user: PrismaUser | null
+  role: Role | null
+}) {
   // Dynamically derive all available semesters from DB subjects (at least 1 to 8)
   const semesterNumbers = useMemo(() => {
     const set = new Set<number>()
@@ -845,6 +1017,9 @@ function SemesterLibrary({ subjects, notes, select }: { subjects: SubjectItem[],
     return list
   }, [subjects])
 
+  const userSem = user?.semester || 1
+  const isRestrictedBySemester = role !== 'admin' && user?.status !== 'GRADUATED'
+
   return (
     <div>
       <Header kicker="Computer Engineering" title="Choose a semester" />
@@ -854,12 +1029,39 @@ function SemesterLibrary({ subjects, notes, select }: { subjects: SubjectItem[],
           const tone = SEMESTER_COLORS[(num - 1) % SEMESTER_COLORS.length]
           const label = SEMESTER_LABELS[num] || `Semester ${num}`
           const previewItems = semSubjects.map(s => s.name).slice(0, 4)
+          const isLocked = isRestrictedBySemester && num > userSem
+
+          if (isLocked) {
+            return (
+              <div
+                key={num}
+                className="bg-card/50 border border-dashed border-border/80 flex min-h-64 flex-col justify-between rounded-3xl p-7 text-left opacity-60 select-none relative overflow-hidden"
+              >
+                <div className="flex items-start justify-between">
+                  <span className="text-sm font-semibold text-muted-foreground flex items-center gap-1.5">
+                    <Lock size={15} /> Semester {num}
+                  </span>
+                  <span className="rounded-full bg-secondary px-3 py-1 text-[11px] font-semibold text-muted-foreground">
+                    Locked
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-2xl font-semibold text-muted-foreground tracking-tight flex items-center gap-2">
+                    {label}
+                  </h3>
+                  <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                    Unlocks automatically when your batch advances to Semester {num}.
+                  </p>
+                </div>
+              </div>
+            )
+          }
 
           return (
             <button
               key={num}
               onClick={() => select(num)}
-              className={`${tone} flex min-h-64 flex-col justify-between rounded-3xl p-7 text-left transition hover:-translate-y-1 shadow-xs border border-black/5`}
+              className={`${tone} flex min-h-64 flex-col justify-between rounded-3xl p-7 text-left transition hover:-translate-y-1 shadow-xs border border-black/5 cursor-pointer`}
             >
               <div className="flex items-start justify-between">
                 <span className="text-sm font-semibold text-foreground">Semester {num}</span>
@@ -1005,7 +1207,7 @@ function SubjectLibrary({
               </span>
               <h2 className="mt-4 text-3xl font-semibold text-foreground tracking-tight">{activeSubject.name}</h2>
               <p className="mt-1.5 text-muted-foreground text-sm">
-                Foundations, worked examples and past questions shared by your seniors.
+                Foundations, worked examples and past questions shared by your contributors.
               </p>
             </div>
           ) : (
@@ -1031,7 +1233,7 @@ function SubjectLibrary({
               <div className="py-16 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40 my-auto">
                 <FileText size={32} className="mx-auto mb-2 opacity-30"/>
                 <p className="font-semibold text-foreground text-sm">No notes available</p>
-                <p className="text-xs mt-1">Be the first senior to contribute notes for {activeSubject?.name || 'this subject'}!</p>
+                <p className="text-xs mt-1">Be the first to contribute notes for {activeSubject?.name || 'this subject'}!</p>
               </div>
             ) : (
               list.map((n,i)=>(
@@ -1091,7 +1293,7 @@ function NoteRow({
                 }`}
               >
                 <GraduationCap size={14} className="text-primary" />
-                <span>{expanded ? 'Hide advice' : 'Senior advice'}</span>
+                <span>{expanded ? 'Hide advice' : 'Contributor advice'}</span>
               </button>
             )}
           </div>
@@ -1102,19 +1304,34 @@ function NoteRow({
         <div className="flex gap-2 shrink-0 items-center">
           {toggleSave && (
             <button 
-              type="button"
+              type="button" 
               onClick={() => toggleSave(note.id)} 
               className={`icon-button border transition-colors ${
                 isSaved ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-secondary text-muted-foreground hover:text-foreground'
               }`}
               title={isSaved ? "Remove from saved" : "Save note"}
-              aria-label={isSaved ? "Remove from saved" : "Save note"}
             >
               <Bookmark size={18} weight={isSaved ? "fill" : "regular"} />
             </button>
           )}
-          <button onClick={open} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-transform hover:scale-105 active:scale-95">Read</button>
-          <button onClick={()=>downloadNote(note)} className="icon-button border transition-transform hover:scale-105 active:scale-95" aria-label={`Download ${note.title}`}><Download size={18}/></button>
+          {open && (
+            <button 
+              onClick={open} 
+              className="icon-button border hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+              title="Read note in browser"
+            >
+              <Eye size={18} />
+            </button>
+          )}
+          <a 
+            href={note.fileUrl || `/api/download?title=${encodeURIComponent(note.title)}`} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="icon-button bg-primary text-primary-foreground hover:opacity-90 transition-opacity" 
+            title="Download PDF file"
+          >
+            <Download size={18}/>
+          </a>
           {onDelete && (
             <button 
               onClick={onDelete} 
@@ -1127,20 +1344,20 @@ function NoteRow({
           )}
         </div>
       </div>
-      <AnimatePresence initial={false}>
+      <AnimatePresence>
         {expanded && note.description && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
+            transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
             <div className="pt-3">
               <div className="rounded-xl bg-sage/40 border border-primary/20 p-3.5 text-sm">
                 <div className="flex items-center gap-2 font-semibold text-foreground mb-1">
                   <GraduationCap size={16} className="text-primary shrink-0" />
-                  <span>Senior Contributor Advice & Tips</span>
+                  <span>Contributor Advice & Tips</span>
                   <span className="text-xs text-muted-foreground font-normal ml-auto">by {note.author}</span>
                 </div>
                 <p className="text-muted-foreground leading-relaxed pl-6 whitespace-pre-wrap">{note.description}</p>
@@ -1155,118 +1372,100 @@ function NoteRow({
 
 function downloadNote(note:Note){const blob=new Blob([`${note.title}\n${note.subject}\nShared on Luma by ${note.author}`],{type:'text/plain'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${note.title}.txt`;a.click();URL.revokeObjectURL(url)}
 
-function getAudienceBadge(audience: string, kind: string) {
-  if (kind === 'New note') {
-    return { label: 'New note', color: 'bg-primary text-primary-foreground' }
-  }
-  if (!audience || audience === 'ALL' || audience === 'Department' || audience === 'All students') {
-    return { label: 'All students', color: 'bg-secondary text-foreground' }
-  }
-  const match = audience.match(/Semester\s*(\d)/i)
-  if (match) {
-    const sem = parseInt(match[1], 10)
-    const tone = SEMESTER_COLORS[(sem - 1) % SEMESTER_COLORS.length] || 'bg-secondary'
-    return { label: `Semester ${sem}`, color: `${tone} text-foreground border border-black/5` }
-  }
-  return { label: audience, color: 'bg-secondary text-foreground' }
-}
+function Notifications({alerts,setAlerts,user}:{alerts:any[],setAlerts:(a:any[])=>void,user:PrismaUser|null}){
+  const [filter, setFilter] = useState<'dept' | 'app' | 'all' | 'unread'>('dept')
 
-function Notifications({alerts,setAlerts}:{alerts:any[],setAlerts:(a:any[])=>void}){
-  const [readFilter, setReadFilter] = useState<'all'|'unread'>('all')
-  const [targetFilter, setTargetFilter] = useState<string>('All')
-
-  const audienceOptions = useMemo(() => {
-    const set = new Set<string>()
-    alerts.forEach(a => {
-      if (a.audience && a.audience !== 'ALL' && a.audience !== 'All students') {
-        set.add(a.audience)
-      }
-    })
-    return ['All', 'General', ...Array.from(set)]
-  }, [alerts])
-
-  const shown = useMemo(() => {
+  const baseFiltered = useMemo(() => {
     return alerts.filter(a => {
-      if (readFilter === 'unread' && !a.unread) return false
-      if (targetFilter === 'General') {
-        return !a.audience || a.audience === 'ALL' || a.audience === 'All students' || a.audience === 'Department'
-      }
-      if (targetFilter !== 'All') {
-        return a.audience === targetFilter
+      // If user is not admin, hide any admin notifications
+      if (user?.role !== 'ADMIN' && a.audience === 'ADMIN') return false
+      // If user has a semester and alert is for a specific semester, check match
+      if (user?.role !== 'ADMIN' && a.audience && a.audience !== 'ALL' && a.audience !== 'All students' && a.audience !== 'Department') {
+        const match = a.audience.match(/Semester\s*(\d)/i) || a.audience.match(/SEM_(\d)/i)
+        if (match) {
+          const targetSem = parseInt(match[1], 10)
+          if (targetSem !== user?.semester) return false
+        }
       }
       return true
     })
-  }, [alerts, readFilter, targetFilter])
+  }, [alerts, user])
+
+  const shown = useMemo(() => {
+    return baseFiltered.filter(a => {
+      if (filter === 'unread') return !!a.unread
+      if (filter === 'dept') return a.kind !== 'New note'
+      if (filter === 'app') return a.kind === 'New note'
+      return true
+    })
+  }, [baseFiltered, filter])
+
+  const counts = useMemo(() => ({
+    all: baseFiltered.length,
+    dept: baseFiltered.filter(a => a.kind !== 'New note').length,
+    app: baseFiltered.filter(a => a.kind === 'New note').length,
+    unread: baseFiltered.filter(a => a.unread).length
+  }), [baseFiltered])
 
   return (
     <section className="max-w-3xl">
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex rounded-full bg-secondary p-1 w-fit">
-          <Nav layoutId="notify-nav" active={readFilter==='all'} onClick={()=>setReadFilter('all')}>All ({alerts.length})</Nav>
-          <Nav layoutId="notify-nav" active={readFilter==='unread'} onClick={()=>setReadFilter('unread')}>Unread ({alerts.filter(a=>a.unread).length})</Nav>
+        <div className="flex rounded-full bg-secondary p-1 w-fit overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <Nav layoutId="notify-nav" active={filter==='dept'} onClick={()=>setFilter('dept')}>
+            Department Notices {counts.dept > 0 && `(${counts.dept})`}
+          </Nav>
+          <Nav layoutId="notify-nav" active={filter==='app'} onClick={()=>setFilter('app')}>
+            App Activity {counts.app > 0 && `(${counts.app})`}
+          </Nav>
+          <Nav layoutId="notify-nav" active={filter==='all'} onClick={()=>setFilter('all')}>
+            All ({counts.all})
+          </Nav>
+          <Nav layoutId="notify-nav" active={filter==='unread'} onClick={()=>setFilter('unread')}>
+            Unread {counts.unread > 0 && `(${counts.unread})`}
+          </Nav>
         </div>
-        {alerts.some(a => a.unread) && (
-          <button onClick={()=>setAlerts(alerts.map(a=>({...a,unread:false})))} className="text-sm underline underline-offset-4 text-muted-foreground hover:text-foreground">
+        {baseFiltered.some(a => a.unread) && (
+          <button onClick={()=>setAlerts(alerts.map(a=>({...a,unread:false})))} className="text-sm underline underline-offset-4 text-muted-foreground hover:text-foreground cursor-pointer shrink-0">
             Mark all read
           </button>
         )}
       </div>
 
-      {audienceOptions.length > 2 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-4 modal-scroll touch-pan-x">
-          {audienceOptions.map(opt => (
-            <button
-              key={opt}
-              onClick={() => setTargetFilter(opt)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
-                targetFilter === opt
-                  ? 'bg-primary text-primary-foreground shadow-xs'
-                  : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
-              }`}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      )}
-
       <div className="flex flex-col gap-3">
         <AnimatePresence mode="wait">
-          <motion.div key={`${readFilter}-${targetFilter}`} initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} transition={{duration:0.2}} className="flex flex-col gap-3">
+          <motion.div key={filter} initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} transition={{duration:0.2}} className="flex flex-col gap-3">
             {shown.length === 0 ? (
               <div className="py-16 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40">
                 <Bell size={32} className="mx-auto mb-2 opacity-30"/>
-                <p className="font-semibold text-foreground text-sm">No announcements found</p>
-                <p className="text-xs mt-1">Official department updates will appear here.</p>
+                <p className="font-semibold text-foreground text-sm">
+                  {filter === 'dept' ? 'No department notices yet' : filter === 'app' ? 'No app activity yet' : filter === 'unread' ? 'No unread notifications' : 'No announcements found'}
+                </p>
+                <p className="text-xs mt-1">
+                  {filter === 'dept' ? 'Official announcements broadcast by faculty/admin will appear here.' : 'Updates on published notes and study materials will appear here.'}
+                </p>
               </div>
             ) : (
-              shown.map(a => {
-                const badge = getAudienceBadge(a.audience, a.kind)
-                return (
-                  <button 
-                    key={a.id} 
-                    onClick={()=>setAlerts(alerts.map(x=>x.id===a.id?{...x,unread:false}:x))} 
-                    className="flex gap-4 rounded-3xl border bg-card p-5 text-left transition hover:shadow-sm hover:border-primary/30"
-                  >
-                    <span className={`mt-1 flex size-10 shrink-0 items-center justify-center rounded-2xl ${badge.color}`}>
-                      {a.kind==='New note' ? <FileText size={18}/> : <Megaphone size={18}/>}
+              shown.map(a => (
+                <button 
+                  key={a.id} 
+                  onClick={()=>setAlerts(alerts.map(x=>x.id===a.id?{...x,unread:false}:x))} 
+                  className="flex gap-4 rounded-3xl border bg-card p-5 text-left transition hover:shadow-sm hover:border-primary/30 cursor-pointer"
+                >
+                  <span className="mt-1 flex size-10 shrink-0 items-center justify-center rounded-2xl bg-secondary text-foreground">
+                    {a.kind==='New note' ? <FileText size={18}/> : <Megaphone size={18}/>}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+                      <span className="text-xs text-muted-foreground">{a.time}</span>
+                    </div>
+                    <span className="flex items-center gap-2">
+                      <b className="text-base font-semibold text-foreground">{a.title}</b>
+                      {a.unread && <i className="size-2 rounded-full bg-primary shrink-0"/>}
                     </span>
-                    <span className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
-                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${badge.color}`}>
-                          {badge.label}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{a.time}</span>
-                      </div>
-                      <span className="flex items-center gap-2">
-                        <b className="text-base font-semibold text-foreground">{a.title}</b>
-                        {a.unread && <i className="size-2 rounded-full bg-primary shrink-0"/>}
-                      </span>
-                      <span className="mt-1 block text-sm text-muted-foreground leading-relaxed">{a.body}</span>
-                    </span>
-                  </button>
-                )
-              })
+                    <span className="mt-1 block text-sm text-muted-foreground leading-relaxed">{a.body}</span>
+                  </span>
+                </button>
+              ))
             )}
           </motion.div>
         </AnimatePresence>
@@ -1274,6 +1473,7 @@ function Notifications({alerts,setAlerts}:{alerts:any[],setAlerts:(a:any[])=>voi
     </section>
   )
 }
+
 
 function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:Note)=>void,notes:Note[],subjects:SubjectItem[]}){
   const [open,setOpen]=useState(false);
@@ -1283,42 +1483,24 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
   const [selectedSemester, setSelectedSemester] = useState(1);
   const [subjectDropdownOpen, setSubjectDropdownOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [mounted, setMounted] = useState(false);
   const lenis = useLenis();
   
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (open) {
       lenis?.stop();
-      const scrollY = window.scrollY;
-      document.body.style.position = 'fixed';
-      document.body.style.top = `-${scrollY}px`;
-      document.body.style.left = '0';
-      document.body.style.right = '0';
-      document.body.style.width = '100%';
       document.body.style.overflow = 'hidden';
-      document.documentElement.style.overflow = 'hidden';
     } else {
       lenis?.start();
-      const scrollY = document.body.style.top;
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.left = '';
-      document.body.style.right = '';
-      document.body.style.width = '';
       document.body.style.overflow = '';
-      document.documentElement.style.overflow = '';
-      if (scrollY) {
-        window.scrollTo(0, parseInt(scrollY || '0', 10) * -1);
-      }
     }
     return () => {
       lenis?.start();
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.left = '';
-      document.body.style.right = '';
-      document.body.style.width = '';
       document.body.style.overflow = '';
-      document.documentElement.style.overflow = '';
     };
   }, [open, lenis]);
 
@@ -1472,241 +1654,244 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
         </ul>
       </aside>
 
-      <AnimatePresence>
-        {open&&<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm overscroll-none touch-none" data-lenis-prevent role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={() => setSubjectDropdownOpen(false)}>
-          <motion.form initial={{scale:0.95, y:15, opacity: 0}} animate={{scale:1, y:0, opacity: 1}} exit={{scale:0.95, y:15, opacity: 0}} transition={{type:"spring", bounce:0.15, duration:0.35}} onSubmit={handleUpload} onClick={(e) => e.stopPropagation()} className="relative flex flex-col w-full max-w-lg rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden" data-lenis-prevent>
-            
-            {/* Frosted Sticky Header */}
-            <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-5 bg-card/90 backdrop-blur-xl border-b border-border/40">
-              <div>
-                <p className="section-kicker mb-0.5">New submission</p>
-                <h2 id="submit-title" className="text-xl sm:text-2xl font-bold tracking-tight">Upload your note</h2>
-              </div>
-              <button 
-                type="button" 
-                onClick={()=>setOpen(false)} 
-                className="flex size-9 items-center justify-center rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Close dialog"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Scrollable Form Body */}
-            <div className="flex-1 overflow-y-auto modal-scroll px-6 py-5 mr-2 pr-4 space-y-5">
-              {submitted ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground mb-4">
-                    <Check size={28} weight="bold" />
+      {mounted && createPortal(
+          <AnimatePresence>
+            {open&&<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm overscroll-none touch-none" data-lenis-prevent role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={() => setSubjectDropdownOpen(false)}>
+              <motion.form initial={{scale:0.95, y:15, opacity: 0}} animate={{scale:1, y:0, opacity: 1}} exit={{scale:0.95, y:15, opacity: 0}} transition={{type:"spring", bounce:0.15, duration:0.35}} onSubmit={handleUpload} onClick={(e) => e.stopPropagation()} className="relative flex flex-col w-full max-w-lg rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden" data-lenis-prevent>
+                
+                {/* Frosted Sticky Header */}
+                <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-5 bg-card/90 backdrop-blur-xl border-b border-border/40">
+                  <div>
+                    <p className="section-kicker mb-0.5">New submission</p>
+                    <h2 id="submit-title" className="text-xl sm:text-2xl font-bold tracking-tight">Upload your note</h2>
                   </div>
-                  <h3 className="text-xl font-bold">Uploaded for review!</h3>
-                  <p className="text-sm text-muted-foreground mt-1 max-w-xs">Your note has been submitted to the department.</p>
+                  <button 
+                    type="button" 
+                    onClick={()=>setOpen(false)} 
+                    className="flex size-9 items-center justify-center rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Close dialog"
+                  >
+                    <X size={16} />
+                  </button>
                 </div>
-              ) : (
-                <div className="flex flex-col gap-4">
-                  <label className="field-label">
-                    Note title
-                    <input required name="title" className="field-input" placeholder="e.g. Week 1–6 Midterm Summary" />
-                  </label>
 
-                  {/* Target Semester Selector with visible scrollbar */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-sm font-semibold text-foreground">Target semester</span>
-                    <div className="flex items-center gap-1.5 overflow-x-auto pb-2 modal-scroll touch-pan-x">
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => {
-                        const isActive = selectedSemester === sem
-                        return (
-                          <button
-                            key={sem}
-                            type="button"
-                            onClick={() => handleSemesterChange(sem)}
-                            className={`relative px-4 py-2 text-xs sm:text-sm font-semibold rounded-full whitespace-nowrap transition-colors select-none shrink-0 ${
-                              isActive
-                                ? 'text-primary-foreground'
-                                : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
-                            }`}
-                          >
-                            {isActive && (
-                              <motion.div
-                                layoutId="upload-sem-pill"
-                                className="absolute inset-0 bg-primary rounded-full z-0 shadow-sm"
-                                transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                              />
-                            )}
-                            <span className="relative z-10">Semester {sem}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Course / Subject Dropdown */}
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-sm font-semibold text-foreground">Course / Subject</span>
-                    {semesterSubjects.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed p-4 text-center text-xs text-muted-foreground bg-secondary/30">
-                        No courses registered for Semester {selectedSemester} yet.
+                {/* Scrollable Form Body */}
+                <div className="flex-1 overflow-y-auto modal-scroll px-6 py-5 mr-2 pr-4 space-y-5">
+                  {submitted ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <div className="flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground mb-4">
+                        <Check size={28} weight="bold" />
                       </div>
-                    ) : (
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={() => setSubjectDropdownOpen(!subjectDropdownOpen)}
-                          className="flex h-12 w-full items-center justify-between rounded-2xl border bg-background px-4 text-sm font-medium focus:border-foreground transition-colors text-left"
-                        >
-                          <span className="truncate">
-                            {subjects.find(s => s.code === subjectCode)
-                              ? `${subjects.find(s => s.code === subjectCode)?.name} (${subjectCode})`
-                              : 'Select a course'}
-                          </span>
-                          <CaretDown
-                            size={16}
-                            weight="bold"
-                            className={`text-muted-foreground transition-transform duration-200 shrink-0 ml-2 ${
-                              subjectDropdownOpen ? 'rotate-180' : ''
-                            }`}
-                          />
-                        </button>
-
-                        <AnimatePresence>
-                          {subjectDropdownOpen && (
-                            <>
-                              <div 
-                                className="fixed inset-0 z-20" 
-                                onClick={() => setSubjectDropdownOpen(false)} 
-                              />
-                              <motion.div
-                                initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                                transition={{ duration: 0.15 }}
-                                className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-56 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                              >
-                                {semesterSubjects.map(s => {
-                                  const isSelected = subjectCode === s.code;
-                                  return (
-                                    <button
-                                      key={s.code}
-                                      type="button"
-                                      onClick={() => {
-                                        setSubjectCode(s.code);
-                                        setSubjectDropdownOpen(false);
-                                      }}
-                                      className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
-                                        isSelected
-                                          ? 'bg-secondary font-semibold text-foreground'
-                                          : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                                      }`}
-                                    >
-                                      <span className="truncate">{s.name} ({s.code})</span>
-                                      {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
-                                    </button>
-                                  );
-                                })}
-                              </motion.div>
-                            </>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Senior Advice / Study Tips */}
-                  <label className="field-label flex flex-col gap-1.5">
-                    <span className="flex items-center gap-1.5 font-semibold text-foreground">
-                      <GraduationCap size={16} className="text-primary" />
-                      Senior Advice & Study Tips (Optional)
-                    </span>
-                    <div className="flex h-28 rounded-2xl border bg-background overflow-hidden focus-within:border-foreground transition-colors">
-                      <textarea
-                        value={seniorAdvice}
-                        onChange={e => setSeniorAdvice(e.target.value)}
-                        className="h-full w-full bg-transparent px-4 py-3 text-sm outline-none resize-none placeholder:text-muted-foreground"
-                        placeholder="e.g. Focus on Chapter 3 formulas and past midterm questions."
-                      />
-                    </div>
-                  </label>
-
-                  {/* PDF File Upload Dropzone */}
-                  <label className={`relative flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border transition-all p-4 ${
-                    selectedFile
-                      ? 'border-primary/40 bg-secondary/80 hover:bg-secondary'
-                      : 'border-dashed border-border/80 bg-secondary/40 hover:border-primary/40 hover:bg-secondary/70'
-                  }`}>
-                    {selectedFile ? (
-                      <div className="flex w-full items-center gap-3.5">
-                        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-                          <FileText size={22} weight="fill" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="block font-semibold text-sm text-foreground truncate">{selectedFile.name}</span>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB · Ready for Cloudflare upload
-                          </p>
-                        </div>
-                        <span className="text-xs font-semibold text-primary px-3 py-1.5 rounded-full bg-background border border-border/60 shadow-xs shrink-0">
-                          Change
-                        </span>
-                      </div>
-                    ) : (
-                      <>
-                        <Upload size={22} className="text-muted-foreground mb-1.5" />
-                        <span className="font-semibold text-foreground">Choose PDF document</span>
-                        <span className="text-xs text-muted-foreground mt-0.5">PDF files up to 100 MB</span>
-                      </>
-                    )}
-                    <input
-                      type="file"
-                      name="file"
-                      accept="application/pdf"
-                      className="sr-only"
-                      required
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          const f = e.target.files[0];
-                          if (f.type !== 'application/pdf') {
-                            alert('Please select a valid PDF file.');
-                            return;
-                          }
-                          if (f.size > 100 * 1024 * 1024) {
-                            alert('File size exceeds 100 MB limit.');
-                            return;
-                          }
-                          setSelectedFile(f);
-                        }
-                      }}
-                    />
-                  </label>
-
-                  {uploading ? (
-                    <div className="flex flex-col gap-2 mt-1">
-                      <div className="flex justify-between text-xs font-semibold text-muted-foreground px-1">
-                        <span>Uploading to Cloudflare...</span>
-                        <span>{uploadProgress}%</span>
-                      </div>
-                      <div className="h-2.5 w-full rounded-full bg-secondary overflow-hidden">
-                        <motion.div 
-                          className="h-full bg-primary rounded-full" 
-                          initial={{ width: 0 }} 
-                          animate={{ width: `${uploadProgress}%` }} 
-                          transition={{ ease: "linear", duration: 0.2 }}
-                        />
-                      </div>
+                      <h3 className="text-xl font-bold">Uploaded for review!</h3>
+                      <p className="text-sm text-muted-foreground mt-1 max-w-xs">Your note has been submitted to the department.</p>
                     </div>
                   ) : (
-                    <button className="rounded-full bg-primary p-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity mt-1">
-                      Submit note for review
-                    </button>
+                    <div className="flex flex-col gap-4">
+                      <label className="field-label">
+                        Note title
+                        <input required name="title" className="field-input" placeholder="e.g. Week 1–6 Midterm Summary" />
+                      </label>
+
+                      {/* Target Semester Selector with visible scrollbar */}
+                      <div className="flex flex-col gap-2">
+                        <span className="text-sm font-semibold text-foreground">Target semester</span>
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 modal-scroll touch-pan-x">
+                          {Array.from({ length: user?.semester || 8 }, (_, i) => i + 1).map(sem => {
+                            const isActive = selectedSemester === sem
+                            return (
+                              <button
+                                key={sem}
+                                type="button"
+                                onClick={() => handleSemesterChange(sem)}
+                                className={`relative px-4 py-2 text-xs sm:text-sm font-semibold rounded-full whitespace-nowrap transition-colors select-none shrink-0 ${
+                                  isActive
+                                    ? 'text-primary-foreground'
+                                    : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+                                }`}
+                              >
+                                {isActive && (
+                                  <motion.div
+                                    layoutId="upload-sem-pill"
+                                    className="absolute inset-0 bg-primary rounded-full z-0 shadow-sm"
+                                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                  />
+                                )}
+                                <span className="relative z-10">Semester {sem}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Course / Subject Dropdown */}
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-sm font-semibold text-foreground">Course / Subject</span>
+                        {semesterSubjects.length === 0 ? (
+                          <div className="rounded-2xl border border-dashed p-4 text-center text-xs text-muted-foreground bg-secondary/30">
+                            No courses registered for Semester {selectedSemester} yet.
+                          </div>
+                        ) : (
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setSubjectDropdownOpen(!subjectDropdownOpen)}
+                              className="flex h-12 w-full items-center justify-between rounded-2xl border bg-background px-4 text-sm font-medium focus:border-foreground transition-colors text-left"
+                            >
+                              <span className="truncate">
+                                {subjects.find(s => s.code === subjectCode)
+                                  ? `${subjects.find(s => s.code === subjectCode)?.name} (${subjectCode})`
+                                  : 'Select a course'}
+                              </span>
+                              <CaretDown
+                                size={16}
+                                weight="bold"
+                                className={`text-muted-foreground transition-transform duration-200 shrink-0 ml-2 ${
+                                  subjectDropdownOpen ? 'rotate-180' : ''
+                                }`}
+                              />
+                            </button>
+
+                            <AnimatePresence>
+                              {subjectDropdownOpen && (
+                                <>
+                                  <div 
+                                    className="fixed inset-0 z-20" 
+                                    onClick={() => setSubjectDropdownOpen(false)} 
+                                  />
+                                  <motion.div
+                                    initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                                    transition={{ duration: 0.15 }}
+                                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-56 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                                  >
+                                    {semesterSubjects.map(s => {
+                                      const isSelected = subjectCode === s.code;
+                                      return (
+                                        <button
+                                          key={s.code}
+                                          type="button"
+                                          onClick={() => {
+                                            setSubjectCode(s.code);
+                                            setSubjectDropdownOpen(false);
+                                          }}
+                                          className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
+                                            isSelected
+                                              ? 'bg-secondary font-semibold text-foreground'
+                                              : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                                          }`}
+                                        >
+                                          <span className="truncate">{s.name} ({s.code})</span>
+                                          {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                                        </button>
+                                      );
+                                    })}
+                                  </motion.div>
+                                </>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Senior Advice / Study Tips */}
+                      <label className="field-label flex flex-col gap-1.5">
+                        <span className="flex items-center gap-1.5 font-semibold text-foreground">
+                          <GraduationCap size={16} className="text-primary" />
+                          Senior Advice & Study Tips (Optional)
+                        </span>
+                        <div className="flex h-28 rounded-2xl border bg-background overflow-hidden focus-within:border-foreground transition-colors">
+                          <textarea
+                            value={seniorAdvice}
+                            onChange={e => setSeniorAdvice(e.target.value)}
+                            className="h-full w-full bg-transparent px-4 py-3 text-sm outline-none resize-none placeholder:text-muted-foreground"
+                            placeholder="e.g. Focus on Chapter 3 formulas and past midterm questions."
+                          />
+                        </div>
+                      </label>
+
+                      {/* PDF File Upload Dropzone */}
+                      <label className={`relative flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border transition-all p-4 ${
+                        selectedFile
+                          ? 'border-primary/40 bg-secondary/80 hover:bg-secondary'
+                          : 'border-dashed border-border/80 bg-secondary/40 hover:border-primary/40 hover:bg-secondary/70'
+                      }`}>
+                        {selectedFile ? (
+                          <div className="flex w-full items-center gap-3.5">
+                            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+                              <FileText size={22} weight="fill" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <span className="block font-semibold text-sm text-foreground truncate">{selectedFile.name}</span>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB · Ready for Cloudflare upload
+                              </p>
+                            </div>
+                            <span className="text-xs font-semibold text-primary px-3 py-1.5 rounded-full bg-background border border-border/60 shadow-xs shrink-0">
+                              Change
+                            </span>
+                          </div>
+                        ) : (
+                          <>
+                            <Upload size={22} className="text-muted-foreground mb-1.5" />
+                            <span className="font-semibold text-foreground">Choose PDF document</span>
+                            <span className="text-xs text-muted-foreground mt-0.5">PDF files up to 100 MB</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          name="file"
+                          accept="application/pdf"
+                          className="sr-only"
+                          required
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              const f = e.target.files[0];
+                              if (f.type !== 'application/pdf') {
+                                alert('Please select a valid PDF file.');
+                                return;
+                              }
+                              if (f.size > 100 * 1024 * 1024) {
+                                alert('File size exceeds 100 MB limit.');
+                                return;
+                              }
+                              setSelectedFile(f);
+                            }
+                          }}
+                        />
+                      </label>
+
+                      {uploading ? (
+                        <div className="flex flex-col gap-2 mt-1">
+                          <div className="flex justify-between text-xs font-semibold text-muted-foreground px-1">
+                            <span>Uploading to Cloudflare...</span>
+                            <span>{uploadProgress}%</span>
+                          </div>
+                          <div className="h-2.5 w-full rounded-full bg-secondary overflow-hidden">
+                            <motion.div 
+                              className="h-full bg-primary rounded-full" 
+                              initial={{ width: 0 }} 
+                              animate={{ width: `${uploadProgress}%` }} 
+                              transition={{ ease: "linear", duration: 0.2 }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <button className="rounded-full bg-primary p-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity mt-1">
+                          Submit note for review
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            {/* Bottom cushion spacer */}
-            <div className="h-4 w-full bg-card shrink-0 pointer-events-none" />
-          </motion.form>
-        </motion.div>}
-      </AnimatePresence>
+                {/* Bottom cushion spacer */}
+                <div className="h-4 w-full bg-card shrink-0 pointer-events-none" />
+              </motion.form>
+            </motion.div>}
+          </AnimatePresence>,
+          document.body
+        )}
     </div>
   )
 }
@@ -1959,7 +2144,7 @@ function ReviewQueueCard({
             <div className="mt-6 rounded-2xl bg-secondary p-4 flex items-center justify-between">
               <div>
                 <b>Submitted by {candidate.author}</b>
-                <p className="mt-0.5 text-xs text-muted-foreground">Senior contributor · {candidate.date}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Note contributor · {candidate.date}</p>
               </div>
               <span className="text-xs bg-background/80 px-2.5 py-1 rounded-full border text-muted-foreground">Attributed to contributor</span>
             </div>
@@ -2004,7 +2189,7 @@ function ReviewQueueCard({
 }
 
 function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:{notes:Note[],setNotes:React.Dispatch<React.SetStateAction<Note[]>>,subjects:SubjectItem[],setSubjects:(s:SubjectItem[])=>void,publish:(n:Note)=>void,addAnnouncement:(a:any)=>void}){
-  const [tab,setTab]=useState<'queue'|'content'|'curriculum'|'notices'>('queue');
+  const [tab,setTab]=useState<'queue'|'content'|'curriculum'|'users'|'calendar'|'notices'>('queue');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [doneId,setDoneId]=useState<any>(null);
   const [loading,setLoading]=useState(false);
@@ -2089,10 +2274,24 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
 
   const semSubjects = subjects.filter(s => s.semester === curriculumSem);
 
+  const [pendingUserCount, setPendingUserCount] = useState(0);
+
+  const fetchPendingUserCount = () => {
+    getAdminUsersData().then(res => {
+      if (res?.pendingUsers) setPendingUserCount(res.pendingUsers.length);
+    }).catch(() => {});
+  };
+
+  React.useEffect(() => {
+    fetchPendingUserCount();
+  }, [tab]);
+
   const tabs = [
-    { id: 'queue', label: `Review queue (${pending.length})` },
+    { id: 'users', label: `Student Reviews ${pendingUserCount > 0 ? `(${pendingUserCount})` : ''}` },
+    { id: 'queue', label: `Notes Review (${pending.length})` },
     { id: 'content', label: `Published (${published.length})` },
     { id: 'curriculum', label: 'Curriculum & Subjects' },
+    { id: 'calendar', label: 'Academic Calendar' },
     { id: 'notices', label: 'Announcements' }
   ];
   const activeTabLabel = tabs.find(t => t.id === tab)?.label;
@@ -2160,10 +2359,24 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
   {/* Desktop Pill Navigation */}
   <div className="hidden md:flex mb-7 overflow-x-auto scrollbar-none">
     <div className="flex w-max rounded-full bg-secondary p-1">
-      <Nav layoutId="admin-nav" active={tab==='queue'} onClick={()=>setTab('queue')}>Review queue ({pending.length})</Nav>
-      <Nav layoutId="admin-nav" active={tab==='content'} onClick={()=>setTab('content')}>Published ({published.length})</Nav>
-      <Nav layoutId="admin-nav" active={tab==='curriculum'} onClick={()=>setTab('curriculum')}>Curriculum & Subjects</Nav>
-      <Nav layoutId="admin-nav" active={tab==='notices'} onClick={()=>setTab('notices')}>Announcements</Nav>
+      <Nav layoutId="admin-nav" active={tab==='users'} onClick={()=>setTab('users')}>
+        Student Reviews {pendingUserCount > 0 && <span className="ml-1.5 px-2 py-0.5 rounded-full text-[11px] bg-primary text-primary-foreground font-bold">{pendingUserCount}</span>}
+      </Nav>
+      <Nav layoutId="admin-nav" active={tab==='queue'} onClick={()=>setTab('queue')}>
+        Notes Review ({pending.length})
+      </Nav>
+      <Nav layoutId="admin-nav" active={tab==='content'} onClick={()=>setTab('content')}>
+        Published ({published.length})
+      </Nav>
+      <Nav layoutId="admin-nav" active={tab==='curriculum'} onClick={()=>setTab('curriculum')}>
+        Curriculum & Subjects
+      </Nav>
+      <Nav layoutId="admin-nav" active={tab==='calendar'} onClick={()=>setTab('calendar')}>
+        Academic Calendar
+      </Nav>
+      <Nav layoutId="admin-nav" active={tab==='notices'} onClick={()=>setTab('notices')}>
+        Department Notices
+      </Nav>
     </div>
   </div>
 
@@ -2172,7 +2385,7 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
       
       {/* Review queue */}
       {tab==='queue'&&<div className="flex flex-col gap-5">
-        {pending.length === 0 && <p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed bg-card/50">No notes currently pending review. Submissions from seniors will appear here.</p>}
+        {pending.length === 0 && <p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed bg-card/50">No notes currently pending review. Submissions from contributors will appear here.</p>}
         {pending.map(candidate => (
           <ReviewQueueCard
             key={candidate.id}
@@ -2199,7 +2412,7 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-5">
           <div>
             <h2 className="text-2xl font-bold">Curriculum & Subjects</h2>
-            <p className="text-sm text-muted-foreground">Manage courses and subjects available for students and seniors per semester.</p>
+            <p className="text-sm text-muted-foreground">Manage courses and subjects available for students and contributors per semester.</p>
           </div>
           {subMsg && <span className="text-xs font-semibold text-primary bg-primary/10 px-3 py-1.5 rounded-full">{subMsg}</span>}
         </div>
@@ -2307,10 +2520,1209 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
         </div>
       </div>}
 
+      {/* Users & Roles Studio */}
+      {tab==='users'&&<AdminUsersManager />}
+
+      {/* Academic Calendar Studio */}
+      {tab==='calendar'&&<AdminCalendarManager />}
+
       {/* Announcements Studio */}
       {tab==='notices'&&<Announcement onPublish={addAnnouncement}/>}
     </motion.div>
   </AnimatePresence></div>}
+
+function AdminCapSelect({
+  value,
+  onChange,
+  disabled
+}: {
+  value: number
+  onChange: (val: number) => void
+  disabled?: boolean
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen(!open)}
+        className="flex h-9 items-center justify-between gap-1.5 rounded-full border bg-background px-3 text-xs font-semibold text-foreground hover:border-primary/50 transition-all cursor-pointer disabled:opacity-50"
+      >
+        <span>Cap: Sem {value}</span>
+        <CaretDown size={12} className={`shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            data-lenis-prevent="true"
+            initial={{ opacity: 0, y: 4, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.96 }}
+            transition={{ duration: 0.12 }}
+            className="absolute left-0 top-full mt-1.5 z-50 rounded-2xl border bg-popover text-popover-foreground p-1.5 shadow-xl space-y-0.5 w-32 max-h-48 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden overscroll-contain"
+            style={{ overscrollBehavior: 'contain' }}
+          >
+            {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+              <button
+                type="button"
+                key={s}
+                onClick={() => {
+                  onChange(s);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                  value === s
+                    ? 'bg-secondary text-foreground font-bold'
+                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                }`}
+              >
+                <span>Semester {s}</span>
+                {value === s && <Check size={14} className="text-foreground shrink-0" />}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function AdminUsersManager() {
+  const [data, setData] = useState<{ pendingUsers: any[]; activeUsers: any[] }>({ pendingUsers: [], activeUsers: [] });
+  const [loading, setLoading] = useState(true);
+  const [subTab, setSubTab] = useState<'pending' | 'directory'>('pending');
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'STUDENT' | 'SENIOR' | 'ADMIN'>('all');
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+  // Reject Modal State
+  const [rejectModalUser, setRejectModalUser] = useState<any | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+
+  // Senior Semester Cap Overrides for pending approval
+  const [seniorCaps, setSeniorCaps] = useState<Record<string, number>>({});
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const res = await getAdminUsersData();
+      setData(res as any);
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleApprove = async (userId: string, role: 'STUDENT' | 'SENIOR' = 'STUDENT') => {
+    setActionLoadingId(userId);
+    try {
+      const semOverride = role === 'SENIOR' ? seniorCaps[userId] : undefined;
+      const res = await approveUser(userId, role, semOverride);
+      if (res.success) {
+        await loadData();
+      }
+    } catch (e: any) {
+      alert(e?.message || 'Failed to approve user');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!rejectModalUser) return;
+    setActionLoadingId(rejectModalUser.id);
+    try {
+      const res = await rejectUser(rejectModalUser.id, rejectReason.trim());
+      if (res.success) {
+        setRejectModalUser(null);
+        setRejectReason('');
+        await loadData();
+      }
+    } catch (e: any) {
+      alert(e?.message || 'Failed to reject user');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleSemesterChange = async (userId: string, newSem: number) => {
+    setActionLoadingId(userId);
+    try {
+      await updateUserSemester(userId, newSem);
+      await loadData();
+    } catch (e: any) {
+      alert(e?.message || 'Failed to update semester');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleToggleHoldBack = async (userId: string) => {
+    setActionLoadingId(userId);
+    try {
+      await toggleHeldBack(userId);
+      await loadData();
+    } catch (e: any) {
+      alert(e?.message || 'Failed to toggle hold-back flag');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleChangeRole = async (userId: string, newRole: 'STUDENT' | 'SENIOR' | 'ADMIN') => {
+    setActionLoadingId(userId);
+    try {
+      await changeUserRole(userId, newRole);
+      await loadData();
+    } catch (e: any) {
+      alert(e?.message || 'Failed to change role');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const filteredActive = useMemo(() => {
+    return data.activeUsers.filter(u => {
+      if (roleFilter !== 'all' && u.role !== roleFilter) return false;
+      const q = search.toLowerCase().trim();
+      if (!q) return true;
+      return `${u.name || ''} ${u.email || ''} ${u.regNumber || ''} ${u.batchYear || ''}`.toLowerCase().includes(q);
+    });
+  }, [data.activeUsers, search, roleFilter]);
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Sub-tab switcher */}
+      <div className="flex items-center justify-between flex-wrap gap-4 border-b border-border/80 pb-4">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSubTab('pending')}
+            className={`px-4 py-2 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+              subTab === 'pending'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'bg-secondary text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Clock size={15} />
+            <span>Pending Applications</span>
+            <span className={`size-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
+              subTab === 'pending' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background text-foreground'
+            }`}>
+              {data.pendingUsers.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSubTab('directory')}
+            className={`px-4 py-2 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+              subTab === 'directory'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'bg-secondary text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Users size={15} />
+            <span>Active Directory</span>
+            <span className={`size-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
+              subTab === 'directory' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background text-foreground'
+            }`}>
+              {data.activeUsers.length}
+            </span>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={loadData}
+          disabled={loading}
+          className="text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1.5 cursor-pointer bg-secondary px-3 py-1.5 rounded-full"
+        >
+          <Clock size={13} className={loading ? 'animate-spin' : ''} /> Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="py-20 text-center text-muted-foreground">
+          <div className="size-6 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto mb-3" />
+          <p className="text-xs">Loading user data...</p>
+        </div>
+      ) : subTab === 'pending' ? (
+        /* PENDING APPLICATIONS VIEW */
+        <div className="flex flex-col gap-4">
+          {data.pendingUsers.length === 0 ? (
+            <div className="py-20 text-center text-muted-foreground rounded-3xl border border-dashed bg-card/40 p-8">
+              <UserCheck size={36} className="mx-auto mb-3 opacity-30" />
+              <h3 className="font-semibold text-base text-foreground">No pending applications</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                All registered students and contributors have been reviewed.
+              </p>
+            </div>
+          ) : (
+            data.pendingUsers.map(user => {
+              const isContr = !!user.contributorRequest;
+              const currentCap = seniorCaps[user.id] ?? user.semester;
+              const isActionRunning = actionLoadingId === user.id;
+
+              return (
+                <div 
+                  key={user.id} 
+                  className="rounded-3xl border bg-card p-5 sm:p-6 shadow-xs flex flex-col lg:flex-row lg:items-start justify-between gap-6 transition-all hover:border-border/80"
+                >
+                  <div className="flex flex-col gap-3.5 min-w-0 flex-1">
+                    
+                    {/* Header Identity Line */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-base sm:text-lg font-bold text-foreground">{user.name || 'Unnamed Student'}</span>
+                      {user.regNumber && (
+                        <span className="bg-secondary text-foreground text-xs font-semibold px-2.5 py-1 rounded-full">
+                          {user.regNumber}
+                        </span>
+                      )}
+                      {user.batchYear && (
+                        <span className="bg-secondary text-muted-foreground text-xs font-medium px-2.5 py-1 rounded-full">
+                          Batch {user.batchYear}
+                        </span>
+                      )}
+                      <span className="bg-secondary text-muted-foreground text-xs font-medium px-2.5 py-1 rounded-full">
+                        Semester {user.semester} • Section {user.section || 'A'}
+                      </span>
+                      {isContr ? (
+                        <span className="bg-primary/10 text-primary border border-primary/25 text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                          <UploadSimple size={13} /> Requested Note Contributor
+                        </span>
+                      ) : (
+                        <span className="bg-secondary text-muted-foreground text-xs font-medium px-2.5 py-1 rounded-full">
+                          Requested Student Access
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Full Submitted Student Details Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 text-xs bg-secondary/30 rounded-2xl p-3.5 border border-border/40">
+                      <div>
+                        <span className="text-muted-foreground block text-[10px] font-semibold uppercase tracking-wider">Email Address</span>
+                        <span className="font-semibold text-foreground break-all">{user.email}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground block text-[10px] font-semibold uppercase tracking-wider">Phone Number</span>
+                        <span className="font-semibold text-foreground">{user.phone || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground block text-[10px] font-semibold uppercase tracking-wider">Applied Role</span>
+                        <span className={`font-semibold ${isContr ? 'text-primary' : 'text-foreground'}`}>
+                          {isContr ? 'Note Contributor' : 'Regular Student'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground block text-[10px] font-semibold uppercase tracking-wider">Application Date</span>
+                        <span className="font-semibold text-foreground">
+                          {user.createdAt ? new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recent'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground block text-[10px] font-semibold uppercase tracking-wider">Department</span>
+                        <span className="font-semibold text-foreground">Computer Engineering</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground block text-[10px] font-semibold uppercase tracking-wider">Current Cohort</span>
+                        <span className="font-semibold text-foreground">Semester {user.semester} • Section {user.section || 'A'}</span>
+                      </div>
+                    </div>
+
+                    {/* Contributor Request Details */}
+                    {isContr && (
+                      <div className="rounded-2xl bg-sage/30 border border-primary/20 p-3.5 text-xs">
+                        <div className="flex items-center gap-1.5 font-bold text-foreground mb-1">
+                          <UploadSimple size={15} className="text-primary" />
+                          <span>Note Contributor Application</span>
+                        </div>
+                        <p className="text-muted-foreground leading-relaxed italic bg-card/60 p-2.5 rounded-xl border border-primary/10 mt-1.5">
+                          "{user.contributorRequest.whyContribute}"
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
+                          <span className="font-semibold text-foreground text-[11px]">Notes available for:</span>
+                          {(user.contributorRequest.semestersHaveNotes || []).map((s: number) => (
+                            <span key={s} className="bg-primary text-primary-foreground px-2 py-0.5 rounded-full text-[10px] font-bold shadow-2xs">
+                              Sem {s}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions Column */}
+                  <div className="flex flex-col gap-2 shrink-0 lg:w-60 w-full pt-1">
+                    {isContr ? (
+                      <div className="flex items-center gap-2 w-full">
+                        <AdminCapSelect
+                          disabled={isActionRunning}
+                          value={currentCap}
+                          onChange={val => setSeniorCaps({ ...seniorCaps, [user.id]: val })}
+                        />
+
+                        <button
+                          type="button"
+                          disabled={isActionRunning}
+                          onClick={() => handleApprove(user.id, 'SENIOR')}
+                          className="flex-1 rounded-full bg-primary hover:opacity-95 text-primary-foreground text-xs font-semibold py-2.5 px-3 transition-opacity text-center cursor-pointer disabled:opacity-50 shadow-xs whitespace-nowrap"
+                        >
+                          Approve Application
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={isActionRunning}
+                        onClick={() => handleApprove(user.id, 'STUDENT')}
+                        className="w-full rounded-full bg-primary hover:opacity-95 text-primary-foreground text-xs font-semibold py-2.5 px-4 transition-opacity text-center cursor-pointer disabled:opacity-50 shadow-xs"
+                      >
+                        Approve Application
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      disabled={isActionRunning}
+                      onClick={() => { setRejectModalUser(user); setRejectReason(''); }}
+                      className="text-xs font-medium text-destructive hover:underline text-center py-1 cursor-pointer disabled:opacity-50 mt-0.5"
+                    >
+                      Reject Application
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      ) : (
+        /* ACTIVE USER DIRECTORY VIEW */
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+            <div className="relative w-full sm:w-80">
+              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search name, reg number, batch..."
+                className="field-input pl-9 text-xs"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
+              {(['all', 'STUDENT', 'SENIOR', 'ADMIN'] as const).map(r => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRoleFilter(r)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold capitalize transition-colors cursor-pointer ${
+                    roleFilter === r
+                      ? 'bg-foreground text-background shadow-xs'
+                      : 'bg-secondary text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {r.toLowerCase()}s
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {filteredActive.length === 0 ? (
+            <div className="py-16 text-center text-muted-foreground rounded-3xl border border-dashed bg-card/40">
+              <p className="text-sm font-semibold text-foreground">No matching users found</p>
+              <p className="text-xs mt-1">Try refining your search query.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {filteredActive.map(u => {
+                const isRunning = actionLoadingId === u.id;
+                const isAdmin = u.role === 'ADMIN';
+
+                return (
+                  <div 
+                    key={u.id}
+                    className="rounded-3xl border bg-card p-5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-5 text-xs transition-all hover:border-border/80"
+                  >
+                    <div className="flex flex-col gap-3 min-w-0 flex-1">
+                      {/* Header Row */}
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <div className="size-8 rounded-full bg-secondary font-bold text-foreground flex items-center justify-center shrink-0 text-xs">
+                          {u.name ? u.name.charAt(0).toUpperCase() : 'U'}
+                        </div>
+                        <b className="text-sm sm:text-base font-bold text-foreground">{u.name || 'Unnamed User'}</b>
+                        
+                        {isAdmin ? (
+                          <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-primary text-primary-foreground flex items-center gap-1 shadow-2xs">
+                            <ShieldCheck size={14} /> Administrator
+                          </span>
+                        ) : (
+                          <>
+                            {u.regNumber && (
+                              <span className="bg-secondary text-foreground text-xs font-semibold px-2.5 py-1 rounded-full">
+                                {u.regNumber}
+                              </span>
+                            )}
+                            {u.batchYear && (
+                              <span className="bg-secondary text-muted-foreground text-xs font-medium px-2.5 py-1 rounded-full">
+                                Batch {u.batchYear}
+                              </span>
+                            )}
+                            <span className="bg-secondary text-muted-foreground text-xs font-medium px-2.5 py-1 rounded-full">
+                              Semester {u.semester} • Section {u.section || 'A'}
+                            </span>
+                            {u.role === 'SENIOR' ? (
+                              <span className="bg-primary/10 text-primary border border-primary/20 text-xs font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                                <UploadSimple size={13} /> Note Contributor
+                              </span>
+                            ) : (
+                              <span className="bg-secondary text-muted-foreground text-xs font-medium px-2.5 py-1 rounded-full">
+                                Student
+                              </span>
+                            )}
+                            {u.heldBack && (
+                              <span className="text-xs bg-destructive/10 text-destructive font-medium px-2.5 py-1 rounded-full border border-destructive/20 flex items-center gap-1">
+                                <Warning size={13} /> Re-take
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Details Grid */}
+                      <div className={`grid gap-2 text-xs text-muted-foreground ${isAdmin ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'} bg-secondary/30 rounded-2xl p-3 border border-border/40`}>
+                        <div>
+                          <span className="text-muted-foreground block text-[10px] font-semibold uppercase tracking-wider">Email</span>
+                          <span className="font-semibold text-foreground break-all">{u.email}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block text-[10px] font-semibold uppercase tracking-wider">Phone</span>
+                          <span className="font-semibold text-foreground">{u.phone || 'N/A'}</span>
+                        </div>
+                        {!isAdmin && (
+                          <>
+                            <div>
+                              <span className="text-muted-foreground block text-[10px] font-semibold uppercase tracking-wider">Current Cohort</span>
+                              <span className="font-semibold text-foreground">Semester {u.semester}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground block text-[10px] font-semibold uppercase tracking-wider">Section</span>
+                              <span className="font-semibold text-foreground">Section {u.section || 'A'}</span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Controls Column */}
+                    <div className="flex items-center gap-2 flex-wrap shrink-0">
+                      {!isAdmin ? (
+                        <>
+                          {/* Semester Changer */}
+                          <label className="flex items-center gap-1.5 text-muted-foreground text-xs font-semibold bg-secondary/60 px-3 py-1.5 rounded-xl border border-border/40">
+                            <span>Sem:</span>
+                            <select
+                              disabled={isRunning}
+                              value={u.semester}
+                              onChange={e => handleSemesterChange(u.id, parseInt(e.target.value, 10))}
+                              className="bg-background text-foreground font-bold rounded-lg px-2 py-1 outline-none cursor-pointer text-xs"
+                            >
+                              {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                                <option key={s} value={s}>Sem {s}</option>
+                              ))}
+                            </select>
+                          </label>
+
+                          {/* Role Changer */}
+                          <select
+                            disabled={isRunning}
+                            value={u.role}
+                            onChange={e => handleChangeRole(u.id, e.target.value as any)}
+                            className="field-input py-1.5 px-3 text-xs rounded-xl bg-background font-semibold cursor-pointer w-32 h-9"
+                          >
+                            <option value="STUDENT">Student</option>
+                            <option value="SENIOR">Contributor</option>
+                            <option value="ADMIN">Admin</option>
+                          </select>
+
+                          {/* Hold Back Toggle */}
+                          <button
+                            type="button"
+                            disabled={isRunning}
+                            onClick={() => handleToggleHoldBack(u.id)}
+                            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer border ${
+                              u.heldBack 
+                                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30' 
+                                : 'bg-secondary text-muted-foreground hover:text-foreground border-transparent'
+                            }`}
+                            title="Toggle re-take hold-back state to prevent auto-advancing when terms change"
+                          >
+                            {u.heldBack ? 'Held Back (Re-take)' : 'Hold Back'}
+                          </button>
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground font-semibold px-3 py-1.5 rounded-full bg-secondary/60">
+                            Full System Privileges
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Reject Modal */}
+      <AnimatePresence>
+        {rejectModalUser && (
+          <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md rounded-3xl bg-card border p-6 shadow-2xl space-y-4"
+            >
+              <h3 className="text-lg font-bold text-foreground">Reject Application</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Rejecting <b className="text-foreground">{rejectModalUser.name}</b> ({rejectModalUser.regNumber || rejectModalUser.email}).
+                You may optionally provide a reason for the applicant.
+              </p>
+
+              <label className="field-label">
+                Reason for Rejection
+                <textarea
+                  value={rejectReason}
+                  onChange={e => setRejectReason(e.target.value)}
+                  placeholder="e.g. Registration number does not match current department roster."
+                  className="field-input text-xs min-h-24 resize-none py-2"
+                />
+              </label>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setRejectModalUser(null)}
+                  className="px-4 py-2 rounded-full text-xs font-semibold bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRejectConfirm}
+                  className="px-4 py-2 rounded-full text-xs font-semibold bg-destructive text-destructive-foreground hover:opacity-95 shadow-xs cursor-pointer"
+                >
+                  Confirm Rejection
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function AdminCalendarManager() {
+  const [data, setData] = useState<{ periods: any[]; activePeriod: any; summerBreakPeriod: any }>({ periods: [], activePeriod: null, summerBreakPeriod: null });
+  const [loading, setLoading] = useState(true);
+
+  // Create Period Modal
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [termName, setTermName] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [batchMaps, setBatchMaps] = useState<{ batchYear: number; semester: number }[]>([
+    { batchYear: 2026, semester: 1 },
+    { batchYear: 2025, semester: 3 },
+    { batchYear: 2024, semester: 5 },
+    { batchYear: 2023, semester: 7 },
+  ]);
+  const [creatingLoading, setCreatingLoading] = useState(false);
+
+  // Pre-advancement Review Modal
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [summaryData, setSummaryData] = useState<any | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [heldBackIds, setHeldBackIds] = useState<string[]>([]);
+  const [advancingLoading, setAdvancingLoading] = useState(false);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const res = await getAcademicPeriods();
+      setData(res as any);
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const openReviewModal = async () => {
+    if (!data.activePeriod) return;
+    setReviewModalOpen(true);
+    setSummaryLoading(true);
+    try {
+      const res = await getPreAdvancementSummary(data.activePeriod.id);
+      setSummaryData(res);
+      // Pre-populate held back IDs
+      const initialHeld: string[] = [];
+      Object.values(res.batchGroups).forEach((group: any) => {
+        group.students.forEach((s: any) => {
+          if (s.heldBack) initialHeld.push(s.id);
+        });
+      });
+      setHeldBackIds(initialHeld);
+    } catch (e: any) {
+      alert(e?.message || 'Failed to load pre-advancement summary');
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
+  const toggleStudentHeldBackInReview = (studentId: string) => {
+    setHeldBackIds(prev =>
+      prev.includes(studentId) ? prev.filter(id => id !== studentId) : [...prev, studentId]
+    );
+  };
+
+  const handleConfirmAdvancement = async () => {
+    if (!data.activePeriod) return;
+    if (!confirm(`Are you sure you want to officially advance semesters for ${data.activePeriod.name}? This will increment student semesters and publish official cohort notices.`)) return;
+    setAdvancingLoading(true);
+    try {
+      const res = await advanceSemestersForPeriod(data.activePeriod.id, heldBackIds);
+      if (res.success) {
+        setReviewModalOpen(false);
+        await loadData();
+        alert('Semesters successfully advanced! Welcome and graduation notices have been dispatched to students.');
+      }
+    } catch (e: any) {
+      alert(e?.message || 'Failed to advance semesters');
+    } finally {
+      setAdvancingLoading(false);
+    }
+  };
+
+  const handleCreateTerm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!termName.trim() || !startDate || !endDate) return;
+    setCreatingLoading(true);
+    try {
+      const res = await createAcademicPeriod({
+        name: termName.trim(),
+        startDate,
+        endDate,
+        status: 'ACTIVE',
+        batchMappings: batchMaps
+      });
+      if (res.success) {
+        setCreateModalOpen(false);
+        setTermName('');
+        setStartDate('');
+        setEndDate('');
+        await loadData();
+      }
+    } catch (e: any) {
+      alert(e?.message || 'Failed to create academic term');
+    } finally {
+      setCreatingLoading(false);
+    }
+  };
+
+  const handleStatusChange = async (periodId: string, status: any) => {
+    try {
+      await setPeriodStatus(periodId, status);
+      await loadData();
+    } catch (e: any) {
+      alert(e?.message || 'Failed to update status');
+    }
+  };
+
+  const updateBatchMapSemester = (index: number, sem: number) => {
+    const updated = [...batchMaps];
+    updated[index].semester = sem;
+    setBatchMaps(updated);
+  };
+
+  const updateBatchMapYear = (index: number, year: number) => {
+    const updated = [...batchMaps];
+    updated[index].batchYear = year;
+    setBatchMaps(updated);
+  };
+
+  const addBatchRow = () => {
+    const minYear = Math.min(...batchMaps.map(b => b.batchYear), 2026);
+    setBatchMaps([...batchMaps, { batchYear: minYear - 1, semester: 1 }]);
+  };
+
+  const removeBatchRow = (index: number) => {
+    if (batchMaps.length <= 1) return;
+    setBatchMaps(batchMaps.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Top Header & New Term Trigger */}
+      <div className="flex items-center justify-between flex-wrap gap-4 border-b border-border/80 pb-4">
+        <div>
+          <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
+            <Calendar size={22} className="text-primary" /> Academic Calendar & Semester Periods
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Manage official semester start/end dates, cohort advancement checklists, and graduation announcements.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCreateModalOpen(true)}
+            className="rounded-full bg-primary hover:opacity-95 text-primary-foreground text-xs font-semibold py-2.5 px-4 transition-opacity flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <Plus size={15} /> Create Academic Term
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="py-20 text-center text-muted-foreground">
+          <div className="size-6 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto mb-3" />
+          <p className="text-xs">Loading academic schedule...</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-6">
+          {/* Active Period Dashboard Card */}
+          {data.activePeriod ? (
+            <div className="rounded-3xl border bg-card p-6 md:p-8 shadow-sm flex flex-col gap-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-3 py-1 rounded-full border border-primary/20">
+                    Currently Active Term
+                  </span>
+                  <h2 className="text-3xl font-bold text-foreground mt-2 tracking-tight">
+                    {data.activePeriod.name}
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {new Date(data.activePeriod.startDate).toLocaleDateString(undefined, { dateStyle: 'long' })} —{' '}
+                    {new Date(data.activePeriod.endDate).toLocaleDateString(undefined, { dateStyle: 'long' })}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={openReviewModal}
+                    className="rounded-full bg-primary hover:opacity-95 text-primary-foreground text-xs font-semibold py-3 px-5 transition-all flex items-center gap-2 shadow-xs cursor-pointer active:scale-[0.98]"
+                  >
+                    <CheckCircle size={16} /> Review & Advance Semesters
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleStatusChange(data.activePeriod.id, 'SUMMER_BREAK')}
+                    className="rounded-full bg-secondary hover:bg-secondary/80 text-foreground text-xs font-semibold py-3 px-4 transition-colors cursor-pointer"
+                  >
+                    Set to Summer Break
+                  </button>
+                </div>
+              </div>
+
+              {/* Batch Matrix Breakdown */}
+              <div>
+                <b className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
+                  Cohort Semester Mapping During This Term:
+                </b>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {data.activePeriod.batchMaps.map((bm: any) => (
+                    <div key={bm.id} className="rounded-2xl bg-secondary/60 border p-3.5 text-center">
+                      <span className="text-xs font-bold text-foreground block">Batch {bm.batchYear}</span>
+                      <span className="text-sm font-semibold text-primary block mt-0.5">Semester {bm.semester}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-3xl border border-dashed bg-card/40 p-8 text-center text-muted-foreground">
+              <Calendar size={36} className="mx-auto mb-3 opacity-30" />
+              <h3 className="text-base font-bold text-foreground">No active academic term</h3>
+              <p className="text-xs mt-1 max-w-md mx-auto">
+                Create a term to activate semester cohort tracking and schedule auto-advancement review.
+              </p>
+              <button
+                type="button"
+                onClick={() => setCreateModalOpen(true)}
+                className="mt-4 rounded-full bg-primary text-primary-foreground text-xs font-semibold py-2.5 px-5 cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+              >
+                <Plus size={15} /> Create First Academic Term
+              </button>
+            </div>
+          )}
+
+          {/* Term History List */}
+          <div>
+            <h4 className="text-sm font-bold text-foreground mb-3 px-1">All Academic Terms</h4>
+            <div className="flex flex-col gap-2.5">
+              {data.periods.map(period => (
+                <div
+                  key={period.id}
+                  className="rounded-2xl border bg-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <b className="text-sm font-semibold text-foreground">{period.name}</b>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                        period.status === 'ACTIVE' 
+                          ? 'bg-primary text-primary-foreground' 
+                          : period.status === 'SUMMER_BREAK'
+                          ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                          : 'bg-secondary text-muted-foreground'
+                      }`}>
+                        {period.status}
+                      </span>
+                    </div>
+                    <p className="text-muted-foreground mt-0.5">
+                      {new Date(period.startDate).toLocaleDateString()} — {new Date(period.endDate).toLocaleDateString()}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {period.batchMaps.map((bm: any) => (
+                      <span key={bm.id} className="bg-secondary px-2 py-1 rounded text-[11px] font-mono">
+                        {bm.batchYear}: Sem {bm.semester}
+                      </span>
+                    ))}
+
+                    {period.status !== 'ACTIVE' && (
+                      <button
+                        type="button"
+                        onClick={() => handleStatusChange(period.id, 'ACTIVE')}
+                        className="text-[11px] font-semibold text-primary hover:underline ml-2 cursor-pointer"
+                      >
+                        Set as Active
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pre-Advancement Review Modal */}
+      <AnimatePresence>
+        {reviewModalOpen && (
+          <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-3xl rounded-3xl bg-card border p-6 sm:p-8 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+            >
+              <div className="flex items-center justify-between border-b pb-4">
+                <div>
+                  <p className="section-kicker">Pre-Advancement Checklist</p>
+                  <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                    Review Before Advancing Semesters
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReviewModalOpen(false)}
+                  className="size-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {summaryLoading ? (
+                <div className="py-20 text-center text-muted-foreground">
+                  <div className="size-6 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto mb-3" />
+                  <p className="text-xs">Compiling batch rosters and candidate checklist...</p>
+                </div>
+              ) : summaryData ? (
+                <div className="flex-1 overflow-y-auto modal-scroll py-4 space-y-6">
+                  {/* Summary Bar */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="rounded-2xl bg-secondary/60 p-3 text-center border">
+                      <span className="text-[11px] text-muted-foreground block">Total Enrolled</span>
+                      <b className="text-base text-foreground font-bold">{summaryData.stats.total}</b>
+                    </div>
+                    <div className="rounded-2xl bg-primary/10 p-3 text-center border border-primary/20">
+                      <span className="text-[11px] text-primary block font-medium">Advancing</span>
+                      <b className="text-base text-primary font-bold">{summaryData.stats.advancing}</b>
+                    </div>
+                    <div className="rounded-2xl bg-amber-500/10 p-3 text-center border border-amber-500/20">
+                      <span className="text-[11px] text-amber-600 dark:text-amber-400 block font-medium">Held Back (Re-take)</span>
+                      <b className="text-base text-amber-600 dark:text-amber-400 font-bold">{heldBackIds.length}</b>
+                    </div>
+                    <div className="rounded-2xl bg-secondary/60 p-3 text-center border">
+                      <span className="text-[11px] text-muted-foreground block">Graduating 🎓</span>
+                      <b className="text-base text-foreground font-bold">{summaryData.stats.graduating}</b>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground leading-relaxed bg-secondary/40 p-3 rounded-xl border">
+                    💡 <b>Review Instructions:</b> Cross-reference each batch with official department examination results. Toggle the <b>Hold Back (Re-take)</b> switch on any student who is repeating courses so their account is preserved at their current semester.
+                  </p>
+
+                  {/* Batch Sections */}
+                  {Object.values(summaryData.batchGroups).map((group: any) => {
+                    const isGradBatch = group.targetSemester > 8;
+
+                    return (
+                      <div key={group.batchYear} className="rounded-2xl border bg-card p-4 space-y-3">
+                        <div className="flex items-center justify-between flex-wrap gap-2 border-b pb-2">
+                          <div className="flex items-center gap-2">
+                            <b className="text-sm font-bold text-foreground">Batch {group.batchYear}</b>
+                            <span className="text-xs text-muted-foreground">
+                              (Currently Sem {group.targetSemester - 1} ➔ {isGradBatch ? '🎓 Graduating' : `Semester ${group.targetSemester}`})
+                            </span>
+                          </div>
+                          <span className="text-xs font-semibold text-muted-foreground">
+                            {group.students.length} {group.students.length === 1 ? 'student' : 'students'}
+                          </span>
+                        </div>
+
+                        {group.students.length === 0 ? (
+                          <p className="text-xs text-muted-foreground py-2 italic">No registered students in this batch.</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {group.students.map((student: any) => {
+                              const isHeld = heldBackIds.includes(student.id);
+
+                              return (
+                                <div
+                                  key={student.id}
+                                  className="flex items-center justify-between p-2.5 rounded-xl bg-secondary/40 text-xs hover:bg-secondary/70 transition-colors gap-3"
+                                >
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <b className="text-foreground font-semibold truncate">{student.name}</b>
+                                      {student.regNumber && (
+                                        <span className="font-mono text-[11px] bg-background px-2 py-0.5 rounded text-foreground">
+                                          {student.regNumber}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-muted-foreground text-[11px] truncate">{student.email}</p>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleStudentHeldBackInReview(student.id)}
+                                    className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer border ${
+                                      isHeld
+                                        ? 'bg-amber-500 text-white border-amber-600 shadow-2xs font-bold'
+                                        : 'bg-background text-muted-foreground hover:text-foreground border-border'
+                                    }`}
+                                  >
+                                    {isHeld ? '⚠️ Held Back' : 'Will Advance'}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              <div className="flex items-center justify-between border-t pt-4 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setReviewModalOpen(false)}
+                  className="rounded-full bg-secondary hover:bg-secondary/80 text-foreground text-xs font-semibold py-2.5 px-5 cursor-pointer"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  disabled={advancingLoading || summaryLoading}
+                  onClick={handleConfirmAdvancement}
+                  className="rounded-full bg-primary hover:opacity-95 text-primary-foreground text-xs font-semibold py-2.5 px-6 cursor-pointer shadow-sm disabled:opacity-50 flex items-center gap-2"
+                >
+                  {advancingLoading ? (
+                    <>
+                      <div className="size-4 border-2 border-primary-foreground/30 border-t-primary-foreground animate-spin rounded-full" />
+                      <span>Advancing cohorts...</span>
+                    </>
+                  ) : (
+                    <span>Confirm & Officially Advance Semesters</span>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Create Term Modal */}
+      <AnimatePresence>
+        {createModalOpen && (
+          <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-sm">
+            <motion.form
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onSubmit={handleCreateTerm}
+              className="w-full max-w-lg rounded-3xl bg-card border p-6 sm:p-8 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto modal-scroll"
+            >
+              <div className="flex items-center justify-between border-b pb-3">
+                <div>
+                  <p className="section-kicker">Academic Schedule</p>
+                  <h3 className="text-xl font-bold text-foreground">Create Academic Term</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCreateModalOpen(false)}
+                  className="size-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <label className="field-label">
+                Term Name
+                <input
+                  required
+                  value={termName}
+                  onChange={e => setTermName(e.target.value)}
+                  placeholder="e.g. Fall 2026 or Spring 2027"
+                  className="field-input text-xs"
+                />
+              </label>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="field-label">
+                  Start Date
+                  <input
+                    required
+                    type="date"
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    className="field-input text-xs"
+                  />
+                </label>
+                <label className="field-label">
+                  End Date
+                  <input
+                    required
+                    type="date"
+                    value={endDate}
+                    onChange={e => setEndDate(e.target.value)}
+                    className="field-input text-xs"
+                  />
+                </label>
+              </div>
+
+              {/* Batch Semester Matrix */}
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                    Batch Cohort Semester Map
+                  </span>
+                  <button
+                    type="button"
+                    onClick={addBatchRow}
+                    className="text-[11px] text-primary font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus size={12} /> Add Batch
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {batchMaps.map((bm, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <div className="flex-1 flex items-center gap-1.5 bg-secondary/50 p-2 rounded-xl border">
+                        <span className="text-xs text-muted-foreground font-medium pl-1">Batch:</span>
+                        <input
+                          type="number"
+                          value={bm.batchYear}
+                          onChange={e => updateBatchMapYear(index, parseInt(e.target.value, 10))}
+                          className="field-input py-1 px-2 text-xs rounded-lg bg-background w-20 font-bold"
+                        />
+                        <span className="text-xs text-muted-foreground font-medium pl-2">➔ Sem:</span>
+                        <select
+                          value={bm.semester}
+                          onChange={e => updateBatchMapSemester(index, parseInt(e.target.value, 10))}
+                          className="field-input py-1 px-2 text-xs rounded-lg bg-background flex-1 cursor-pointer"
+                        >
+                          {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                            <option key={s} value={s}>Semester {s}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {batchMaps.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeBatchRow(index)}
+                          className="p-2 text-muted-foreground hover:text-destructive cursor-pointer"
+                        >
+                          <Trash size={15} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => setCreateModalOpen(false)}
+                  className="rounded-full bg-secondary text-foreground text-xs font-semibold py-2.5 px-4 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingLoading}
+                  className="rounded-full bg-primary text-primary-foreground text-xs font-semibold py-2.5 px-5 cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  {creatingLoading ? 'Saving term...' : 'Save & Activate Academic Term'}
+                </button>
+              </div>
+            </motion.form>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
   const [title, setTitle] = useState('')
@@ -2360,8 +3772,8 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
           <Megaphone size={20} />
         </span>
       </div>
-      <h2 className="mt-4 text-2xl font-bold tracking-tight">Create an announcement</h2>
-      <p className="text-sm text-muted-foreground mt-1">Broadcast official updates to all students or target a specific semester.</p>
+      <h2 className="mt-4 text-2xl font-bold tracking-tight">Broadcast Department Notice</h2>
+      <p className="text-sm text-muted-foreground mt-1">Publish official notices or important updates directly to students.</p>
 
       <div className="mt-7 flex flex-col gap-5">
         <label className="field-label">

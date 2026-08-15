@@ -37,6 +37,10 @@ export async function createNote(data: {
 
   if (!subject) return { error: 'Subject not found.' }
 
+  if (user.role === 'SENIOR' && user.semester && subject.semester > user.semester) {
+    return { error: `Unauthorized. As a Semester ${user.semester} senior, you can only upload notes for courses in Semester 1 to ${user.semester}.` }
+  }
+
   try {
     const note = await prisma.note.create({
       data: {

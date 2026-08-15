@@ -7,15 +7,57 @@ datasource db {
 }
 
 model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  name            String?
+  role            String   @default("STUDENT") // STUDENT, SENIOR, ADMIN
+  status          String   @default("PENDING") // PENDING, ACTIVE, REJECTED, GRADUATED
+  avatar          String?
+  createdAt       DateTime @default(now())
+
+  // Profile fields collected at registration
+  regNumber       String?  @unique             // Format: YYYY-CE-XX or YYYY-CE-XXX
+  phone           String?
+  section         String?                      // A, B, C, etc.
+  semester        Int      @default(1)         // 1 to 8
+  batchYear       Int?                         // Extracted from regNumber (e.g. 2024)
+  heldBack        Boolean  @default(false)     // Re-take student flag (skips automatic batch advancement)
+  rejectionReason String?
+
+  notes               Note[]
+  bookmarks           Bookmark[]
+  contributorRequest  ContributorRequest?
+}
+
+model ContributorRequest {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  whyContribute      String
+  semestersHaveNotes Int[]    // e.g. [1, 2]
+  status             String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  createdAt          DateTime @default(now())
+}
+
+model AcademicPeriod {
   id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  role      String   @default("STUDENT") // STUDENT, SENIOR, ADMIN
-  avatar    String?
+  name      String                          // e.g. "Fall 2026", "Spring 2027"
+  startDate DateTime
+  endDate   DateTime
+  status    String   @default("UPCOMING")  // UPCOMING, ACTIVE, SUMMER_BREAK, ENDED
   createdAt DateTime @default(now())
 
-  notes       Note[]
-  bookmarks   Bookmark[]
+  batchMaps BatchSemesterMap[]
+}
+
+model BatchSemesterMap {
+  id         String         @id @default(cuid())
+  batchYear  Int                            // e.g. 2023
+  semester   Int                            // Semester number for this batch during this period
+  periodId   String
+  period     AcademicPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, batchYear])
 }
 
 model Subject {
@@ -55,10 +97,10 @@ model Bookmark {
   createdAt DateTime @default(now())
 
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   noteId    String
-  note      Note     @relation(fields: [noteId], references: [id])
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
 
   @@unique([userId, noteId])
 }
@@ -67,6 +109,6 @@ model Announcement {
   id        String   @id @default(cuid())
   title     String
   body      String
-  audience  String   @default("ALL") // ALL, SEM_1, etc.
+  audience  String   @default("ALL") // ALL, SEM_1, ADMIN, etc.
   createdAt DateTime @default(now())
 }

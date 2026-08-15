@@ -34,9 +34,37 @@ export default async function Page() {
   }
 
   try {
-    announcements = await prisma.announcement.findMany({ 
-      orderBy: { createdAt: 'desc' } 
-    })
+    if (user && user.role === 'ADMIN') {
+      announcements = await prisma.announcement.findMany({ 
+        orderBy: { createdAt: 'desc' } 
+      })
+    } else if (user) {
+      const semTarget = `Semester ${user.semester}`
+      const semTargetAlt = `SEM_${user.semester}`
+      announcements = await prisma.announcement.findMany({ 
+        where: {
+          OR: [
+            { audience: 'ALL' },
+            { audience: 'All students' },
+            { audience: 'Department' },
+            { audience: semTarget },
+            { audience: semTargetAlt },
+          ]
+        },
+        orderBy: { createdAt: 'desc' } 
+      })
+    } else {
+      announcements = await prisma.announcement.findMany({ 
+        where: {
+          OR: [
+            { audience: 'ALL' },
+            { audience: 'All students' },
+            { audience: 'Department' },
+          ]
+        },
+        orderBy: { createdAt: 'desc' } 
+      })
+    }
   } catch (err) {
     console.warn('Prisma database unreachable for announcements:', (err as Error).message)
   }
