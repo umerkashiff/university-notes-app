@@ -145,7 +145,7 @@ export function StudyCompanion({
     : screen==='semesters'
     ? 'Semesters'
     : screen==='subject'
-    ? (selectedSubjectName || `Semester ${selectedSemester}`)
+    ? `Semester ${selectedSemester}`
     : screen==='saved'
     ? 'Saved notes'
     : greeting
@@ -199,7 +199,7 @@ export function StudyCompanion({
         <motion.div key={screen} initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} transition={{duration:0.2}}>
           {screen==='saved'&&<SavedNotes notes={notes} subjects={subjectsList} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader}/>} 
           {screen==='semesters'&&<SemesterLibrary subjects={subjectsList} notes={notes} select={(n)=>{setSelectedSemester(n);setScreen('subject')}}/>}
-          {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')} onSelectSubjectName={setSelectedSubjectName}/>} 
+          {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')}/>} 
           {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts}/>} 
           {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])}/>} 
           {screen==='cms'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),audience: note.subject || 'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
@@ -362,8 +362,7 @@ function SubjectLibrary({
   savedNoteIds,
   toggleSave,
   open,
-  onBack,
-  onSelectSubjectName
+  onBack
 }: {
   semester: number
   subjects: SubjectItem[]
@@ -374,18 +373,11 @@ function SubjectLibrary({
   toggleSave: (id: string | number) => void
   open: (n: Note) => void
   onBack: () => void
-  onSelectSubjectName?: (name: string | null) => void
 }) {
   const semSubjects = useMemo(() => subjects.filter(s => s.semester === semester), [subjects, semester])
   const [selectedSubject, setSelectedSubject] = useState<SubjectItem | null>(null)
 
   const activeSubject = selectedSubject || semSubjects[0] || null
-
-  useEffect(() => {
-    if (onSelectSubjectName) {
-      onSelectSubjectName(activeSubject ? activeSubject.name : `Semester ${semester}`)
-    }
-  }, [activeSubject, semester, onSelectSubjectName])
 
   const list = useMemo(() => {
     if (semSubjects.length === 0) return []
@@ -407,92 +399,128 @@ function SubjectLibrary({
   const tone = SEMESTER_COLORS[(semester - 1) % SEMESTER_COLORS.length]
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[260px_1fr]">
-      <aside>
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
         <button 
-          className="mb-5 flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" 
+          className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors bg-secondary/80 hover:bg-secondary px-3.5 py-1.5 rounded-full" 
           onClick={onBack}
         >
-          <ArrowLeft size={16}/> Semester {semester}
+          <ArrowLeft size={16}/> Back to Semesters
         </button>
-        <div className="flex flex-col gap-1.5">
-          {semSubjects.length === 0 ? (
-            <div className="p-4 rounded-2xl bg-card border border-dashed text-xs text-muted-foreground">
-              No subjects registered for Semester {semester}.
-            </div>
-          ) : (
-            semSubjects.map((s) => {
+        <span className="text-xs font-semibold text-muted-foreground">
+          {semSubjects.length} {semSubjects.length === 1 ? 'course' : 'courses'}
+        </span>
+      </div>
+
+      {/* Mobile Horizontal Pill Bar */}
+      {semSubjects.length > 0 && (
+        <div className="lg:hidden">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 modal-scroll touch-pan-x min-w-0 max-w-full">
+            {semSubjects.map(s => {
               const isActive = activeSubject?.code === s.code
               return (
                 <button
                   key={s.code}
                   onClick={() => setSelectedSubject(s)}
-                  className={`rounded-2xl p-4 text-left text-sm transition-colors flex items-center justify-between gap-2 ${
-                    isActive ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'hover:bg-secondary text-foreground'
+                  className={`relative px-4 py-2 text-xs font-semibold rounded-full whitespace-nowrap transition-colors select-none shrink-0 ${
+                    isActive
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
                   }`}
                 >
-                  <span className="truncate">{s.name}</span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-secondary text-muted-foreground'}`}>
-                    {s.code}
-                  </span>
+                  <span>{s.name}</span>
+                  <span className="opacity-70 ml-1 text-[10px]">({s.code})</span>
                 </button>
               )
-            })
-          )}
+            })}
+          </div>
         </div>
-      </aside>
+      )}
 
-      <section>
-        {activeSubject ? (
-          <div className={`rounded-3xl ${tone} p-7 border border-black/5 shadow-xs`}>
-            <span className="rounded-full bg-background/80 px-3 py-1 text-xs font-bold text-foreground">
-              {activeSubject.code}
-            </span>
-            <h2 className="mt-5 text-3xl font-semibold text-foreground tracking-tight">{activeSubject.name}</h2>
-            <p className="mt-2 text-muted-foreground text-sm">
-              Foundations, worked examples and past questions shared by your seniors.
-            </p>
+      <div className="grid gap-8 lg:grid-cols-[260px_1fr] items-start">
+        {/* Desktop Sticky Sidebar */}
+        <aside className="hidden lg:block sticky top-24 self-start w-full">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 px-1">Courses</p>
+          <div className="flex flex-col gap-1.5">
+            {semSubjects.length === 0 ? (
+              <div className="p-4 rounded-2xl bg-card border border-dashed text-xs text-muted-foreground">
+                No subjects registered for Semester {semester}.
+              </div>
+            ) : (
+              semSubjects.map((s) => {
+                const isActive = activeSubject?.code === s.code
+                return (
+                  <button
+                    key={s.code}
+                    onClick={() => setSelectedSubject(s)}
+                    className={`rounded-2xl p-4 text-left text-sm transition-colors flex items-center justify-between gap-2 ${
+                      isActive ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'hover:bg-secondary text-foreground'
+                    }`}
+                  >
+                    <span className="truncate">{s.name}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-secondary text-muted-foreground'}`}>
+                      {s.code}
+                    </span>
+                  </button>
+                )
+              })
+            )}
           </div>
-        ) : (
-          <div className={`rounded-3xl ${tone} p-7 border border-black/5`}>
-            <h2 className="text-3xl font-semibold text-foreground">Semester {semester}</h2>
-            <p className="mt-2 text-muted-foreground text-sm">Select a course to view uploaded notes.</p>
-          </div>
-        )}
+        </aside>
 
-        <label className="mt-6 flex items-center gap-3 rounded-2xl border bg-card px-4 focus-within:border-primary/40 transition-colors">
-          <Search size={18} className="text-muted-foreground shrink-0"/>
-          <span className="sr-only">Search notes</span>
-          <input 
-            value={query} 
-            onChange={e=>setQuery(e.target.value)} 
-            className="h-14 flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground" 
-            placeholder={activeSubject ? `Search ${activeSubject.name} notes...` : "Search notes..."}
-          />
-        </label>
-
-        <div className="mt-4 flex flex-col gap-3">
-          {list.length === 0 ? (
-            <div className="py-16 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40">
-              <FileText size={32} className="mx-auto mb-2 opacity-30"/>
-              <p className="font-semibold text-foreground text-sm">No notes available</p>
-              <p className="text-xs mt-1">Be the first senior to contribute notes for {activeSubject?.name || 'this subject'}!</p>
+        {/* Main Content with Stable Min Height */}
+        <section className="min-w-0 min-h-[420px] flex flex-col">
+          {activeSubject ? (
+            <div className={`rounded-3xl ${tone} p-7 border border-black/5 shadow-xs transition-colors`}>
+              <span className="rounded-full bg-background/80 px-3 py-1 text-xs font-bold text-foreground">
+                {activeSubject.code}
+              </span>
+              <h2 className="mt-4 text-3xl font-semibold text-foreground tracking-tight">{activeSubject.name}</h2>
+              <p className="mt-1.5 text-muted-foreground text-sm">
+                Foundations, worked examples and past questions shared by your seniors.
+              </p>
             </div>
           ) : (
-            list.map((n,i)=>(
-              <NoteRow 
-                key={n.id} 
-                note={n} 
-                subjects={subjects} 
-                isSaved={savedNoteIds.includes(String(n.id))}
-                toggleSave={toggleSave}
-                index={i} 
-                open={()=>open(n)}
-              />
-            ))
+            <div className={`rounded-3xl ${tone} p-7 border border-black/5`}>
+              <h2 className="text-3xl font-semibold text-foreground">Semester {semester}</h2>
+              <p className="mt-2 text-muted-foreground text-sm">Select a course to view uploaded notes.</p>
+            </div>
           )}
-        </div>
-      </section>
+
+          <label className="mt-6 flex items-center gap-3 rounded-2xl border bg-card px-4 focus-within:border-primary/40 transition-colors">
+            <Search size={18} className="text-muted-foreground shrink-0"/>
+            <span className="sr-only">Search notes</span>
+            <input 
+              value={query} 
+              onChange={e=>setQuery(e.target.value)} 
+              className="h-14 flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground" 
+              placeholder={activeSubject ? `Search ${activeSubject.name} notes...` : "Search notes..."}
+            />
+          </label>
+
+          <div className="mt-4 flex flex-col gap-3 flex-1">
+            {list.length === 0 ? (
+              <div className="py-16 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40 my-auto">
+                <FileText size={32} className="mx-auto mb-2 opacity-30"/>
+                <p className="font-semibold text-foreground text-sm">No notes available</p>
+                <p className="text-xs mt-1">Be the first senior to contribute notes for {activeSubject?.name || 'this subject'}!</p>
+              </div>
+            ) : (
+              list.map((n,i)=>(
+                <NoteRow 
+                  key={n.id} 
+                  note={n} 
+                  subjects={subjects} 
+                  isSaved={savedNoteIds.includes(String(n.id))}
+                  toggleSave={toggleSave}
+                  index={i} 
+                  open={()=>open(n)}
+                />
+              ))
+            )}
+          </div>
+        </section>
+      </div>
     </div>
   )
 }
@@ -518,7 +546,7 @@ function NoteRow({
   const semNumber = subjects.find(s => s.code === note.code || s.name === note.subject)?.semester
 
   return (
-    <motion.article initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} transition={{delay:index*0.05, duration:0.4}} className="flex flex-col rounded-2xl border bg-card p-4 hover:border-primary/30 transition-colors shadow-sm">
+    <motion.article initial={{opacity:0}} animate={{opacity:1}} transition={{duration:0.2}} className="flex flex-col rounded-2xl border bg-card p-4 hover:border-primary/30 transition-colors shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <span className={`flex size-12 shrink-0 items-center justify-center rounded-2xl ${note.tone}`}><FileText size={20}/></span>
         <div className="min-w-0 flex-1">
