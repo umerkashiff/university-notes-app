@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { login, logout } from '@/app/actions/auth'
 import type { User as PrismaUser } from '@prisma/client'
 import { createClient } from '@/utils/supabase/client'
-import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage, createAnnouncement } from '@/app/actions/notes'
+import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage, createAnnouncement, deleteNote } from '@/app/actions/notes'
 import { getPresignedUrl } from '@/app/actions/upload'
 import React from 'react'
 
@@ -200,7 +200,7 @@ export function StudyCompanion({ initialUser, initialNotes = [], initialAnnounce
           {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')} onSelectSubjectName={setSelectedSubjectName}/>} 
           {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts}/>} 
           {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])}/>} 
-          {screen==='cms'&&<AdminCms notes={notes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),audience: note.subject || 'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
+          {screen==='cms'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),audience: note.subject || 'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
         </motion.div>
       </AnimatePresence>
     </div>
@@ -499,6 +499,7 @@ function NoteRow({
   isSaved = false,
   toggleSave,
   open,
+  onDelete,
   index = 0
 }: {
   note: Note
@@ -506,6 +507,7 @@ function NoteRow({
   isSaved?: boolean
   toggleSave?: (id: string | number) => void
   open: () => void
+  onDelete?: () => void
   index?: number
 }){
   const [expanded, setExpanded] = useState(false);
@@ -553,6 +555,16 @@ function NoteRow({
           )}
           <button onClick={open} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-transform hover:scale-105 active:scale-95">Read</button>
           <button onClick={()=>downloadNote(note)} className="icon-button border transition-transform hover:scale-105 active:scale-95" aria-label={`Download ${note.title}`}><Download size={18}/></button>
+          {onDelete && (
+            <button 
+              onClick={onDelete} 
+              className="icon-button border text-destructive hover:bg-destructive/10 hover:border-destructive/30 transition-colors" 
+              title="Delete note"
+              aria-label={`Delete ${note.title}`}
+            >
+              <Trash size={18} />
+            </button>
+          )}
         </div>
       </div>
       <AnimatePresence initial={false}>
@@ -1139,7 +1151,7 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
   )
 }
 
-function AdminCms({notes,subjects,setSubjects,publish,addAnnouncement}:{notes:Note[],subjects:SubjectItem[],setSubjects:(s:SubjectItem[])=>void,publish:(n:Note)=>void,addAnnouncement:(a:any)=>void}){
+function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:{notes:Note[],setNotes:React.Dispatch<React.SetStateAction<Note[]>>,subjects:SubjectItem[],setSubjects:(s:SubjectItem[])=>void,publish:(n:Note)=>void,addAnnouncement:(a:any)=>void}){
   const [tab,setTab]=useState<'queue'|'content'|'curriculum'|'notices'>('queue');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [doneId,setDoneId]=useState<any>(null);
@@ -1167,6 +1179,18 @@ function AdminCms({notes,subjects,setSubjects,publish,addAnnouncement}:{notes:No
     else { publish(n); setDoneId(n.id); setTimeout(() => setDoneId(null), 2000); }
     setLoading(false);
   }
+
+  const handleDeleteNote = async (n: Note) => {
+    if (!confirm(`Delete note "${n.title}"? This will permanently remove it from the library and delete its uploaded PDF.`)) return;
+    setLoading(true);
+    const res = await deleteNote(String(n.id));
+    if (res.error) {
+      alert(res.error);
+    } else {
+      setNotes(prev => prev.filter(x => x.id !== n.id));
+    }
+    setLoading(false);
+  };
 
   const handleAddSubject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1198,15 +1222,16 @@ function AdminCms({notes,subjects,setSubjects,publish,addAnnouncement}:{notes:No
   };
 
   const handleDeleteSubject = async (id: string, code: string) => {
-    if(!confirm(`Delete subject ${code}? This cannot be undone.`)) return;
+    if(!confirm(`Delete subject ${code}? All attached notes for this course will also be deleted. This cannot be undone.`)) return;
     const res = await deleteSubject(id);
     if (res.error) {
       setSubMsg(res.error);
       setTimeout(() => setSubMsg(''), 4000);
     } else {
       setSubjects(subjects.filter(s => s.id !== id));
+      setNotes(prev => prev.filter(n => n.code !== code));
       setSubMsg(`Deleted subject ${code}.`);
-      setTimeout(() => setSubMsg(''), 2000);
+      setTimeout(() => setSubMsg(''), 2500);
     }
   };
 
@@ -1305,11 +1330,11 @@ function AdminCms({notes,subjects,setSubjects,publish,addAnnouncement}:{notes:No
           </div>
         )}
 
-        <p className="mt-5 leading-relaxed text-muted-foreground"><a href={candidate.fileUrl} target="_blank" className="inline-flex items-center gap-1 text-primary underline underline-offset-2 font-medium">Open uploaded PDF ↗</a></p></div></div><div className="mt-6 rounded-2xl bg-secondary p-4"><b>Submitted by {candidate.author}</b><p className="mt-0.5 text-xs text-muted-foreground">Senior contributor · {candidate.date}</p></div></section><aside className="rounded-3xl bg-sage p-6"><h3 className="text-xl font-semibold">Ready to publish?</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Check the title, subject and document quality before making it visible to all students.</p>{doneId === candidate.id?<div className="mt-8 rounded-2xl bg-background/60 p-5 text-center"><Check className="mx-auto"/><b className="mt-3 block">Published</b></div>:<div className="mt-8 flex flex-col gap-2"><button disabled={loading} onClick={()=>handlePublish(candidate)} className="rounded-full bg-primary px-5 py-3 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity">Approve & publish</button><button className="rounded-full border border-foreground/20 px-5 py-3 text-sm font-semibold hover:bg-background/40">Request changes</button><button className="px-5 py-2 text-sm text-destructive hover:underline">Reject submission</button></div>}</aside></div>)}
+        <p className="mt-5 leading-relaxed text-muted-foreground"><a href={candidate.fileUrl} target="_blank" className="inline-flex items-center gap-1 text-primary underline underline-offset-2 font-medium">Open uploaded PDF ↗</a></p></div></div><div className="mt-6 rounded-2xl bg-secondary p-4"><b>Submitted by {candidate.author}</b><p className="mt-0.5 text-xs text-muted-foreground">Senior contributor · {candidate.date}</p></div></section><aside className="rounded-3xl bg-sage p-6"><h3 className="text-xl font-semibold">Ready to publish?</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Check the title, subject and document quality before making it visible to all students.</p>{doneId === candidate.id?<div className="mt-8 rounded-2xl bg-background/60 p-5 text-center"><Check className="mx-auto"/><b className="mt-3 block">Published</b></div>:<div className="mt-8 flex flex-col gap-2"><button disabled={loading} onClick={()=>handlePublish(candidate)} className="rounded-full bg-primary px-5 py-3 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity">Approve & publish</button><button className="rounded-full border border-foreground/20 px-5 py-3 text-sm font-semibold hover:bg-background/40">Request changes</button><button disabled={loading} onClick={()=>handleDeleteNote(candidate)} className="px-5 py-2 text-sm text-destructive hover:underline">Reject & delete</button></div>}</aside></div>)}
       </div>}
 
       {/* Published content */}
-      {tab==='content'&&<div className="flex flex-col gap-3">{published.length===0?<p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed bg-card/40">No published notes yet.</p>:published.map((n,i)=><NoteRow key={n.id} note={n} subjects={subjects} index={i} open={()=>{}}/>)}</div>}
+      {tab==='content'&&<div className="flex flex-col gap-3">{published.length===0?<p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed bg-card/40">No published notes yet.</p>:published.map((n,i)=><NoteRow key={n.id} note={n} subjects={subjects} index={i} open={()=>{}} onDelete={()=>handleDeleteNote(n)}/>)}</div>}
 
       {/* Curriculum & Subjects Management */}
       {tab==='curriculum'&&<div className="flex flex-col gap-7">

@@ -147,6 +147,51 @@ export async function createSubject(data: {
   }
 }
 
+export async function deleteNote(noteId: string) {
+  const user = await getCurrentUser()
+  if (!user || user.role !== 'ADMIN') {
+    return { error: 'Unauthorized. Only admins can delete notes.' }
+  }
+
+  try {
+    const note = await prisma.note.findUnique({ where: { id: noteId } })
+    if (!note) return { error: 'Note not found.' }
+
+    // Cleanup R2 storage if fileUrl exists
+    if (note.fileUrl) {
+      try {
+        const filePath = note.fileUrl.split('/').pop()
+        if (filePath && process.env.R2_ENDPOINT) {
+          const s3Client = new S3Client({
+            region: 'auto',
+            endpoint: process.env.R2_ENDPOINT,
+            credentials: {
+              accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+              secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+            },
+          })
+          await s3Client.send(new DeleteObjectCommand({
+            Bucket: process.env.R2_BUCKET_NAME!,
+            Key: filePath
+          }))
+        }
+      } catch (r2Err) {
+        console.warn('Failed to delete note file from R2:', r2Err)
+      }
+    }
+
+    // Delete associated bookmarks
+    await prisma.bookmark.deleteMany({ where: { noteId } })
+
+    // Delete the note
+    await prisma.note.delete({ where: { id: noteId } })
+
+    return { success: true }
+  } catch (err) {
+    return { error: (err as Error).message }
+  }
+}
+
 export async function deleteSubject(subjectId: string) {
   const user = await getCurrentUser()
   if (!user || user.role !== 'ADMIN') {
@@ -154,9 +199,36 @@ export async function deleteSubject(subjectId: string) {
   }
 
   try {
-    const noteCount = await prisma.note.count({ where: { subjectId } })
-    if (noteCount > 0) {
-      return { error: `Cannot delete subject with ${noteCount} attached note(s).` }
+    const notes = await prisma.note.findMany({ where: { subjectId } })
+    
+    // Clean up all notes, their bookmarks, and their R2 files
+    for (const note of notes) {
+      if (note.fileUrl) {
+        try {
+          const filePath = note.fileUrl.split('/').pop()
+          if (filePath && process.env.R2_ENDPOINT) {
+            const s3Client = new S3Client({
+              region: 'auto',
+              endpoint: process.env.R2_ENDPOINT,
+              credentials: {
+                accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+                secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+              },
+            })
+            await s3Client.send(new DeleteObjectCommand({
+              Bucket: process.env.R2_BUCKET_NAME!,
+              Key: filePath
+            }))
+          }
+        } catch (r2Err) {
+          console.warn('Failed to delete subject note file from R2:', r2Err)
+        }
+      }
+      await prisma.bookmark.deleteMany({ where: { noteId: note.id } })
+    }
+
+    if (notes.length > 0) {
+      await prisma.note.deleteMany({ where: { subjectId } })
     }
 
     await prisma.subject.delete({ where: { id: subjectId } })
