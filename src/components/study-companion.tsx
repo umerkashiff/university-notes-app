@@ -436,12 +436,24 @@ function SettingsPage({
   const role = (user?.role?.toLowerCase() as Role) || 'student'
   const roleLabel = role === 'admin' ? 'Administrator' : role === 'senior' ? 'Note Contributor' : 'Student'
 
+  const userCurrentSem = user?.semester ? Math.min(8, Math.max(1, user.semester)) : 1
+  const isAlumni = !!(user?.batchYear && user.batchYear <= 2021)
+  const availableSemesters = role === 'admin' || isAlumni
+    ? [1, 2, 3, 4, 5, 6, 7, 8]
+    : Array.from({ length: userCurrentSem }, (_, i) => i + 1)
+
   const [reqType, setReqType] = useState('Missing Course / Subject')
-  const [reqSem, setReqSem] = useState(1)
+  const [reqSem, setReqSem] = useState(userCurrentSem)
   const [reqCourse, setReqCourse] = useState('')
   const [reqMsg, setReqMsg] = useState('')
   const [reqLoading, setReqLoading] = useState(false)
   const [reqSuccess, setReqSuccess] = useState(false)
+
+  React.useEffect(() => {
+    if (user?.semester) {
+      setReqSem(Math.min(8, Math.max(1, user.semester)))
+    }
+  }, [user?.semester])
 
   const [typeDropdownOpen, setTypeDropdownOpen] = useState(false)
   const [semDropdownOpen, setSemDropdownOpen] = useState(false)
@@ -484,7 +496,9 @@ function SettingsPage({
       {/* Header Description */}
       <div>
         <p className="text-muted-foreground text-sm">
-          Customize your display theme, inspect your university account details, and request lecture notes or courses directly from department administrators.
+          {role === 'admin'
+            ? 'Customize your display theme, manage system preferences, and inspect administrator account details.'
+            : 'Customize your display theme, inspect your university account details, and request lecture notes or courses directly from department administrators.'}
         </p>
       </div>
 
@@ -578,7 +592,8 @@ function SettingsPage({
         </div>
       </section>
 
-      {/* 3. Request Content / Feedback */}
+      {/* 3. Request Content / Feedback (For Students & Contributors only) */}
+      {role !== 'admin' && (
       <section className="rounded-3xl border bg-card p-6 sm:p-7 shadow-xs">
         <div className="flex items-center gap-2 mb-1">
           <ChatText size={20} className="text-primary" />
@@ -667,7 +682,7 @@ function SettingsPage({
                           className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
                           style={{ overscrollBehavior: 'contain' }}
                         >
-                          {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                          {availableSemesters.map(s => (
                             <button
                               key={s}
                               type="button"
@@ -725,6 +740,7 @@ function SettingsPage({
           </button>
         </form>
       </section>
+      )}
 
       {/* 3b. Re-take / Academic Standing Self-Report (For Students) */}
       {role === 'student' && (
