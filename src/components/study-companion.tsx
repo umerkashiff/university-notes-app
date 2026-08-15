@@ -45,6 +45,27 @@ const SEMESTER_LABELS: Record<number, string> = {
   8: 'Eighth semester',
 }
 
+function formatRelativeDate(dateInput?: string | Date | number): string {
+  if (!dateInput) return 'Recently'
+  const d = new Date(dateInput)
+  if (isNaN(d.getTime())) return String(dateInput)
+
+  const now = new Date()
+  
+  // Calculate midnight start of day for accurate comparison
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const targetDay = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const diffDays = Math.round((today.getTime() - targetDay.getTime()) / (1000 * 60 * 60 * 24))
+
+  if (diffDays === 0) {
+    return 'Today'
+  } else if (diffDays === 1) {
+    return 'Yesterday'
+  } else {
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+}
+
 export function StudyCompanion({ 
   initialUser, 
   initialNotes = [], 
@@ -118,7 +139,7 @@ export function StudyCompanion({
     subject: n.subject?.name || n.subject || '',
     code: n.subject?.code || n.code || '',
     author: n.author?.name || n.author?.email || 'Senior Contributor',
-    date: n.createdAt ? new Date(n.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recently',
+    date: formatRelativeDate(n.createdAt),
     pages: n.pages || 1,
     size: n.size || '1.0 MB',
     tone: n.tone || 'bg-sage',
@@ -133,8 +154,8 @@ export function StudyCompanion({
     kind: a.audience === 'ALL' || !a.audience ? 'Department' : a.audience,
     title: a.title,
     body: a.body,
-    time: a.createdAt ? new Date(a.createdAt).toLocaleDateString('en-GB') : 'Just now',
-    unread: true
+    time: formatRelativeDate(a.createdAt),
+    unread: a.unread ?? true
   })
 
   const [notes, setNotes] = useState<Note[]>(() => (initialNotes && initialNotes.length > 0) ? initialNotes.map(mapNote) : [])
