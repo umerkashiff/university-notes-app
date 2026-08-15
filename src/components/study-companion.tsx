@@ -91,7 +91,8 @@ export function StudyCompanion({ initialUser, initialNotes = [], initialAnnounce
   
   const mapAlert = (a: any) => ({
     id: a.id,
-    kind: a.audience === 'ALL' ? 'Department' : a.audience || 'Department',
+    audience: a.audience || 'ALL',
+    kind: a.audience === 'ALL' || !a.audience ? 'Department' : a.audience,
     title: a.title,
     body: a.body,
     time: a.createdAt ? new Date(a.createdAt).toLocaleDateString('en-GB') : 'Just now',
@@ -199,7 +200,7 @@ export function StudyCompanion({ initialUser, initialNotes = [], initialAnnounce
           {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')} onSelectSubjectName={setSelectedSubjectName}/>} 
           {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts}/>} 
           {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])}/>} 
-          {screen==='cms'&&<AdminCms notes={notes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
+          {screen==='cms'&&<AdminCms notes={notes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),audience: note.subject || 'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
         </motion.div>
       </AnimatePresence>
     </div>
@@ -582,31 +583,118 @@ function NoteRow({
 
 function downloadNote(note:Note){const blob=new Blob([`${note.title}\n${note.subject}\nShared on Luma by ${note.author}`],{type:'text/plain'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${note.title}.txt`;a.click();URL.revokeObjectURL(url)}
 
+function getAudienceBadge(audience: string, kind: string) {
+  if (kind === 'New note') {
+    return { label: 'New note', color: 'bg-primary text-primary-foreground' }
+  }
+  if (!audience || audience === 'ALL' || audience === 'Department' || audience === 'All students') {
+    return { label: 'All students', color: 'bg-secondary text-foreground' }
+  }
+  const match = audience.match(/Semester\s*(\d)/i)
+  if (match) {
+    const sem = parseInt(match[1], 10)
+    const tone = SEMESTER_COLORS[(sem - 1) % SEMESTER_COLORS.length] || 'bg-secondary'
+    return { label: `Semester ${sem}`, color: `${tone} text-foreground border border-black/5` }
+  }
+  return { label: audience, color: 'bg-secondary text-foreground' }
+}
+
 function Notifications({alerts,setAlerts}:{alerts:any[],setAlerts:(a:any[])=>void}){
-  const [filter,setFilter]=useState<'all'|'unread'>('all');
-  const shown=filter==='all'?alerts:alerts.filter(a=>a.unread);
+  const [readFilter, setReadFilter] = useState<'all'|'unread'>('all')
+  const [targetFilter, setTargetFilter] = useState<string>('All')
+
+  const audienceOptions = useMemo(() => {
+    const set = new Set<string>()
+    alerts.forEach(a => {
+      if (a.audience && a.audience !== 'ALL' && a.audience !== 'All students') {
+        set.add(a.audience)
+      }
+    })
+    return ['All', 'General', ...Array.from(set)]
+  }, [alerts])
+
+  const shown = useMemo(() => {
+    return alerts.filter(a => {
+      if (readFilter === 'unread' && !a.unread) return false
+      if (targetFilter === 'General') {
+        return !a.audience || a.audience === 'ALL' || a.audience === 'All students' || a.audience === 'Department'
+      }
+      if (targetFilter !== 'All') {
+        return a.audience === targetFilter
+      }
+      return true
+    })
+  }, [alerts, readFilter, targetFilter])
+
   return (
     <section className="max-w-3xl">
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex rounded-full bg-secondary p-1">
-          <Nav layoutId="notify-nav" active={filter==='all'} onClick={()=>setFilter('all')}>All</Nav>
-          <Nav layoutId="notify-nav" active={filter==='unread'} onClick={()=>setFilter('unread')}>Unread</Nav>
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex rounded-full bg-secondary p-1 w-fit">
+          <Nav layoutId="notify-nav" active={readFilter==='all'} onClick={()=>setReadFilter('all')}>All ({alerts.length})</Nav>
+          <Nav layoutId="notify-nav" active={readFilter==='unread'} onClick={()=>setReadFilter('unread')}>Unread ({alerts.filter(a=>a.unread).length})</Nav>
         </div>
-        <button onClick={()=>setAlerts(alerts.map(a=>({...a,unread:false})))} className="text-sm underline underline-offset-4 text-muted-foreground hover:text-foreground">
-          Mark all read
-        </button>
+        {alerts.some(a => a.unread) && (
+          <button onClick={()=>setAlerts(alerts.map(a=>({...a,unread:false})))} className="text-sm underline underline-offset-4 text-muted-foreground hover:text-foreground">
+            Mark all read
+          </button>
+        )}
       </div>
+
+      {audienceOptions.length > 2 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-4 scrollbar-none">
+          {audienceOptions.map(opt => (
+            <button
+              key={opt}
+              onClick={() => setTargetFilter(opt)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
+                targetFilter === opt
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+              }`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex flex-col gap-3">
         <AnimatePresence mode="wait">
-          <motion.div key={filter} initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} transition={{duration:0.2}} className="flex flex-col gap-3">
+          <motion.div key={`${readFilter}-${targetFilter}`} initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} transition={{duration:0.2}} className="flex flex-col gap-3">
             {shown.length === 0 ? (
               <div className="py-16 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40">
                 <Bell size={32} className="mx-auto mb-2 opacity-30"/>
-                <p className="font-semibold text-foreground text-sm">No announcements</p>
+                <p className="font-semibold text-foreground text-sm">No announcements found</p>
                 <p className="text-xs mt-1">Official department updates will appear here.</p>
               </div>
             ) : (
-              shown.map(a=><button key={a.id} onClick={()=>setAlerts(alerts.map(x=>x.id===a.id?{...x,unread:false}:x))} className="flex gap-4 rounded-3xl border bg-card p-5 text-left transition hover:shadow-sm hover:border-primary/30"><span className={`mt-1 flex size-10 shrink-0 items-center justify-center rounded-2xl ${a.kind==='Department'?'bg-sand':'bg-sage'}`}>{a.kind==='Department'?<Megaphone size={18}/>:<FileText size={18}/>}</span><span className="flex-1"><span className="flex items-center gap-2"><b>{a.title}</b>{a.unread&&<i className="size-2 rounded-full bg-primary"/>}</span><span className="mt-1 block text-sm text-muted-foreground">{a.body}</span><span className="mt-3 block text-xs text-muted-foreground">{a.kind} · {a.time}</span></span></button>)
+              shown.map(a => {
+                const badge = getAudienceBadge(a.audience, a.kind)
+                return (
+                  <button 
+                    key={a.id} 
+                    onClick={()=>setAlerts(alerts.map(x=>x.id===a.id?{...x,unread:false}:x))} 
+                    className="flex gap-4 rounded-3xl border bg-card p-5 text-left transition hover:shadow-sm hover:border-primary/30"
+                  >
+                    <span className={`mt-1 flex size-10 shrink-0 items-center justify-center rounded-2xl ${badge.color}`}>
+                      {a.kind==='New note' ? <FileText size={18}/> : <Megaphone size={18}/>}
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${badge.color}`}>
+                          {badge.label}
+                        </span>
+                        <span className="text-xs text-muted-foreground">{a.time}</span>
+                      </div>
+                      <span className="flex items-center gap-2">
+                        <b className="text-base font-semibold text-foreground">{a.title}</b>
+                        {a.unread && <i className="size-2 rounded-full bg-primary shrink-0"/>}
+                      </span>
+                      <span className="mt-1 block text-sm text-muted-foreground leading-relaxed">{a.body}</span>
+                    </span>
+                  </button>
+                )
+              })
             )}
           </motion.div>
         </AnimatePresence>
@@ -1365,8 +1453,21 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [audience, setAudience] = useState('All students')
+  const [dropdownOpen, setDropdownOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState(false)
+
+  const AUDIENCE_CHOICES = [
+    'All students',
+    'Semester 1',
+    'Semester 2',
+    'Semester 3',
+    'Semester 4',
+    'Semester 5',
+    'Semester 6',
+    'Semester 7',
+    'Semester 8',
+  ]
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1383,16 +1484,23 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
       setSent(true)
       setTitle('')
       setBody('')
+      setAudience('All students')
       setTimeout(() => setSent(false), 3000)
     }
     setSubmitting(false)
   }
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-2xl rounded-3xl border bg-card p-6 md:p-8">
-      <Megaphone size={24} className="text-primary mb-2" />
-      <h2 className="text-2xl font-semibold">Create an announcement</h2>
-      <div className="mt-7 flex flex-col gap-4">
+    <form onSubmit={handleSubmit} className="max-w-2xl rounded-3xl border bg-card p-6 md:p-8 shadow-xs">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+          <Megaphone size={20} />
+        </span>
+      </div>
+      <h2 className="mt-4 text-2xl font-bold tracking-tight">Create an announcement</h2>
+      <p className="text-sm text-muted-foreground mt-1">Broadcast official updates to all students or target a specific semester.</p>
+
+      <div className="mt-7 flex flex-col gap-5">
         <label className="field-label">
           Title
           <input 
@@ -1400,44 +1508,110 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
             value={title} 
             onChange={e => setTitle(e.target.value)} 
             className="field-input" 
-            placeholder="What should students know?" 
+            placeholder="e.g. Midterm exam schedule released" 
           />
         </label>
-        <label className="field-label">
-          Audience
-          <select 
-            value={audience} 
-            onChange={e => setAudience(e.target.value)} 
-            className="field-input"
-          >
-            <option value="All students">All students</option>
-            <option value="Semester 1">Semester 1</option>
-            <option value="Semester 2">Semester 2</option>
-            <option value="Semester 3">Semester 3</option>
-            <option value="Semester 4">Semester 4</option>
-            <option value="Semester 5">Semester 5</option>
-            <option value="Semester 6">Semester 6</option>
-            <option value="Semester 7">Semester 7</option>
-            <option value="Semester 8">Semester 8</option>
-          </select>
-        </label>
+
+        {/* Custom Audience Dropdown */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-semibold text-foreground">Target Audience</span>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              className="flex h-12 w-full items-center justify-between rounded-2xl border bg-background px-4 text-sm font-medium focus:border-foreground transition-colors text-left"
+            >
+              <span className="flex items-center gap-2">
+                <span className="font-semibold text-foreground">{audience}</span>
+                <span className="text-xs text-muted-foreground">
+                  {audience === 'All students' ? '(Department-wide)' : `(Targeted to ${audience})`}
+                </span>
+              </span>
+              <CaretDown
+                size={16}
+                weight="bold"
+                className={`text-muted-foreground transition-transform duration-200 shrink-0 ml-2 ${
+                  dropdownOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
+            <AnimatePresence>
+              {dropdownOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-60 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                >
+                  {AUDIENCE_CHOICES.map(item => {
+                    const isSelected = audience === item;
+                    return (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => {
+                          setAudience(item);
+                          setDropdownOpen(false);
+                        }}
+                        className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
+                          isSelected
+                            ? 'bg-secondary font-semibold text-foreground'
+                            : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                        }`}
+                      >
+                        <span>{item}</span>
+                        {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                      </button>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Quick Select Semester Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pt-1.5 pb-1 scrollbar-none">
+            {['All students', 'Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5', 'Sem 6', 'Sem 7', 'Sem 8'].map((pill) => {
+              const fullVal = pill === 'All students' ? 'All students' : `Semester ${pill.replace('Sem ', '')}`
+              const isActive = audience === fullVal
+              return (
+                <button
+                  key={pill}
+                  type="button"
+                  onClick={() => setAudience(fullVal)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
+                    isActive
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+                  }`}
+                >
+                  {pill}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         <label className="field-label">
           Message
           <textarea 
             required 
             value={body} 
             onChange={e => setBody(e.target.value)} 
-            className="field-input min-h-32 py-3" 
-            placeholder="Write a clear, friendly update..." 
+            className="field-input min-h-32 py-3 resize-none" 
+            placeholder="Write a clear, concise announcement..." 
           />
         </label>
+
         <button 
           type="submit" 
           disabled={submitting} 
-          className="flex items-center justify-center gap-2 rounded-full bg-primary p-3 font-semibold text-primary-foreground hover:opacity-95 transition-opacity"
+          className="flex items-center justify-center gap-2 rounded-full bg-primary p-3.5 font-semibold text-primary-foreground hover:opacity-95 transition-opacity shadow-sm mt-1"
         >
           <Send size={17}/>
-          {sent ? 'Published!' : submitting ? 'Publishing...' : 'Publish announcement'}
+          {sent ? 'Published announcement!' : submitting ? 'Publishing...' : 'Publish announcement'}
         </button>
       </div>
     </form>
