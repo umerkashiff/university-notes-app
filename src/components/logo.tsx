@@ -13,11 +13,11 @@ interface LogoProps {
 export function SemstackLogo({ size = 22, className = '', alt = 'Semstack' }: LogoProps) {
   return (
     <img
-      src="/final.svg"
+      src="/final.svg?v=3"
       alt={alt}
       width={size}
       height={size}
-      className={`shrink-0 select-none object-contain rounded-full ${className}`}
+      className={`shrink-0 select-none object-contain rounded-full bg-black ${className}`}
       draggable={false}
     />
   )
