@@ -611,7 +611,8 @@ function SettingsPage({
                         initial={{ opacity: 0, y: -6, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                        className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-56 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-1.5 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                        data-lenis-prevent
+                        className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-52 overflow-y-auto overscroll-contain flex flex-col gap-1 rounded-2xl border bg-card p-1.5 shadow-xl"
                       >
                         {REQUEST_TYPES.map(t => (
                           <button
@@ -654,7 +655,8 @@ function SettingsPage({
                         initial={{ opacity: 0, y: -6, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                        className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-56 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-1.5 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                        data-lenis-prevent
+                        className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-52 overflow-y-auto overscroll-contain flex flex-col gap-1 rounded-2xl border bg-card p-1.5 shadow-xl"
                       >
                         {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
                           <button
@@ -1761,7 +1763,8 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
                                     animate={{ opacity: 1, y: 0, scale: 1 }}
                                     exit={{ opacity: 0, y: -6, scale: 0.98 }}
                                     transition={{ duration: 0.15 }}
-                                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-56 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                                    data-lenis-prevent
+                                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-52 overflow-y-auto overscroll-contain flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl"
                                   >
                                     {semesterSubjects.map(s => {
                                       const isSelected = subjectCode === s.code;
@@ -2042,7 +2045,8 @@ function ReviewQueueCard({
                           initial={{ opacity: 0, y: -6, scale: 0.98 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                          className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-48 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                          data-lenis-prevent
+                          className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-48 overflow-y-auto overscroll-contain flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl"
                         >
                           {semSubjects.map(s => (
                             <button
@@ -3818,7 +3822,8 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.98 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-56 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                    data-lenis-prevent
+                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-52 overflow-y-auto overscroll-contain flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl"
                   >
                     {AUDIENCE_CHOICES.map(item => {
                       const isSelected = audience === item;
