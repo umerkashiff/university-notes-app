@@ -203,7 +203,6 @@ export function StudyCompanion({
           {role==='senior'&&<><Nav active={screen==='submissions'} onClick={()=>setScreen('submissions')}>My notes</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}
           {role==='admin'&&<><Nav active={screen==='cms'} onClick={()=>setScreen('cms')}>Studio</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}
           <Nav active={screen==='notifications'} onClick={()=>setScreen('notifications')}>Notices</Nav>
-          <Nav active={screen==='settings'} onClick={()=>setScreen('settings')}>Settings</Nav>
         </nav>
         <div className="flex items-center gap-2">
           <button onClick={()=>setScreen('notifications')} className="icon-button relative" aria-label={`${unread} unread notifications`}>
@@ -262,7 +261,6 @@ export function StudyCompanion({
       <Mobile active={role==='admin'?screen==='cms':role==='senior'?screen==='submissions':(screen==='semesters'||screen==='subject')} onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} icon={<Home/>}>Home</Mobile>
       {role==='student'?<Mobile active={screen==='saved'} onClick={()=>setScreen('saved')} icon={<Bookmark/>}>Saved</Mobile>:<Mobile active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')} icon={<BookOpen/>}>Library</Mobile>}
       <Mobile active={screen==='notifications'} onClick={()=>setScreen('notifications')} icon={<Bell/>}>Notices</Mobile>
-      <Mobile active={screen==='settings'} onClick={()=>setScreen('settings')} icon={<Settings/>}>Settings</Mobile>
     </nav>
   </main>
 }
