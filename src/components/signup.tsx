@@ -24,23 +24,33 @@ function formatRegNumber(val: string): string {
   const clean = val.toUpperCase().replace(/[^0-9A-Z]/g, '')
   if (!clean) return ''
 
-  const yearPart = clean.slice(0, 4)
   if (clean.length <= 4) {
-    return yearPart
+    return clean
   }
 
-  let rest = clean.slice(4)
-  if (rest.startsWith('CE')) {
-    rest = rest.slice(2)
-  } else if (rest.startsWith('C')) {
-    rest = rest.slice(1)
+  const year = clean.slice(0, 4)
+  const rest = clean.slice(4)
+
+  // Match department letters typed by user (e.g. C, CE)
+  const lettersMatch = rest.match(/^([A-Z]+)/)
+  if (lettersMatch) {
+    const letters = lettersMatch[1].slice(0, 3)
+    const remaining = rest.slice(lettersMatch[1].length)
+    const rollDigits = remaining.replace(/[^0-9]/g, '').slice(0, 3)
+
+    if (rollDigits) {
+      return `${year}-${letters}-${rollDigits}`
+    }
+    return `${year}-${letters}`
   }
 
+  // If user typed digits directly after year
   const rollDigits = rest.replace(/[^0-9]/g, '').slice(0, 3)
-  if (rollDigits.length > 0) {
-    return `${yearPart}-CE-${rollDigits}`
+  if (rollDigits) {
+    return `${year}-${rollDigits}`
   }
-  return `${yearPart}-CE-`
+
+  return year
 }
 
 function CustomSelect({
@@ -199,8 +209,8 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
   const handleRegNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const nextVal = e.target.value
     if (nextVal.length < regNumber.length) {
-      if (regNumber.endsWith('-') || regNumber.endsWith('-CE-')) {
-        setRegNumber(nextVal.replace(/-CE-?$/i, '').replace(/-$/i, ''))
+      if (regNumber.endsWith('-')) {
+        setRegNumber(nextVal.replace(/-$/i, ''))
         return
       }
       setRegNumber(nextVal.toUpperCase())
@@ -407,7 +417,7 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
                   className={`field-input uppercase placeholder:normal-case text-sm ${isRegValid && parsedBatchYear ? 'pr-28' : 'pr-4'} ${
                     showRegWarning ? 'border-amber-500/60 focus:border-amber-500' : isRegValid ? 'border-primary/60' : ''
                   }`}
-                  placeholder="e.g. 2025-CE-94 (or just type 202594)"
+                  placeholder="YYYY-CE-XX (e.g. 2024-CE-15)"
                   disabled={loading}
                 />
                 
