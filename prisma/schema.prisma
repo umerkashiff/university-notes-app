@@ -110,6 +110,7 @@ model Announcement {
   id        String   @id @default(cuid())
   title     String
   body      String
+  imageUrl  String?
   audience  String   @default("ALL") // ALL, SEM_1, ADMIN, etc.
   createdAt DateTime @default(now())
 }

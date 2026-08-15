@@ -69,6 +69,20 @@ export async function approveUser(
     }
   })
 
+  // Dispatch Welcome / Approved Email
+  try {
+    const { accountApprovedEmail } = await import('@/lib/emails/templates')
+    const { sendEmail } = await import('@/lib/emails/send')
+    const { subject, html } = accountApprovedEmail({
+      name: updatedUser.name,
+      role: updatedUser.role,
+      semester: updatedUser.semester
+    })
+    sendEmail(updatedUser.email, subject, html).catch(() => {})
+  } catch (e) {
+    console.warn('Failed to send account approval email:', e)
+  }
+
   return { success: true, user: updatedUser }
 }
 
@@ -87,6 +101,19 @@ export async function rejectUser(userId: string, reason?: string) {
     where: { userId: userId },
     data: { status: 'REJECTED' }
   })
+
+  // Dispatch Rejection Email
+  try {
+    const { accountRejectedEmail } = await import('@/lib/emails/templates')
+    const { sendEmail } = await import('@/lib/emails/send')
+    const { subject, html } = accountRejectedEmail({
+      name: updatedUser.name,
+      reason: updatedUser.rejectionReason
+    })
+    sendEmail(updatedUser.email, subject, html).catch(() => {})
+  } catch (e) {
+    console.warn('Failed to send account rejection email:', e)
+  }
 
   return { success: true, user: updatedUser }
 }
@@ -124,6 +151,21 @@ export async function changeUserRole(userId: string, role: 'STUDENT' | 'SENIOR' 
     where: { id: userId },
     data: { role }
   })
+
+  // If promoted to Senior/Contributor, notify via email
+  if (role === 'SENIOR') {
+    try {
+      const { rolePromotedEmail } = await import('@/lib/emails/templates')
+      const { sendEmail } = await import('@/lib/emails/send')
+      const { subject, html } = rolePromotedEmail({
+        name: updatedUser.name,
+        newRole: 'Note Contributor'
+      })
+      sendEmail(updatedUser.email, subject, html).catch(() => {})
+    } catch (e) {
+      console.warn('Failed to send promotion email:', e)
+    }
+  }
 
   return { success: true, user: updatedUser }
 }

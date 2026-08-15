@@ -1489,6 +1489,23 @@ function Notifications({alerts,setAlerts,user}:{alerts:any[],setAlerts:(a:any[])
                       {a.unread && <i className="size-2 rounded-full bg-primary shrink-0"/>}
                     </span>
                     <span className="mt-1 block text-sm text-muted-foreground leading-relaxed">{a.body}</span>
+                    {a.imageUrl && (
+                      <div className="mt-3 overflow-hidden rounded-2xl border bg-background/50 max-h-72">
+                        <a 
+                          href={a.imageUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          onClick={e => e.stopPropagation()} 
+                          className="block group"
+                        >
+                          <img 
+                            src={a.imageUrl} 
+                            alt="Attached notice document" 
+                            className="w-full h-auto max-h-72 object-contain bg-black/5 group-hover:opacity-90 transition-opacity" 
+                          />
+                        </a>
+                      </div>
+                    )}
                   </span>
                 </button>
               ))
@@ -2254,16 +2271,27 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
     setLoading(false);
   }
 
+  const [rejectNoteTarget, setRejectNoteTarget] = useState<Note | null>(null);
+  const [rejectNoteReason, setRejectNoteReason] = useState('');
+  const [rejectNoteLoading, setRejectNoteLoading] = useState(false);
+
   const handleDeleteNote = async (n: Note) => {
-    if (!confirm(`Delete note "${n.title}"? This will permanently remove it from the library and delete its uploaded PDF.`)) return;
-    setLoading(true);
-    const res = await deleteNote(String(n.id));
+    setRejectNoteTarget(n);
+    setRejectNoteReason('');
+  };
+
+  const handleConfirmNoteRejection = async () => {
+    if (!rejectNoteTarget) return;
+    setRejectNoteLoading(true);
+    const res = await deleteNote(String(rejectNoteTarget.id), rejectNoteReason.trim());
     if (res.error) {
       alert(res.error);
     } else {
-      setNotes(prev => prev.filter(x => x.id !== n.id));
+      setNotes(prev => prev.filter(x => x.id !== rejectNoteTarget.id));
+      setRejectNoteTarget(null);
+      setRejectNoteReason('');
     }
-    setLoading(false);
+    setRejectNoteLoading(false);
   };
 
   const handleAddSubject = async (e: React.FormEvent) => {
@@ -2450,6 +2478,81 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
           />
         ))}
       </div>}
+
+      {/* Note Rejection Modal with Feedback */}
+      <AnimatePresence>
+        {rejectNoteTarget && (
+          <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md rounded-3xl bg-card border p-6 shadow-2xl space-y-4"
+            >
+              <h3 className="text-lg font-bold text-foreground">Reject Note Submission</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Rejecting <b className="text-foreground">{rejectNoteTarget.title}</b> submitted by <b className="text-foreground">{rejectNoteTarget.author}</b>.
+                An email with your feedback will be sent to the contributor.
+              </p>
+
+              {/* Quick Preset Reasons */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground">Select common reason:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Blurry scan / unreadable text',
+                    'Incomplete lecture notes',
+                    'Duplicate of existing upload',
+                    'Incorrect course or semester syllabus'
+                  ].map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setRejectNoteReason(preset)}
+                      className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
+                        rejectNoteReason === preset
+                          ? 'bg-primary text-primary-foreground border-primary font-semibold'
+                          : 'bg-secondary text-muted-foreground hover:text-foreground border-border/60'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="field-label">
+                Feedback for Contributor
+                <textarea
+                  value={rejectNoteReason}
+                  onChange={e => setRejectNoteReason(e.target.value)}
+                  placeholder="Explain why this note cannot be published or what needs improvement..."
+                  className="field-input text-xs min-h-24 resize-none py-2"
+                />
+              </label>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={rejectNoteLoading}
+                  onClick={() => setRejectNoteTarget(null)}
+                  className="px-4 py-2 rounded-full text-xs font-semibold bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={rejectNoteLoading}
+                  onClick={handleConfirmNoteRejection}
+                  className="px-4 py-2 rounded-full text-xs font-semibold bg-destructive text-destructive-foreground hover:opacity-95 shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {rejectNoteLoading ? 'Rejecting...' : 'Confirm Rejection & Notify'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Published content */}
       {tab==='content'&&<div className="flex flex-col gap-3">{published.length===0?<p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed bg-card/40">No published notes yet.</p>:published.map((n,i)=><NoteRow key={n.id} note={n} subjects={subjects} index={i} open={()=>{}} onDelete={()=>handleDeleteNote(n)}/>)}</div>}
@@ -3975,6 +4078,8 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
   const [body, setBody] = useState('')
   const [audience, setAudience] = useState('All students')
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState(false)
 
@@ -3990,14 +4095,61 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
     'Semester 8',
   ]
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file (PNG, JPG, JPEG, WEBP).')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image file size must be under 10MB.')
+      return
+    }
+    setImageFile(file)
+    const reader = new FileReader()
+    reader.onload = () => setImagePreview(reader.result as string)
+    reader.readAsDataURL(file)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
+
+    let uploadedImageUrl: string | undefined = undefined
+
+    if (imageFile) {
+      const cleanName = imageFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+      const uniqueKey = `announcements/${Date.now()}-${cleanName}`
+      const presignRes = await getPresignedUrl(uniqueKey, imageFile.type)
+      if (presignRes.error || !presignRes.url) {
+        alert(presignRes.error || 'Failed to prepare image upload')
+        setSubmitting(false)
+        return
+      }
+
+      const uploadRes = await fetch(presignRes.url, {
+        method: 'PUT',
+        headers: { 'Content-Type': imageFile.type },
+        body: imageFile,
+      })
+
+      if (!uploadRes.ok) {
+        alert('Failed to upload announcement image to cloud storage.')
+        setSubmitting(false)
+        return
+      }
+
+      uploadedImageUrl = presignRes.url.split('?')[0]
+    }
+
     const res = await createAnnouncement({
       title,
       body,
-      audience: audience === 'All students' ? 'ALL' : audience
+      audience: audience === 'All students' ? 'ALL' : audience,
+      imageUrl: uploadedImageUrl,
     })
+
     if (res.error) {
       alert(res.error)
     } else if (res.announcement) {
@@ -4006,6 +4158,8 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
       setTitle('')
       setBody('')
       setAudience('All students')
+      setImageFile(null)
+      setImagePreview(null)
       setTimeout(() => setSent(false), 3000)
     }
     setSubmitting(false)
@@ -4019,7 +4173,7 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
         </span>
       </div>
       <h2 className="mt-4 text-2xl font-bold tracking-tight">Broadcast Department Notice</h2>
-      <p className="text-sm text-muted-foreground mt-1">Publish official notices or important updates directly to students.</p>
+      <p className="text-sm text-muted-foreground mt-1">Publish official notices, circulars, or schedules with instant email dispatch.</p>
 
       <div className="mt-7 flex flex-col gap-5">
         <label className="field-label">
@@ -4113,13 +4267,51 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
           />
         </label>
 
+        {/* Optional Image Attachment */}
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-semibold text-foreground">Attach Circular / Schedule Image (Optional)</span>
+          {imagePreview ? (
+            <div className="relative rounded-2xl border p-3 bg-secondary/30 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <img src={imagePreview} alt="Preview" className="size-14 rounded-xl object-cover border shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-foreground truncate">{imageFile?.name}</p>
+                  <p className="text-[11px] text-muted-foreground">{((imageFile?.size || 0) / (1024 * 1024)).toFixed(2)} MB</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setImageFile(null); setImagePreview(null); }}
+                className="p-2 text-muted-foreground hover:text-destructive transition-colors cursor-pointer rounded-full hover:bg-secondary"
+                title="Remove image"
+              >
+                <Trash size={16} />
+              </button>
+            </div>
+          ) : (
+            <label className="border border-dashed rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer bg-background hover:bg-secondary/40 transition-colors text-center">
+              <UploadSimple size={20} className="text-primary" />
+              <div>
+                <span className="text-xs font-semibold text-foreground">Upload official notice image</span>
+                <p className="text-[11px] text-muted-foreground mt-0.5">PNG, JPG, or WEBP up to 10MB</p>
+              </div>
+              <input 
+                type="file" 
+                accept="image/*" 
+                onChange={handleImageChange} 
+                className="hidden" 
+              />
+            </label>
+          )}
+        </div>
+
         <button 
           type="submit" 
           disabled={submitting} 
-          className="flex items-center justify-center gap-2 rounded-full bg-primary p-3.5 font-semibold text-primary-foreground hover:opacity-95 transition-opacity shadow-sm mt-1"
+          className="flex items-center justify-center gap-2 rounded-full bg-primary p-3.5 font-semibold text-primary-foreground hover:opacity-95 transition-opacity shadow-sm mt-1 cursor-pointer disabled:opacity-50"
         >
           <Send size={17}/>
-          {sent ? 'Published announcement!' : submitting ? 'Publishing...' : 'Publish announcement'}
+          {sent ? 'Published & Emailed Notice!' : submitting ? 'Publishing & Dispatching Emails...' : 'Publish Announcement & Email Students'}
         </button>
       </div>
     </form>

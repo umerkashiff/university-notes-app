@@ -212,6 +212,23 @@ export async function advanceSemestersForPeriod(
             audience: 'ALL'
           }
         })
+
+        // Email graduating students
+        try {
+          const { graduatedEmail } = await import('@/lib/emails/templates')
+          const { sendEmail } = await import('@/lib/emails/send')
+          for (const grad of graduatingStudents) {
+            if (grad.email) {
+              const { subject, html } = graduatedEmail({
+                name: grad.name,
+                batchYear: bm.batchYear
+              })
+              sendEmail(grad.email, subject, html).catch(() => {})
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to send graduation emails:', e)
+        }
       }
     } else {
       // B) Students in Sem 1–7 -> Advance to Next Semester
@@ -242,6 +259,25 @@ export async function advanceSemestersForPeriod(
             audience: `SEM_${nextSem}`
           }
         })
+
+        // Email advancing students
+        try {
+          const { semesterAdvancedEmail } = await import('@/lib/emails/templates')
+          const { sendEmail } = await import('@/lib/emails/send')
+          for (const st of advancingStudents) {
+            if (st.email) {
+              const { subject, html } = semesterAdvancedEmail({
+                name: st.name,
+                fromSem: bm.semester,
+                toSem: nextSem,
+                periodName: period.name
+              })
+              sendEmail(st.email, subject, html).catch(() => {})
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to send semester advancement emails:', e)
+        }
       }
     }
   }

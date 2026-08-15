@@ -59,6 +59,28 @@ export async function createNote(data: {
       }
     })
 
+    // Email alert to active administrators
+    try {
+      const admins = await prisma.user.findMany({
+        where: { role: 'ADMIN', status: 'ACTIVE' },
+        select: { email: true }
+      })
+      if (admins.length > 0) {
+        const { noteSubmittedAlertEmail } = await import('@/lib/emails/templates')
+        const { sendEmail } = await import('@/lib/emails/send')
+        const { subject: emailSubj, html } = noteSubmittedAlertEmail({
+          contributorName: user.name || 'Note Contributor',
+          noteTitle: data.title,
+          subjectCode: subject.code,
+          pages: data.pages,
+          fileSize: data.size
+        })
+        sendEmail(admins.map(a => a.email), emailSubj, html).catch(() => {})
+      }
+    } catch (e) {
+      console.warn('Failed to send admin email alert for new note submission:', e)
+    }
+
     return { success: true, note }
   } catch (err) {
     // Cleanup orphaned file on DB failure
@@ -92,14 +114,17 @@ export async function publishNote(noteId: string) {
   }
 
   try {
-    const existing = await prisma.note.findUnique({ where: { id: noteId }, include: { subject: true } })
+    const existing = await prisma.note.findUnique({ 
+      where: { id: noteId }, 
+      include: { subject: true, author: true } 
+    })
     if (!existing) return { error: 'Note not found.' }
     if (existing.status === 'PUBLISHED') return { error: 'Note is already published.' }
 
     const note = await prisma.note.update({
       where: { id: noteId },
       data: { status: 'PUBLISHED' },
-      include: { subject: true }
+      include: { subject: true, author: true }
     })
 
     // Create an announcement automatically
@@ -107,9 +132,26 @@ export async function publishNote(noteId: string) {
       data: {
         title: `${note.subject.name} notes published`,
         body: `${note.title} is now available.`,
-        audience: 'ALL'
+        audience: `SEM_${note.subject.semester}`
       }
     })
+
+    // Notify the contributor author via email
+    if (existing.author?.email) {
+      try {
+        const { notePublishedEmail } = await import('@/lib/emails/templates')
+        const { sendEmail } = await import('@/lib/emails/send')
+        const { subject: emailSubj, html } = notePublishedEmail({
+          authorName: existing.author.name,
+          noteTitle: note.title,
+          subjectName: note.subject.name,
+          subjectCode: note.subject.code
+        })
+        sendEmail(existing.author.email, emailSubj, html).catch(() => {})
+      } catch (e) {
+        console.warn('Failed to send note published email to author:', e)
+      }
+    }
 
     return { success: true }
   } catch (err) {
@@ -160,15 +202,31 @@ export async function updateNote(data: {
       }
     })
 
-    // If approved and newly published, announce it under the senior's notes
+    // If newly published, announce and email author
     if (data.status === 'PUBLISHED' && existing.status !== 'PUBLISHED') {
       await prisma.announcement.create({
         data: {
           title: `${updated.subject.name} notes published`,
           body: `${updated.title} is now available.`,
-          audience: updated.subject.name || 'ALL'
+          audience: `SEM_${updated.subject.semester}`
         }
       })
+
+      if (existing.author?.email) {
+        try {
+          const { notePublishedEmail } = await import('@/lib/emails/templates')
+          const { sendEmail } = await import('@/lib/emails/send')
+          const { subject: emailSubj, html } = notePublishedEmail({
+            authorName: existing.author.name,
+            noteTitle: updated.title,
+            subjectName: updated.subject.name,
+            subjectCode: updated.subject.code
+          })
+          sendEmail(existing.author.email, emailSubj, html).catch(() => {})
+        } catch (e) {
+          console.warn('Failed to send note published email to author:', e)
+        }
+      }
     }
 
     return { success: true, note: updated }
@@ -211,15 +269,35 @@ export async function createSubject(data: {
   }
 }
 
-export async function deleteNote(noteId: string) {
+export async function deleteNote(noteId: string, rejectionReason?: string) {
   const user = await getCurrentUser()
   if (!user || user.role !== 'ADMIN') {
     return { error: 'Unauthorized. Only admins can delete notes.' }
   }
 
   try {
-    const note = await prisma.note.findUnique({ where: { id: noteId } })
+    const note = await prisma.note.findUnique({ 
+      where: { id: noteId },
+      include: { author: true, subject: true }
+    })
     if (!note) return { error: 'Note not found.' }
+
+    // If note was in PENDING review queue and rejected, send polite rejection email to contributor
+    if (note.status === 'PENDING' && note.author?.email) {
+      try {
+        const { noteRejectedEmail } = await import('@/lib/emails/templates')
+        const { sendEmail } = await import('@/lib/emails/send')
+        const { subject: emailSubj, html } = noteRejectedEmail({
+          authorName: note.author.name,
+          noteTitle: note.title,
+          subjectCode: note.subject?.code,
+          reason: rejectionReason
+        })
+        sendEmail(note.author.email, emailSubj, html).catch(() => {})
+      } catch (e) {
+        console.warn('Failed to send note rejection email to author:', e)
+      }
+    }
 
     // Cleanup R2 storage if fileUrl exists
     if (note.fileUrl) {
@@ -322,6 +400,7 @@ export async function createAnnouncement(data: {
   title: string
   body: string
   audience?: string
+  imageUrl?: string
 }) {
   const user = await getCurrentUser()
   if (!user || user.role !== 'ADMIN') {
@@ -333,9 +412,41 @@ export async function createAnnouncement(data: {
       data: {
         title: data.title,
         body: data.body,
+        imageUrl: data.imageUrl || null,
         audience: data.audience || 'ALL',
       }
     })
+
+    // Broadcast email to targeted active students
+    try {
+      const whereClause: any = { status: 'ACTIVE' }
+      if (data.audience && data.audience !== 'ALL' && data.audience !== 'All students' && data.audience !== 'Department') {
+        const semMatch = data.audience.match(/Semester\s*(\d)/i) || data.audience.match(/SEM_(\d)/i)
+        if (semMatch) {
+          whereClause.semester = parseInt(semMatch[1], 10)
+        }
+      }
+
+      const targetedUsers = await prisma.user.findMany({
+        where: whereClause,
+        select: { email: true }
+      })
+
+      if (targetedUsers.length > 0) {
+        const { departmentAnnouncementEmail } = await import('@/lib/emails/templates')
+        const { sendEmail } = await import('@/lib/emails/send')
+        const { subject: emailSubj, html } = departmentAnnouncementEmail({
+          title: data.title,
+          body: data.body,
+          audienceLabel: data.audience || 'All Students',
+          hasImage: !!data.imageUrl
+        })
+        sendEmail(targetedUsers.map(u => u.email), emailSubj, html).catch(() => {})
+      }
+    } catch (broadcastErr) {
+      console.warn('Failed to broadcast announcement email:', broadcastErr)
+    }
+
     return { success: true, announcement }
   } catch (err) {
     return { error: (err as Error).message }

@@ -16,7 +16,7 @@ const s3Client = new S3Client({
 
 export async function getPresignedUrl(fileName: string, contentType: string) {
   const user = await getCurrentUser()
-  if (!user || user.role !== 'SENIOR') {
+  if (!user || (user.role !== 'SENIOR' && user.role !== 'ADMIN')) {
     return { error: 'Unauthorized' }
   }
 
