@@ -1176,6 +1176,11 @@ function ReviewQueueCard({
   const [loading, setLoading] = useState(false);
 
   const handleSave = async (publishAfter: boolean) => {
+    if (!selectedCode || semSubjects.length === 0) {
+      alert(`Cannot save: Semester ${selectedSem} does not have any registered subjects yet. Please add subjects to Semester ${selectedSem} in the Curriculum tab first, or select another semester.`);
+      return;
+    }
+
     setLoading(true);
     const res = await updateNote({
       id: String(candidate.id),
@@ -1200,9 +1205,6 @@ function ReviewQueueCard({
       };
 
       onUpdate(updatedNote);
-      if (publishAfter) {
-        onPublish(updatedNote);
-      }
       setIsEditing(false);
     }
     setLoading(false);
@@ -1252,7 +1254,7 @@ function ReviewQueueCard({
                       onClick={() => {
                         setSelectedSem(sem);
                         const subs = subjects.filter(s => s.semester === sem);
-                        if (subs.length > 0) setSelectedCode(subs[0].code);
+                        setSelectedCode(subs.length > 0 ? subs[0].code : '');
                       }}
                       className={`relative px-3.5 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-colors select-none shrink-0 ${
                         isActive
@@ -1271,8 +1273,8 @@ function ReviewQueueCard({
             <div className="flex flex-col gap-1.5 min-w-0 max-w-full w-full">
               <span className="text-sm font-semibold text-foreground">Course / Subject</span>
               {semSubjects.length === 0 ? (
-                <div className="rounded-2xl border border-dashed p-3 text-center text-xs text-muted-foreground bg-secondary/30">
-                  No subjects in Semester {selectedSem}. Add in Curriculum tab first.
+                <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-3.5 text-center text-xs text-destructive flex items-center justify-center gap-1.5">
+                  <Info size={16} /> No subjects registered in Semester {selectedSem}. Add in Curriculum tab first.
                 </div>
               ) : (
                 <div className="relative">
@@ -1337,18 +1339,22 @@ function ReviewQueueCard({
 
             <div className="flex flex-col sm:flex-row gap-2 mt-1">
               <button
-                disabled={loading}
+                disabled={loading || !selectedCode || semSubjects.length === 0}
                 type="button"
                 onClick={() => handleSave(true)}
-                className="flex-1 rounded-full bg-primary py-3 px-4 font-semibold text-primary-foreground text-sm hover:opacity-95 transition-opacity shadow-sm"
+                className={`flex-1 rounded-full bg-primary py-3 px-4 font-semibold text-primary-foreground text-sm transition-opacity shadow-sm ${
+                  !selectedCode || semSubjects.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-95'
+                }`}
               >
                 {loading ? 'Saving...' : 'Save & publish now'}
               </button>
               <button
-                disabled={loading}
+                disabled={loading || !selectedCode || semSubjects.length === 0}
                 type="button"
                 onClick={() => handleSave(false)}
-                className="rounded-full border border-border py-3 px-4 text-sm font-semibold hover:bg-secondary transition-colors"
+                className={`rounded-full border border-border py-3 px-4 text-sm font-semibold transition-colors ${
+                  !selectedCode || semSubjects.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-secondary'
+                }`}
               >
                 Save draft changes
               </button>
@@ -1615,7 +1621,11 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
             onPublish={handlePublish}
             onDelete={handleDeleteNote}
             onUpdate={(updated) => {
-              setNotes(prev => prev.map(n => n.id === updated.id ? updated : n));
+              if (updated.status === 'PUBLISHED') {
+                publish(updated);
+              } else {
+                setNotes(prev => prev.map(n => n.id === updated.id ? updated : n));
+              }
             }}
           />
         ))}

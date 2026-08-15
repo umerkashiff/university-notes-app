@@ -135,15 +135,9 @@ export async function updateNote(data: {
 
     let subjectId = existing.subjectId
     if (data.subjectCode && data.subjectCode !== existing.subject.code) {
-      let targetSub = await prisma.subject.findUnique({ where: { code: data.subjectCode } })
+      const targetSub = await prisma.subject.findUnique({ where: { code: data.subjectCode } })
       if (!targetSub) {
-        targetSub = await prisma.subject.create({
-          data: {
-            name: data.subjectCode,
-            code: data.subjectCode,
-            semester: data.semester || 1
-          }
-        })
+        return { error: `Course ${data.subjectCode} does not exist. Please add it in the Curriculum tab first.` }
       }
       subjectId = targetSub.id
     }
