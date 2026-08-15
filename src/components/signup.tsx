@@ -395,12 +395,7 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
                 <span>Current Semester</span>
                 <div className="flex h-11 w-full items-center justify-between rounded-2xl border bg-secondary/40 px-3.5 text-sm select-none border-border/70">
                   {isRegValid && parsedBatchYear ? (
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-foreground">Semester {effectiveSemester}</span>
-                      <span className="text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
-                        {isRepeating ? 'Repeating' : `Batch ${parsedBatchYear}`}
-                      </span>
-                    </div>
+                    <span className="font-semibold text-foreground">Semester {effectiveSemester}</span>
                   ) : (
                     <span className="text-muted-foreground text-xs">Enter registration number</span>
                   )}
