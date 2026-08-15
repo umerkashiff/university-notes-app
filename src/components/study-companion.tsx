@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom'
 import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDown, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info, PencilSimple, Moon, Sun, Desktop, UserCircle, Lock, Calendar, CheckCircle, Warning, WarningCircle, UserPlus, Eye, Clock, UserCheck, ShieldWarning } from '@phosphor-icons/react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { login, logout, register } from '@/app/actions/auth'
-import { getAdminUsersData, approveUser, rejectUser, updateUserSemester, toggleHeldBack, changeUserRole, submitHeldBackSelfReport } from '@/app/actions/admin'
+import { getAdminUsersData, approveUser, rejectUser, updateUserSemester, toggleHeldBack, changeUserRole, submitHeldBackSelfReport, getContentRequests, updateContentRequestStatus, deleteContentRequest } from '@/app/actions/admin'
 import { getAcademicPeriods, createAcademicPeriod, getPreAdvancementSummary, advanceSemestersForPeriod, setPeriodStatus } from '@/app/actions/academic'
 import { SignUp } from '@/components/signup'
 import { PendingScreen } from '@/components/pending-screen'
@@ -2225,7 +2225,7 @@ function ReviewQueueCard({
 }
 
 function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:{notes:Note[],setNotes:React.Dispatch<React.SetStateAction<Note[]>>,subjects:SubjectItem[],setSubjects:(s:SubjectItem[])=>void,publish:(n:Note)=>void,addAnnouncement:(a:any)=>void}){
-  const [tab,setTab]=useState<'queue'|'content'|'curriculum'|'users'|'calendar'|'notices'>('queue');
+  const [tab,setTab]=useState<'queue'|'content'|'curriculum'|'users'|'calendar'|'notices'|'requests'>('queue');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [doneId,setDoneId]=useState<any>(null);
   const [loading,setLoading]=useState(false);
@@ -2235,6 +2235,7 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
   const [creatingSub, setCreatingSub] = useState(false);
   const [subMsg, setSubMsg] = useState('');
   const [storageBytes, setStorageBytes] = useState<number | null>(null);
+  const [pendingReqCount, setPendingReqCount] = useState(0);
 
   React.useEffect(() => {
     getTotalStorage().then(res => {
@@ -2316,6 +2317,9 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
     getAdminUsersData().then(res => {
       if (res?.pendingUsers) setPendingUserCount(res.pendingUsers.length);
     }).catch(() => {});
+    getContentRequests('PENDING').then(res => {
+      if (res?.requests) setPendingReqCount(res.requests.length);
+    }).catch(() => {});
   };
 
   React.useEffect(() => {
@@ -2324,6 +2328,7 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
 
   const tabs = [
     { id: 'users', label: `Student Reviews ${pendingUserCount > 0 ? `(${pendingUserCount})` : ''}` },
+    { id: 'requests', label: `Student Requests ${pendingReqCount > 0 ? `(${pendingReqCount})` : ''}` },
     { id: 'queue', label: `Notes Review (${pending.length})` },
     { id: 'content', label: `Published (${published.length})` },
     { id: 'curriculum', label: 'Curriculum & Subjects' },
@@ -2398,6 +2403,9 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
       <Nav layoutId="admin-nav" active={tab==='users'} onClick={()=>setTab('users')}>
         Student Reviews {pendingUserCount > 0 && <span className="ml-1.5 px-2 py-0.5 rounded-full text-[11px] bg-primary text-primary-foreground font-bold">{pendingUserCount}</span>}
       </Nav>
+      <Nav layoutId="admin-nav" active={tab==='requests'} onClick={()=>setTab('requests')}>
+        Student Requests {pendingReqCount > 0 && <span className="ml-1.5 px-2 py-0.5 rounded-full text-[11px] bg-amber-500 text-white font-bold">{pendingReqCount}</span>}
+      </Nav>
       <Nav layoutId="admin-nav" active={tab==='queue'} onClick={()=>setTab('queue')}>
         Notes Review ({pending.length})
       </Nav>
@@ -2419,6 +2427,9 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
   <AnimatePresence mode="wait">
     <motion.div key={tab} initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} transition={{duration:0.2}}>
       
+      {/* Student Requests & Reports tab */}
+      {tab==='requests'&&<RequestsManager onRefreshCount={fetchPendingUserCount} />}
+
       {/* Review queue */}
       {tab==='queue'&&<div className="flex flex-col gap-5">
         {pending.length === 0 && <p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed bg-card/50">No notes currently pending review. Submissions from contributors will appear here.</p>}
@@ -3756,6 +3767,205 @@ function AdminCalendarManager() {
           </div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function RequestsManager({ onRefreshCount }: { onRefreshCount?: () => void }) {
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'RESOLVED' | 'DISMISSED'>('ALL');
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+    getContentRequests(statusFilter === 'ALL' ? undefined : statusFilter).then(res => {
+      if (isMounted && res.success && res.requests) {
+        setRequests(res.requests);
+      }
+      if (isMounted) setLoading(false);
+    }).catch(() => {
+      if (isMounted) setLoading(false);
+    });
+    return () => { isMounted = false; };
+  }, [statusFilter]);
+
+  const handleUpdateStatus = async (id: string, status: 'PENDING' | 'RESOLVED' | 'DISMISSED') => {
+    setActionLoading(id);
+    const res = await updateContentRequestStatus(id, status);
+    if (res.success && res.request) {
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, status: res.request.status } : r));
+      onRefreshCount?.();
+    }
+    setActionLoading(null);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this student request? This cannot be undone.')) return;
+    setActionLoading(id);
+    const res = await deleteContentRequest(id);
+    if (res.success) {
+      setRequests(prev => prev.filter(r => r.id !== id));
+      onRefreshCount?.();
+    }
+    setActionLoading(null);
+  };
+
+  const pendingCount = requests.filter(r => r.status === 'PENDING').length;
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Header & Filter Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border bg-card p-5 rounded-3xl shadow-xs">
+        <div>
+          <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+            <ChatText size={18} className="text-primary" />
+            Student Requests & Reports
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Private inquiries, syllabus requests, and issue reports submitted by verified students.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-1.5 rounded-full bg-secondary p-1">
+          {(['ALL', 'PENDING', 'RESOLVED', 'DISMISSED'] as const).map(st => (
+            <button
+              key={st}
+              onClick={() => setStatusFilter(st)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                statusFilter === st
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {st === 'ALL' ? 'All' : st === 'PENDING' ? `Pending (${pendingCount})` : st === 'RESOLVED' ? 'Resolved' : 'Dismissed'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Requests List */}
+      {loading ? (
+        <div className="flex justify-center py-16 text-xs text-muted-foreground">Loading requests...</div>
+      ) : requests.length === 0 ? (
+        <div className="text-center py-16 border rounded-3xl border-dashed bg-card/40 p-8">
+          <ChatText size={32} className="mx-auto mb-2 opacity-30 text-muted-foreground" />
+          <p className="text-sm font-semibold text-foreground">No requests found</p>
+          <p className="text-xs text-muted-foreground mt-1">Student submissions and issue reports will appear here in real-time.</p>
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {requests.map(req => {
+            const isResolved = req.status === 'RESOLVED';
+            const isDismissed = req.status === 'DISMISSED';
+            const isPending = req.status === 'PENDING';
+
+            const typeColor = 
+              req.type.includes('Missing') ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' :
+              req.type.includes('Lecture') ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' :
+              req.type.includes('Past') ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20' :
+              req.type.includes('Broken') ? 'bg-destructive/10 text-destructive border-destructive/20' :
+              'bg-primary/10 text-primary border-primary/20';
+
+            return (
+              <div
+                key={req.id}
+                className="rounded-3xl border bg-card p-5 sm:p-6 shadow-xs flex flex-col gap-4"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-[11px] font-bold px-3 py-1 rounded-full border ${typeColor}`}>
+                      {req.type}
+                    </span>
+                    {req.semester && (
+                      <span className="text-[11px] font-semibold bg-secondary px-2.5 py-1 rounded-full text-muted-foreground">
+                        Semester {req.semester}
+                      </span>
+                    )}
+                    {req.subject && (
+                      <span className="text-[11px] font-semibold bg-secondary px-2.5 py-1 rounded-full text-foreground">
+                        {req.subject}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                      isResolved ? 'bg-sage/50 text-primary' :
+                      isDismissed ? 'bg-secondary text-muted-foreground' :
+                      'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                    }`}>
+                      {req.status}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(req.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Message Body */}
+                <div className="text-sm text-foreground/90 leading-relaxed bg-secondary/30 p-4 rounded-2xl border border-border/40">
+                  <p className="whitespace-pre-wrap">{req.message}</p>
+                </div>
+
+                {/* Student Details & Action Buttons */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                    <User size={15} className="text-primary" />
+                    <b className="text-foreground">{req.user?.name || 'Verified Student'}</b>
+                    <span>({req.user?.regNumber || req.user?.email || 'N/A'})</span>
+                    {req.user?.semester && <span>· Sem {req.user.semester}</span>}
+                    {req.user?.section && <span>· Sec {req.user.section}</span>}
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    {isPending && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={actionLoading === req.id}
+                          onClick={() => handleUpdateStatus(req.id, 'RESOLVED')}
+                          className="rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 transition-opacity flex items-center gap-1 cursor-pointer"
+                        >
+                          <Check size={14} weight="bold" /> Mark Resolved
+                        </button>
+                        <button
+                          type="button"
+                          disabled={actionLoading === req.id}
+                          onClick={() => handleUpdateStatus(req.id, 'DISMISSED')}
+                          className="rounded-full bg-secondary px-3.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                        >
+                          Dismiss
+                        </button>
+                      </>
+                    )}
+                    {!isPending && (
+                      <button
+                        type="button"
+                        disabled={actionLoading === req.id}
+                        onClick={() => handleUpdateStatus(req.id, 'PENDING')}
+                        className="rounded-full bg-secondary px-3.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                      >
+                        Re-open
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={actionLoading === req.id}
+                      onClick={() => handleDelete(req.id)}
+                      className="p-1.5 text-muted-foreground hover:text-destructive transition-colors cursor-pointer rounded-full hover:bg-secondary"
+                      title="Delete request"
+                    >
+                      <Trash size={16} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

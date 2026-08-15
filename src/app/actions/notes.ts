@@ -385,14 +385,14 @@ export async function submitContentRequest(data: {
   if (!user) return { error: 'Please sign in to submit a request.' }
 
   try {
-    const title = `Request: ${data.type} (${user.name || user.email})`
-    const body = `Semester ${data.semester || 'N/A'}${data.subject ? ` · ${data.subject}` : ''}: ${data.message}`
-    
-    await prisma.announcement.create({
+    await prisma.contentRequest.create({
       data: {
-        title,
-        body,
-        audience: 'ADMIN'
+        type: data.type,
+        semester: data.semester,
+        subject: data.subject,
+        message: data.message,
+        userId: user.id,
+        status: 'PENDING'
       }
     })
 

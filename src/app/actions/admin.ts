@@ -132,12 +132,67 @@ export async function submitHeldBackSelfReport(notes?: string) {
   const user = await getCurrentUser()
   if (!user) throw new Error('Authentication required')
 
-  await prisma.announcement.create({
+  await prisma.contentRequest.create({
     data: {
-      title: 'Re-Take / Hold-Back Request',
-      body: `Student ${user.name} (${user.regNumber || user.email}, Sem ${user.semester}) submitted a repeat semester report: "${notes || 'Repeating coursework'}"`,
-      audience: 'ADMIN'
+      type: 'Academic Progression & Re-take Report',
+      message: `Student submitted repeat coursework report: "${notes || 'Repeating coursework / pause progression'}"`,
+      semester: user.semester,
+      userId: user.id,
+      status: 'PENDING'
     }
+  })
+
+  return { success: true }
+}
+
+export async function getContentRequests(statusFilter?: string) {
+  await requireAdmin()
+
+  const where: any = {}
+  if (statusFilter && statusFilter !== 'ALL') {
+    where.status = statusFilter
+  }
+
+  const requests = await prisma.contentRequest.findMany({
+    where,
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          regNumber: true,
+          semester: true,
+          section: true,
+          batchYear: true
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' }
+  })
+
+  return { success: true, requests }
+}
+
+export async function updateContentRequestStatus(id: string, status: 'PENDING' | 'RESOLVED' | 'DISMISSED', adminNotes?: string) {
+  await requireAdmin()
+
+  const updated = await prisma.contentRequest.update({
+    where: { id },
+    data: {
+      status,
+      adminNotes: adminNotes ?? undefined
+    }
+  })
+
+  return { success: true, request: updated }
+}
+
+export async function deleteContentRequest(id: string) {
+  await requireAdmin()
+
+  await prisma.contentRequest.delete({
+    where: { id }
   })
 
   return { success: true }
