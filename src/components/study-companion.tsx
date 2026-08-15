@@ -1211,10 +1211,10 @@ function ReviewQueueCard({
   const semNumber = subjects.find(s => s.code === candidate.code || s.name === candidate.subject)?.semester || selectedSem;
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
-      <section className="rounded-3xl border bg-card p-6 shadow-sm">
+    <div className="grid min-w-0 max-w-full w-full gap-5 lg:grid-cols-[1fr_340px]">
+      <section className="min-w-0 max-w-full w-full rounded-3xl border bg-card p-5 sm:p-6 shadow-sm overflow-hidden">
         {isEditing ? (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 min-w-0 max-w-full w-full">
             <div className="flex items-center justify-between border-b pb-3">
               <div>
                 <span className="text-xs font-bold uppercase tracking-wider text-primary">Admin Quick Edit</span>
@@ -1223,7 +1223,7 @@ function ReviewQueueCard({
               <button 
                 type="button"
                 onClick={() => setIsEditing(false)} 
-                className="text-xs text-muted-foreground hover:text-foreground font-semibold"
+                className="text-xs text-muted-foreground hover:text-foreground font-semibold px-2.5 py-1 rounded-lg hover:bg-secondary transition-colors"
               >
                 Cancel
               </button>
@@ -1240,9 +1240,9 @@ function ReviewQueueCard({
             </label>
 
             {/* Target Semester Pills with visible scrollbar */}
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 min-w-0 max-w-full w-full">
               <span className="text-sm font-semibold text-foreground">Target Semester</span>
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-2 modal-scroll touch-pan-x">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-2 modal-scroll touch-pan-x min-w-0 max-w-full w-full">
                 {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => {
                   const isActive = selectedSem === sem;
                   return (
@@ -1254,7 +1254,7 @@ function ReviewQueueCard({
                         const subs = subjects.filter(s => s.semester === sem);
                         if (subs.length > 0) setSelectedCode(subs[0].code);
                       }}
-                      className={`relative px-4 py-1.5 text-xs sm:text-sm font-semibold rounded-full whitespace-nowrap transition-colors select-none shrink-0 ${
+                      className={`relative px-3.5 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-colors select-none shrink-0 ${
                         isActive
                           ? 'bg-primary text-primary-foreground shadow-xs'
                           : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
@@ -1268,7 +1268,7 @@ function ReviewQueueCard({
             </div>
 
             {/* Course Dropdown */}
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 min-w-0 max-w-full w-full">
               <span className="text-sm font-semibold text-foreground">Course / Subject</span>
               {semSubjects.length === 0 ? (
                 <div className="rounded-2xl border border-dashed p-3 text-center text-xs text-muted-foreground bg-secondary/30">
@@ -1286,7 +1286,7 @@ function ReviewQueueCard({
                         ? `${subjects.find(s => s.code === selectedCode)?.name} (${selectedCode})`
                         : 'Select a course'}
                     </span>
-                    <CaretDown size={16} weight="bold" className={`text-muted-foreground transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+                    <CaretDown size={16} weight="bold" className={`text-muted-foreground transition-transform shrink-0 ml-2 ${dropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
 
                   <AnimatePresence>
@@ -1340,7 +1340,7 @@ function ReviewQueueCard({
                 disabled={loading}
                 type="button"
                 onClick={() => handleSave(true)}
-                className="flex-1 rounded-full bg-primary py-2.5 px-4 font-semibold text-primary-foreground text-sm hover:opacity-95 transition-opacity shadow-sm"
+                className="flex-1 rounded-full bg-primary py-3 px-4 font-semibold text-primary-foreground text-sm hover:opacity-95 transition-opacity shadow-sm"
               >
                 {loading ? 'Saving...' : 'Save & publish now'}
               </button>
@@ -1348,14 +1348,14 @@ function ReviewQueueCard({
                 disabled={loading}
                 type="button"
                 onClick={() => handleSave(false)}
-                className="rounded-full border border-border py-2.5 px-4 text-sm font-semibold hover:bg-secondary transition-colors"
+                className="rounded-full border border-border py-3 px-4 text-sm font-semibold hover:bg-secondary transition-colors"
               >
                 Save draft changes
               </button>
             </div>
           </div>
         ) : (
-          <div>
+          <div className="min-w-0 max-w-full w-full">
             <div className="flex flex-col sm:flex-row sm:items-start gap-4">
               <span className="flex size-12 items-center justify-center rounded-2xl bg-blush shrink-0"><Inbox/></span>
               <div className="flex-1 min-w-0">
@@ -1370,7 +1370,7 @@ function ReviewQueueCard({
                     Edit title & location
                   </button>
                 </div>
-                <h2 className="mt-3 text-2xl font-semibold">{candidate.title}</h2>
+                <h2 className="mt-3 text-2xl font-semibold break-words">{candidate.title}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {candidate.subject} ({candidate.code}) · Semester {semNumber} · {candidate.pages} pages · {candidate.size}
                 </p>
@@ -1378,7 +1378,7 @@ function ReviewQueueCard({
                 {candidate.description && (
                   <div className="mt-4 rounded-2xl bg-sage/30 border border-primary/20 p-3.5 text-sm">
                     <b className="flex items-center gap-1.5 text-foreground"><GraduationCap size={16} className="text-primary"/> Contributor Advice:</b>
-                    <p className="mt-1 text-muted-foreground leading-relaxed">{candidate.description}</p>
+                    <p className="mt-1 text-muted-foreground leading-relaxed break-words">{candidate.description}</p>
                   </div>
                 )}
 
@@ -1401,10 +1401,13 @@ function ReviewQueueCard({
         )}
       </section>
 
-      <aside className="rounded-3xl bg-sage p-6 h-fit">
+      {/* Action sidebar: hide on mobile when editing to prevent duplicate stacked buttons */}
+      <aside className={`rounded-3xl bg-sage p-6 h-fit ${isEditing ? 'hidden lg:block' : ''}`}>
         <h3 className="text-xl font-semibold">Ready to publish?</h3>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Check or edit the title, semester, and course before making it visible to all students.
+          {isEditing 
+            ? 'Save changes or publish immediately. Author attribution is preserved.' 
+            : 'Check or edit the title, semester, and course before making it visible to all students.'}
         </p>
         <div className="mt-8 flex flex-col gap-2">
           <button 
