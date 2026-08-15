@@ -20,6 +20,29 @@ interface SignUpProps {
   onSwitchToLogin: () => void
 }
 
+function formatRegNumber(val: string): string {
+  const clean = val.toUpperCase().replace(/[^0-9A-Z]/g, '')
+  if (!clean) return ''
+
+  const yearPart = clean.slice(0, 4)
+  if (clean.length <= 4) {
+    return yearPart
+  }
+
+  let rest = clean.slice(4)
+  if (rest.startsWith('CE')) {
+    rest = rest.slice(2)
+  } else if (rest.startsWith('C')) {
+    rest = rest.slice(1)
+  }
+
+  const rollDigits = rest.replace(/[^0-9]/g, '').slice(0, 3)
+  if (rollDigits.length > 0) {
+    return `${yearPart}-CE-${rollDigits}`
+  }
+  return `${yearPart}-CE-`
+}
+
 function CustomSelect({
   value,
   onChange,
@@ -171,6 +194,19 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
     } else {
       setSelectedSemesters([...selectedSemesters, sem].sort((a, b) => a - b))
     }
+  }
+
+  const handleRegNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const nextVal = e.target.value
+    if (nextVal.length < regNumber.length) {
+      if (regNumber.endsWith('-') || regNumber.endsWith('-CE-')) {
+        setRegNumber(nextVal.replace(/-CE-?$/i, '').replace(/-$/i, ''))
+        return
+      }
+      setRegNumber(nextVal.toUpperCase())
+      return
+    }
+    setRegNumber(formatRegNumber(nextVal))
   }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -366,12 +402,12 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
                   required 
                   name="regNumber"
                   value={regNumber} 
-                  onChange={e => setRegNumber(e.target.value.toUpperCase())} 
+                  onChange={handleRegNumberChange} 
                   type="text" 
                   className={`field-input uppercase placeholder:normal-case text-sm ${isRegValid && parsedBatchYear ? 'pr-28' : 'pr-4'} ${
                     showRegWarning ? 'border-amber-500/60 focus:border-amber-500' : isRegValid ? 'border-primary/60' : ''
                   }`}
-                  placeholder="YYYY-CE-XX (e.g. 2024-CE-15)"
+                  placeholder="e.g. 2025-CE-94 (or just type 202594)"
                   disabled={loading}
                 />
                 
