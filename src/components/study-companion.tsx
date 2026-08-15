@@ -144,6 +144,7 @@ export function StudyCompanion({
   const [selectedSemester,setSelectedSemester]=useState(1)
   const [query,setQuery]=useState('')
   const [showRole,setShowRole]=useState(false)
+  const [isLoggingOut,setIsLoggingOut]=useState(false)
   const unread = alerts.filter(a=>a.unread).length
 
   const greeting = useMemo(() => {
@@ -153,10 +154,10 @@ export function StudyCompanion({
     return `${timeStr}, ${firstName}`
   }, [user])
 
-  const signIn = async (email: string, password?: string) => {
+  const signIn = async (email: string, password?: string): Promise<string | void> => {
     const res = await login(email, password)
     if (res.error) {
-      alert(res.error)
+      return res.error
     } else if (res.user) {
       setUser(res.user)
       const next = res.user.role.toLowerCase() as Role
@@ -165,12 +166,14 @@ export function StudyCompanion({
   }
 
   const handleLogout = async () => {
+    setIsLoggingOut(true)
     await logout()
     setUser(null)
+    setShowRole(false)
+    setIsLoggingOut(false)
   }
 
-  if(!role) return <Login onLogin={signIn}/>
-  if(reader) return <PdfReader note={reader} onBack={()=>setReader(null)}/>
+  const roleLabel = role === 'admin' ? 'Administrator' : role === 'senior' ? 'Senior Contributor' : 'Student'
 
   const title = screen==='cms'
     ? 'Content studio'
@@ -188,81 +191,120 @@ export function StudyCompanion({
     ? 'Settings'
     : greeting
 
-  const roleLabel = role === 'admin' ? 'Administrator' : role === 'senior' ? 'Senior Contributor' : 'Student'
-
-  return <main className="min-h-screen bg-background text-foreground">
-    <header className="sticky top-0 z-40 border-b border-white/30 bg-white/40 dark:bg-card/40 backdrop-blur-xl shadow-sm supports-[backdrop-filter]:bg-white/30 transform-gpu will-change-transform">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
-        <button onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} className="flex items-center gap-3" aria-label="Luma home">
-          <span className="flex size-9 -rotate-3 items-center justify-center rounded-xl bg-primary text-primary-foreground"><BookOpen size={18}/></span>
-          <span className="text-xl font-bold tracking-tight">Luma</span>
-          <span className="hidden rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground sm:inline">Computer Engineering</span>
-        </button>
-        <nav className="hidden items-center gap-1 rounded-full bg-secondary p-1 md:flex" aria-label="Primary">
-          {role==='student'&&<><Nav active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')}>Home</Nav><Nav active={screen==='saved'} onClick={()=>setScreen('saved')}>Saved</Nav></>}
-          {role==='senior'&&<><Nav active={screen==='submissions'} onClick={()=>setScreen('submissions')}>My notes</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}
-          {role==='admin'&&<><Nav active={screen==='cms'} onClick={()=>setScreen('cms')}>Studio</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}
-          <Nav active={screen==='notifications'} onClick={()=>setScreen('notifications')}>Notices</Nav>
-        </nav>
-        <div className="flex items-center gap-2">
-          <button onClick={()=>setScreen('notifications')} className="icon-button relative" aria-label={`${unread} unread notifications`}>
-            <Bell size={19}/>
-            {unread>0&&<span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground">{unread}</span>}
-          </button>
-          <div className="relative">
-            <button onClick={()=>setShowRole(!showRole)} className="flex size-10 items-center justify-center rounded-full bg-mist text-sm font-bold shadow-xs">
-              {user?.avatar || (user?.name ? user.name.slice(0, 2).toUpperCase() : "ST")}
-            </button>
-            <AnimatePresence>
-              {showRole&&<motion.div initial={{opacity:0, scale:0.95, y:5}} animate={{opacity:1, scale:1, y:0}} exit={{opacity:0, scale:0.95, y:5}} transition={{duration:0.15}} className="popover right-0 w-64 p-2 origin-top-right">
-                <div className="border-b p-3">
-                  <b className="block truncate text-foreground">{user?.name || user?.email}</b>
-                  <p className="text-xs capitalize text-muted-foreground mt-0.5">{roleLabel}</p>
+  return (
+    <AnimatePresence mode="wait">
+      {!role ? (
+        <motion.div
+          key="login-screen"
+          initial={{ opacity: 0, scale: 0.97 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 1.05, filter: 'blur(8px)' }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          className="w-full min-h-screen"
+        >
+          <Login onLogin={signIn} />
+        </motion.div>
+      ) : reader ? (
+        <motion.div
+          key="pdf-reader-screen"
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.98 }}
+          transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          className="w-full min-h-screen"
+        >
+          <PdfReader note={reader} onBack={() => setReader(null)} />
+        </motion.div>
+      ) : (
+        <motion.main
+          key="app-main-shell"
+          initial={{ opacity: 0, scale: 0.96, filter: 'blur(6px)' }}
+          animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+          exit={{ opacity: 0, scale: 0.96, filter: 'blur(6px)' }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="min-h-screen bg-background text-foreground"
+        >
+          <header className="sticky top-0 z-40 border-b border-white/30 bg-white/40 dark:bg-card/40 backdrop-blur-xl shadow-sm supports-[backdrop-filter]:bg-white/30 transform-gpu will-change-transform">
+            <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
+              <button onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} className="flex items-center gap-3" aria-label="Luma home">
+                <span className="flex size-9 -rotate-3 items-center justify-center rounded-xl bg-primary text-primary-foreground"><BookOpen size={18}/></span>
+                <span className="text-xl font-bold tracking-tight">Luma</span>
+                <span className="hidden rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground sm:inline">Computer Engineering</span>
+              </button>
+              <nav className="hidden items-center gap-1 rounded-full bg-secondary p-1 md:flex" aria-label="Primary">
+                {role==='student'&&<><Nav active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')}>Home</Nav><Nav active={screen==='saved'} onClick={()=>setScreen('saved')}>Saved</Nav></>}
+                {role==='senior'&&<><Nav active={screen==='submissions'} onClick={()=>setScreen('submissions')}>My notes</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}
+                {role==='admin'&&<><Nav active={screen==='cms'} onClick={()=>setScreen('cms')}>Studio</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}
+                <Nav active={screen==='notifications'} onClick={()=>setScreen('notifications')}>Notices</Nav>
+              </nav>
+              <div className="flex items-center gap-2">
+                <button onClick={()=>setScreen('notifications')} className="icon-button relative" aria-label={`${unread} unread notifications`}>
+                  <Bell size={19}/>
+                  {unread>0&&<span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground">{unread}</span>}
+                </button>
+                <div className="relative">
+                  <button onClick={()=>setShowRole(!showRole)} className="flex size-10 items-center justify-center rounded-full bg-mist text-sm font-bold shadow-xs">
+                    {user?.avatar || (user?.name ? user.name.slice(0, 2).toUpperCase() : "ST")}
+                  </button>
+                  <AnimatePresence>
+                    {showRole&&<motion.div initial={{opacity:0, scale:0.95, y:5}} animate={{opacity:1, scale:1, y:0}} exit={{opacity:0, scale:0.95, y:5}} transition={{duration:0.15}} className="popover right-0 w-64 p-2 origin-top-right">
+                      <div className="border-b p-3">
+                        <b className="block truncate text-foreground">{user?.name || user?.email}</b>
+                        <p className="text-xs capitalize text-muted-foreground mt-0.5">{roleLabel}</p>
+                      </div>
+                      <button 
+                        onClick={() => { setScreen('settings'); setShowRole(false); }} 
+                        className="flex w-full items-center gap-2.5 rounded-xl p-3 text-sm font-medium hover:bg-secondary text-foreground transition-colors cursor-pointer"
+                      >
+                        <Settings size={17}/> Settings & Preferences
+                      </button>
+                      <button 
+                        onClick={handleLogout} 
+                        disabled={isLoggingOut}
+                        className="flex w-full items-center gap-2.5 rounded-xl p-3 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        {isLoggingOut ? (
+                          <div className="size-4 border-2 border-destructive/30 border-t-destructive animate-spin rounded-full" />
+                        ) : (
+                          <LogOut size={17}/>
+                        )}
+                        <span>{isLoggingOut ? 'Signing out...' : 'Sign out'}</span>
+                      </button>
+                    </motion.div>}
+                  </AnimatePresence>
                 </div>
-                <button 
-                  onClick={() => { setScreen('settings'); setShowRole(false); }} 
-                  className="flex w-full items-center gap-2.5 rounded-xl p-3 text-sm font-medium hover:bg-secondary text-foreground transition-colors"
-                >
-                  <Settings size={17}/> Settings & Preferences
-                </button>
-                <button 
-                  onClick={handleLogout} 
-                  className="flex w-full items-center gap-2.5 rounded-xl p-3 text-sm text-destructive hover:bg-destructive/10 transition-colors"
-                >
-                  <LogOut size={17}/> Sign out
-                </button>
-              </motion.div>}
+              </div>
+            </div>
+          </header>
+
+          <div className="mx-auto max-w-7xl px-5 py-8 pb-28 md:px-8 md:py-12">
+            <div className="mb-8 flex items-end justify-between">
+              <div>
+                <p className="section-kicker">{screen==='settings'?'Account & Preferences':role==='admin'?'Department CMS':role==='senior'?'Senior contributor':'Your study library'}</p>
+                <h1 className="text-balance text-4xl font-semibold tracking-[-.04em] md:text-5xl">{title}</h1>
+              </div>
+            </div>
+            <AnimatePresence mode="wait">
+              <motion.div key={screen} initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} transition={{duration:0.2}}>
+                {screen==='saved'&&<SavedNotes notes={notes} subjects={subjectsList} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader}/>} 
+                {screen==='semesters'&&<SemesterLibrary subjects={subjectsList} notes={notes} select={(n)=>{setSelectedSemester(n);setScreen('subject')}}/>}
+                {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')}/>} 
+                {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts}/>} 
+                {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])}/>} 
+                {screen==='cms'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),audience: note.subject || 'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
+                {screen==='settings'&&<SettingsPage user={user} theme={theme} onChangeTheme={changeTheme} onLogout={handleLogout} onNavigate={setScreen} isLoggingOut={isLoggingOut}/>}
+              </motion.div>
             </AnimatePresence>
           </div>
-        </div>
-      </div>
-    </header>
-
-    <div className="mx-auto max-w-7xl px-5 py-8 pb-28 md:px-8 md:py-12">
-      <div className="mb-8 flex items-end justify-between">
-        <div>
-          <p className="section-kicker">{screen==='settings'?'Account & Preferences':role==='admin'?'Department CMS':role==='senior'?'Senior contributor':'Your study library'}</p>
-          <h1 className="text-balance text-4xl font-semibold tracking-[-.04em] md:text-5xl">{title}</h1>
-        </div>
-      </div>
-      <AnimatePresence mode="wait">
-        <motion.div key={screen} initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} transition={{duration:0.2}}>
-          {screen==='saved'&&<SavedNotes notes={notes} subjects={subjectsList} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader}/>} 
-          {screen==='semesters'&&<SemesterLibrary subjects={subjectsList} notes={notes} select={(n)=>{setSelectedSemester(n);setScreen('subject')}}/>}
-          {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')}/>} 
-          {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts}/>} 
-          {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])}/>} 
-          {screen==='cms'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),audience: note.subject || 'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
-          {screen==='settings'&&<SettingsPage user={user} theme={theme} onChangeTheme={changeTheme} onLogout={handleLogout} onNavigate={setScreen}/>}
-        </motion.div>
-      </AnimatePresence>
-    </div>
-    <nav className="fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 gap-1 rounded-full border bg-card p-1.5 shadow-lg md:hidden">
-      <Mobile active={role==='admin'?screen==='cms':role==='senior'?screen==='submissions':(screen==='semesters'||screen==='subject')} onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} icon={<Home/>}>Home</Mobile>
-      {role==='student'?<Mobile active={screen==='saved'} onClick={()=>setScreen('saved')} icon={<Bookmark/>}>Saved</Mobile>:<Mobile active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')} icon={<BookOpen/>}>Library</Mobile>}
-      <Mobile active={screen==='notifications'} onClick={()=>setScreen('notifications')} icon={<Bell/>}>Notices</Mobile>
-    </nav>
-  </main>
+          <nav className="fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 gap-1 rounded-full border bg-card p-1.5 shadow-lg md:hidden">
+            <Mobile active={role==='admin'?screen==='cms':role==='senior'?screen==='submissions':(screen==='semesters'||screen==='subject')} onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} icon={<Home/>}>Home</Mobile>
+            {role==='student'?<Mobile active={screen==='saved'} onClick={()=>setScreen('saved')} icon={<Bookmark/>}>Saved</Mobile>:<Mobile active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')} icon={<BookOpen/>}>Library</Mobile>}
+            <Mobile active={screen==='notifications'} onClick={()=>setScreen('notifications')} icon={<Bell/>}>Notices</Mobile>
+          </nav>
+        </motion.main>
+      )}
+    </AnimatePresence>
+  )
 }
 
 function Nav({active,onClick,children,layoutId="nav-pill"}:{active:boolean,onClick:()=>void,children:React.ReactNode,layoutId?:string}){return <button onClick={onClick} className={`relative px-5 py-2 text-sm transition-colors rounded-full ${active?'text-foreground font-semibold':'text-muted-foreground hover:text-foreground'}`}>
@@ -282,13 +324,15 @@ function SettingsPage({
   theme,
   onChangeTheme,
   onLogout,
-  onNavigate
+  onNavigate,
+  isLoggingOut = false
 }: {
   user: PrismaUser | null
   theme: 'light' | 'dark' | 'system'
   onChangeTheme: (t: 'light' | 'dark' | 'system') => void
   onLogout: () => void
   onNavigate: (s: Screen) => void
+  isLoggingOut?: boolean
 }) {
   const role = (user?.role?.toLowerCase() as Role) || 'student'
   const roleLabel = role === 'admin' ? 'Administrator' : role === 'senior' ? 'Senior Contributor' : 'Student'
@@ -557,19 +601,139 @@ function SettingsPage({
         <button
           type="button"
           onClick={onLogout}
-          className="rounded-full border border-destructive/30 text-destructive hover:bg-destructive/10 px-5 py-2.5 text-sm font-semibold transition-colors flex items-center gap-2"
+          disabled={isLoggingOut}
+          className="rounded-full border border-destructive/40 text-destructive hover:bg-destructive/10 px-5 py-2.5 text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-xs active:scale-[0.98]"
         >
-          <LogOut size={16} /> Sign out
+          {isLoggingOut ? (
+            <div className="size-4 border-2 border-destructive/30 border-t-destructive animate-spin rounded-full" />
+          ) : (
+            <LogOut size={16} />
+          )}
+          <span>{isLoggingOut ? 'Signing out...' : 'Sign out'}</span>
         </button>
       </section>
     </div>
   )
 }
 
-function Login({onLogin}:{onLogin:(email:string, password:string)=>void}){const [identity,setIdentity]=useState('');const [password,setPassword]=useState('');const [error,setError]=useState('');return <main className="login-shell min-h-screen bg-background p-5 md:p-8"><div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl overflow-hidden rounded-[2rem] border bg-card shadow-sm md:grid-cols-[1.05fr_.95fr]">
-  <section className="relative hidden flex-col justify-between overflow-hidden bg-sage p-12 md:flex"><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground"><BookOpen size={20}/></span><b className="text-xl">Luma</b></div><div className="max-w-md"><span className="eyebrow"><ShieldCheck size={15}/> Made for your department</span><h1 className="mt-5 text-balance text-5xl font-semibold leading-[1.05] tracking-[-.05em]">Every useful note, in one calm place.</h1><p className="mt-5 text-lg leading-relaxed text-muted-foreground">Browse by semester, read beautifully, and never miss what matters.</p></div><div className="grid grid-cols-2 gap-3"><div className="rounded-3xl bg-background/60 p-5"><FileText/><b className="mt-8 block">Shared by seniors</b><p className="text-sm text-muted-foreground">Reviewed before publishing.</p></div><div className="rounded-3xl bg-background/60 p-5"><Bell/><b className="mt-8 block">Department updates</b><p className="text-sm text-muted-foreground">Clear, timely announcements.</p></div></div></section>
-  <section className="flex flex-col justify-center p-7 md:p-12"><div className="mb-10 flex items-center gap-3 md:hidden"><span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground"><BookOpen size={20}/></span><b className="text-xl">Luma</b></div><p className="section-kicker">Welcome back</p><h2 className="text-4xl font-semibold tracking-[-.04em]">Sign in to Luma</h2><p className="mt-2 text-muted-foreground">Your department's notes and notices await.</p><form onSubmit={e=>{e.preventDefault();setError('');onLogin(identity, password)}} className="mt-8 flex flex-col gap-5"><label className="field-label">Email address<input required value={identity} onChange={e=>setIdentity(e.target.value)} type="email" className="field-input" placeholder="student@uet.edu"/></label><label className="field-label">Password<input required value={password} onChange={e=>setPassword(e.target.value)} type="password" className="field-input" placeholder="••••••••"/></label>{error&&<p className="text-sm text-destructive">{error}</p>}<button className="rounded-full bg-primary px-5 py-3.5 font-semibold text-primary-foreground">Continue</button></form><p className="mt-7 text-center text-sm text-muted-foreground">New student? Your department will issue your account.</p></section>
-  </div></main>}
+function Login({ onLogin }: { onLogin: (email: string, password?: string) => Promise<string | void> | void }) {
+  const [identity, setIdentity] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      const err = await onLogin(identity, password)
+      if (err) setError(err)
+    } catch (e: any) {
+      setError(e?.message || 'Login failed. Please check your credentials.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <main className="login-shell min-h-screen bg-background p-5 md:p-8">
+      <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl overflow-hidden rounded-[2rem] border bg-card shadow-sm md:grid-cols-[1.05fr_.95fr]">
+        <section className="relative hidden flex-col justify-between overflow-hidden bg-sage p-12 md:flex">
+          <div className="flex items-center gap-3">
+            <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <BookOpen size={20}/>
+            </span>
+            <b className="text-xl">Luma</b>
+          </div>
+          <div className="max-w-md">
+            <span className="eyebrow"><ShieldCheck size={15}/> Made for your department</span>
+            <h1 className="mt-5 text-balance text-5xl font-semibold leading-[1.05] tracking-[-.05em]">
+              Every useful note, in one calm place.
+            </h1>
+            <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
+              Browse by semester, read beautifully, and never miss what matters.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-3xl bg-background/60 p-5">
+              <FileText/>
+              <b className="mt-8 block">Shared by seniors</b>
+              <p className="text-sm text-muted-foreground">Reviewed before publishing.</p>
+            </div>
+            <div className="rounded-3xl bg-background/60 p-5">
+              <Bell/>
+              <b className="mt-8 block">Department updates</b>
+              <p className="text-sm text-muted-foreground">Clear, timely announcements.</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="flex flex-col justify-center p-7 md:p-12">
+          <div className="mb-10 flex items-center gap-3 md:hidden">
+            <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <BookOpen size={20}/>
+            </span>
+            <b className="text-xl">Luma</b>
+          </div>
+          <p className="section-kicker">Welcome back</p>
+          <h2 className="text-4xl font-semibold tracking-[-.04em]">Sign in to Luma</h2>
+          <p className="mt-2 text-muted-foreground">Your department's notes and notices await.</p>
+
+          <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
+            <label className="field-label">
+              Email address
+              <input 
+                required 
+                value={identity} 
+                onChange={e => setIdentity(e.target.value)} 
+                type="email" 
+                className="field-input" 
+                placeholder="student@uet.edu"
+                disabled={loading}
+              />
+            </label>
+            <label className="field-label">
+              Password
+              <input 
+                required 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+                type="password" 
+                className="field-input" 
+                placeholder="••••••••"
+                disabled={loading}
+              />
+            </label>
+
+            {error && (
+              <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive font-medium">
+                {error}
+              </div>
+            )}
+
+            <button 
+              disabled={loading}
+              className="rounded-full bg-primary px-5 py-3.5 font-semibold text-primary-foreground flex items-center justify-center gap-2 hover:opacity-95 active:scale-[0.99] transition-all disabled:opacity-70 shadow-sm cursor-pointer"
+            >
+              {loading ? (
+                <>
+                  <div className="size-4 border-2 border-primary-foreground/30 border-t-primary-foreground animate-spin rounded-full" />
+                  <span>Signing in...</span>
+                </>
+              ) : (
+                <span>Continue</span>
+              )}
+            </button>
+          </form>
+          <p className="mt-7 text-center text-sm text-muted-foreground">
+            New student? Your department will issue your account.
+          </p>
+        </section>
+      </div>
+    </main>
+  )
+}
 
 function SavedNotes({
   notes,
