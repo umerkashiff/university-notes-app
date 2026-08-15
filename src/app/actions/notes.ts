@@ -113,6 +113,72 @@ export async function publishNote(noteId: string) {
   }
 }
 
+export async function updateNote(data: {
+  id: string
+  title?: string
+  subjectCode?: string
+  semester?: number
+  description?: string
+  status?: string
+}) {
+  const user = await getCurrentUser()
+  if (!user || user.role !== 'ADMIN') {
+    return { error: 'Unauthorized. Only admins can edit note metadata.' }
+  }
+
+  try {
+    const existing = await prisma.note.findUnique({ 
+      where: { id: data.id }, 
+      include: { subject: true, author: true } 
+    })
+    if (!existing) return { error: 'Note not found.' }
+
+    let subjectId = existing.subjectId
+    if (data.subjectCode && data.subjectCode !== existing.subject.code) {
+      let targetSub = await prisma.subject.findUnique({ where: { code: data.subjectCode } })
+      if (!targetSub) {
+        targetSub = await prisma.subject.create({
+          data: {
+            name: data.subjectCode,
+            code: data.subjectCode,
+            semester: data.semester || 1
+          }
+        })
+      }
+      subjectId = targetSub.id
+    }
+
+    const updated = await prisma.note.update({
+      where: { id: data.id },
+      data: {
+        title: data.title !== undefined ? data.title : existing.title,
+        description: data.description !== undefined ? data.description : existing.description,
+        subjectId,
+        status: data.status !== undefined ? data.status : existing.status
+      },
+      include: {
+        subject: true,
+        author: true
+      }
+    })
+
+    // If approved and newly published, announce it under the senior's notes
+    if (data.status === 'PUBLISHED' && existing.status !== 'PUBLISHED') {
+      await prisma.announcement.create({
+        data: {
+          title: `${updated.subject.name} notes published`,
+          body: `${updated.title} is now available.`,
+          audience: updated.subject.name || 'ALL'
+        }
+      })
+    }
+
+    return { success: true, note: updated }
+  } catch (err) {
+    return { error: (err as Error).message }
+  }
+}
+
 export async function createSubject(data: {
   name: string
   code: string

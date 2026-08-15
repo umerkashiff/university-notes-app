@@ -4,12 +4,12 @@ import dynamic from 'next/dynamic'
 import { useLenis } from 'lenis/react'
 
 import { useMemo, useState, useEffect } from 'react'
-import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDown, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info } from '@phosphor-icons/react'
+import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDown, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info, PencilSimple } from '@phosphor-icons/react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { login, logout } from '@/app/actions/auth'
 import type { User as PrismaUser } from '@prisma/client'
 import { createClient } from '@/utils/supabase/client'
-import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage, createAnnouncement, deleteNote } from '@/app/actions/notes'
+import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage, createAnnouncement, deleteNote, updateNote } from '@/app/actions/notes'
 import { getPresignedUrl } from '@/app/actions/upload'
 import React from 'react'
 
@@ -1151,6 +1151,289 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
   )
 }
 
+function ReviewQueueCard({
+  candidate,
+  subjects,
+  onPublish,
+  onDelete,
+  onUpdate
+}: {
+  candidate: Note
+  subjects: SubjectItem[]
+  onPublish: (n: Note) => void
+  onDelete: (n: Note) => void
+  onUpdate: (updated: Note) => void
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [title, setTitle] = useState(candidate.title);
+  const [description, setDescription] = useState(candidate.description || '');
+  
+  const initialSub = subjects.find(s => s.code === candidate.code || s.name === candidate.subject);
+  const [selectedSem, setSelectedSem] = useState<number>(initialSub?.semester || 1);
+  const semSubjects = useMemo(() => subjects.filter(s => s.semester === selectedSem), [subjects, selectedSem]);
+  const [selectedCode, setSelectedCode] = useState<string>(candidate.code || (semSubjects[0]?.code || ''));
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleSave = async (publishAfter: boolean) => {
+    setLoading(true);
+    const res = await updateNote({
+      id: String(candidate.id),
+      title: title.trim() || candidate.title,
+      subjectCode: selectedCode,
+      semester: selectedSem,
+      description: description.trim(),
+      status: publishAfter ? 'PUBLISHED' : 'PENDING'
+    });
+
+    if (res.error) {
+      alert(res.error);
+    } else if (res.note) {
+      const updatedSubject = subjects.find(s => s.code === selectedCode);
+      const updatedNote: Note = {
+        ...candidate,
+        title: res.note.title,
+        subject: updatedSubject?.name || res.note.subject?.name || candidate.subject,
+        code: selectedCode,
+        description: res.note.description || undefined,
+        status: res.note.status
+      };
+
+      onUpdate(updatedNote);
+      if (publishAfter) {
+        onPublish(updatedNote);
+      }
+      setIsEditing(false);
+    }
+    setLoading(false);
+  };
+
+  const semNumber = subjects.find(s => s.code === candidate.code || s.name === candidate.subject)?.semester || selectedSem;
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
+      <section className="rounded-3xl border bg-card p-6 shadow-sm">
+        {isEditing ? (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-primary">Admin Quick Edit</span>
+                <h3 className="text-lg font-semibold text-foreground">Edit submission details</h3>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsEditing(false)} 
+                className="text-xs text-muted-foreground hover:text-foreground font-semibold"
+              >
+                Cancel
+              </button>
+            </div>
+
+            <label className="field-label">
+              Note Title
+              <input
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                className="field-input"
+                placeholder="Note title"
+              />
+            </label>
+
+            {/* Target Semester Pills with visible scrollbar */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-semibold text-foreground">Target Semester</span>
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-2 modal-scroll touch-pan-x">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => {
+                  const isActive = selectedSem === sem;
+                  return (
+                    <button
+                      key={sem}
+                      type="button"
+                      onClick={() => {
+                        setSelectedSem(sem);
+                        const subs = subjects.filter(s => s.semester === sem);
+                        if (subs.length > 0) setSelectedCode(subs[0].code);
+                      }}
+                      className={`relative px-4 py-1.5 text-xs sm:text-sm font-semibold rounded-full whitespace-nowrap transition-colors select-none shrink-0 ${
+                        isActive
+                          ? 'bg-primary text-primary-foreground shadow-xs'
+                          : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+                      }`}
+                    >
+                      Semester {sem}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Course Dropdown */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-semibold text-foreground">Course / Subject</span>
+              {semSubjects.length === 0 ? (
+                <div className="rounded-2xl border border-dashed p-3 text-center text-xs text-muted-foreground bg-secondary/30">
+                  No subjects in Semester {selectedSem}. Add in Curriculum tab first.
+                </div>
+              ) : (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                    className="flex h-11 w-full items-center justify-between rounded-2xl border bg-background px-4 text-sm font-medium focus:border-foreground transition-colors text-left"
+                  >
+                    <span className="truncate">
+                      {subjects.find(s => s.code === selectedCode)
+                        ? `${subjects.find(s => s.code === selectedCode)?.name} (${selectedCode})`
+                        : 'Select a course'}
+                    </span>
+                    <CaretDown size={16} weight="bold" className={`text-muted-foreground transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  <AnimatePresence>
+                    {dropdownOpen && (
+                      <>
+                        <div className="fixed inset-0 z-20" onClick={() => setDropdownOpen(false)} />
+                        <motion.div
+                          initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                          className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 max-h-48 overflow-y-auto flex flex-col gap-1 rounded-2xl border bg-card p-2 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                        >
+                          {semSubjects.map(s => (
+                            <button
+                              key={s.code}
+                              type="button"
+                              onClick={() => { setSelectedCode(s.code); setDropdownOpen(false); }}
+                              className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2 text-left text-sm transition-colors ${
+                                selectedCode === s.code ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                              }`}
+                            >
+                              <span className="truncate">{s.name} ({s.code})</span>
+                              {selectedCode === s.code && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                            </button>
+                          ))}
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+            </div>
+
+            <label className="field-label">
+              Contributor Advice & Tips
+              <textarea
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                className="field-input min-h-24 py-2.5 resize-none"
+                placeholder="Senior advice..."
+              />
+            </label>
+
+            <div className="rounded-2xl bg-secondary/70 p-3 text-xs text-muted-foreground flex items-center justify-between">
+              <span>Author attribution: <b className="text-foreground">{candidate.author}</b></span>
+              <span className="text-[10px] bg-background px-2 py-0.5 rounded-md border font-semibold">Preserved</span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 mt-1">
+              <button
+                disabled={loading}
+                type="button"
+                onClick={() => handleSave(true)}
+                className="flex-1 rounded-full bg-primary py-2.5 px-4 font-semibold text-primary-foreground text-sm hover:opacity-95 transition-opacity shadow-sm"
+              >
+                {loading ? 'Saving...' : 'Save & publish now'}
+              </button>
+              <button
+                disabled={loading}
+                type="button"
+                onClick={() => handleSave(false)}
+                className="rounded-full border border-border py-2.5 px-4 text-sm font-semibold hover:bg-secondary transition-colors"
+              >
+                Save draft changes
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+              <span className="flex size-12 items-center justify-center rounded-2xl bg-blush shrink-0"><Inbox/></span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="rounded-full bg-sand px-3 py-1 text-xs font-semibold text-foreground">Awaiting review</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(true)}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline bg-primary/10 px-3 py-1 rounded-full"
+                  >
+                    <PencilSimple size={14} />
+                    Edit title & location
+                  </button>
+                </div>
+                <h2 className="mt-3 text-2xl font-semibold">{candidate.title}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {candidate.subject} ({candidate.code}) · Semester {semNumber} · {candidate.pages} pages · {candidate.size}
+                </p>
+                
+                {candidate.description && (
+                  <div className="mt-4 rounded-2xl bg-sage/30 border border-primary/20 p-3.5 text-sm">
+                    <b className="flex items-center gap-1.5 text-foreground"><GraduationCap size={16} className="text-primary"/> Contributor Advice:</b>
+                    <p className="mt-1 text-muted-foreground leading-relaxed">{candidate.description}</p>
+                  </div>
+                )}
+
+                <p className="mt-5 leading-relaxed text-muted-foreground">
+                  <a href={candidate.fileUrl} target="_blank" className="inline-flex items-center gap-1 text-primary underline underline-offset-2 font-medium">
+                    Open uploaded PDF ↗
+                  </a>
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 rounded-2xl bg-secondary p-4 flex items-center justify-between">
+              <div>
+                <b>Submitted by {candidate.author}</b>
+                <p className="mt-0.5 text-xs text-muted-foreground">Senior contributor · {candidate.date}</p>
+              </div>
+              <span className="text-xs bg-background/80 px-2.5 py-1 rounded-full border text-muted-foreground">Attributed to contributor</span>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <aside className="rounded-3xl bg-sage p-6 h-fit">
+        <h3 className="text-xl font-semibold">Ready to publish?</h3>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          Check or edit the title, semester, and course before making it visible to all students.
+        </p>
+        <div className="mt-8 flex flex-col gap-2">
+          <button 
+            disabled={loading} 
+            onClick={() => onPublish(candidate)} 
+            className="rounded-full bg-primary px-5 py-3 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity"
+          >
+            Approve & publish
+          </button>
+          <button 
+            type="button" 
+            onClick={() => setIsEditing(!isEditing)} 
+            className="rounded-full border border-foreground/20 px-5 py-3 text-sm font-semibold hover:bg-background/40 transition-colors"
+          >
+            {isEditing ? 'Close editor' : 'Edit details before publishing'}
+          </button>
+          <button 
+            disabled={loading} 
+            onClick={() => onDelete(candidate)} 
+            className="px-5 py-2 text-sm text-destructive hover:underline text-center"
+          >
+            Reject & delete
+          </button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
 function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:{notes:Note[],setNotes:React.Dispatch<React.SetStateAction<Note[]>>,subjects:SubjectItem[],setSubjects:(s:SubjectItem[])=>void,publish:(n:Note)=>void,addAnnouncement:(a:any)=>void}){
   const [tab,setTab]=useState<'queue'|'content'|'curriculum'|'notices'>('queue');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1321,16 +1604,18 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
       {/* Review queue */}
       {tab==='queue'&&<div className="flex flex-col gap-5">
         {pending.length === 0 && <p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed bg-card/50">No notes currently pending review. Submissions from seniors will appear here.</p>}
-        {pending.map(candidate => <div key={candidate.id} className="grid gap-5 lg:grid-cols-[1fr_340px]"><section className="rounded-3xl border bg-card p-6"><div className="flex flex-col sm:flex-row sm:items-start gap-4"><span className="flex size-12 items-center justify-center rounded-2xl bg-blush shrink-0"><Inbox/></span><div className="flex-1 min-w-0"><span className="rounded-full bg-sand px-3 py-1 text-xs font-semibold text-foreground">Awaiting review</span><h2 className="mt-3 text-2xl font-semibold">{candidate.title}</h2><p className="mt-1 text-sm text-muted-foreground">{candidate.subject} ({candidate.code}) · {candidate.pages} pages · {candidate.size}</p>
-        
-        {candidate.description && (
-          <div className="mt-4 rounded-2xl bg-sage/30 border border-primary/20 p-3.5 text-sm">
-            <b className="flex items-center gap-1.5 text-foreground"><GraduationCap size={16} className="text-primary"/> Contributor Advice:</b>
-            <p className="mt-1 text-muted-foreground leading-relaxed">{candidate.description}</p>
-          </div>
-        )}
-
-        <p className="mt-5 leading-relaxed text-muted-foreground"><a href={candidate.fileUrl} target="_blank" className="inline-flex items-center gap-1 text-primary underline underline-offset-2 font-medium">Open uploaded PDF ↗</a></p></div></div><div className="mt-6 rounded-2xl bg-secondary p-4"><b>Submitted by {candidate.author}</b><p className="mt-0.5 text-xs text-muted-foreground">Senior contributor · {candidate.date}</p></div></section><aside className="rounded-3xl bg-sage p-6"><h3 className="text-xl font-semibold">Ready to publish?</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Check the title, subject and document quality before making it visible to all students.</p>{doneId === candidate.id?<div className="mt-8 rounded-2xl bg-background/60 p-5 text-center"><Check className="mx-auto"/><b className="mt-3 block">Published</b></div>:<div className="mt-8 flex flex-col gap-2"><button disabled={loading} onClick={()=>handlePublish(candidate)} className="rounded-full bg-primary px-5 py-3 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity">Approve & publish</button><button className="rounded-full border border-foreground/20 px-5 py-3 text-sm font-semibold hover:bg-background/40">Request changes</button><button disabled={loading} onClick={()=>handleDeleteNote(candidate)} className="px-5 py-2 text-sm text-destructive hover:underline">Reject & delete</button></div>}</aside></div>)}
+        {pending.map(candidate => (
+          <ReviewQueueCard
+            key={candidate.id}
+            candidate={candidate}
+            subjects={subjects}
+            onPublish={handlePublish}
+            onDelete={handleDeleteNote}
+            onUpdate={(updated) => {
+              setNotes(prev => prev.map(n => n.id === updated.id ? updated : n));
+            }}
+          />
+        ))}
       </div>}
 
       {/* Published content */}
