@@ -408,11 +408,20 @@ export async function createAnnouncement(data: {
   }
 
   try {
+    let cleanImageUrl = data.imageUrl || null
+    if (cleanImageUrl && (cleanImageUrl.includes('cloudflarestorage.com') || cleanImageUrl.includes('uet-notes-bucket'))) {
+      const publicBase = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || 'https://pub-4c28b39a02ca4952a6c31f0baf9d62e3.r2.dev'
+      const key = cleanImageUrl.split('/announcements/')[1]
+      if (key) {
+        cleanImageUrl = `${publicBase}/announcements/${key}`
+      }
+    }
+
     const announcement = await prisma.announcement.create({
       data: {
         title: data.title,
         body: data.body,
-        imageUrl: data.imageUrl || null,
+        imageUrl: cleanImageUrl,
         audience: data.audience || 'ALL',
       }
     })
@@ -439,9 +448,9 @@ export async function createAnnouncement(data: {
           title: data.title,
           body: data.body,
           audienceLabel: data.audience || 'All Students',
-          hasImage: !!data.imageUrl
+          hasImage: !!cleanImageUrl
         })
-        sendEmail(targetedUsers.map(u => u.email), emailSubj, html).catch(() => {})
+        await sendEmail(targetedUsers.map(u => u.email), emailSubj, html)
       }
     } catch (broadcastErr) {
       console.warn('Failed to broadcast announcement email:', broadcastErr)

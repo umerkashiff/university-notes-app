@@ -178,7 +178,8 @@ export function StudyCompanion({
       title: cleanTitle,
       body: cleanBody,
       time: formatRelativeDate(a.createdAt),
-      unread: a.unread ?? true
+      unread: a.unread ?? true,
+      imageUrl: a.imageUrl || undefined
     }
   }
 
@@ -4660,7 +4661,8 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
         return
       }
 
-      uploadedImageUrl = presignRes.url.split('?')[0]
+      const publicBase = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || 'https://pub-4c28b39a02ca4952a6c31f0baf9d62e3.r2.dev'
+      uploadedImageUrl = `${publicBase}/${uniqueKey}`
     }
 
     const res = await createAnnouncement({
