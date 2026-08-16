@@ -1843,12 +1843,12 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
                     <span className="text-sm font-semibold text-foreground">Target semester</span>
                     <div className="flex items-center gap-1.5 overflow-x-auto pb-2 modal-scroll touch-pan-x">
                       {[1,2,3,4,5,6,7,8].map(n=>(
-                        <button key={n} type="button" onClick={()=>setSelectedSemester(n)} className={`flex shrink-0 h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-all ${selectedSemester===n?'bg-primary text-primary-foreground shadow-sm':'bg-secondary text-muted-foreground hover:bg-secondary/80'}`}>{n}</button>
+                        <button key={n} type="button" onClick={()=>handleSemesterChange(n)} className={`flex shrink-0 h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-all ${selectedSemester===n?'bg-primary text-primary-foreground shadow-sm':'bg-secondary text-muted-foreground hover:bg-secondary/80'}`}>{n}</button>
                       ))}
                     </div>
                   </div>
-                  {/* Subject Dropdown */}
-                  {semesterSubjects.length>0&&(
+                  {/* Subject Dropdown or Empty Warning */}
+                  {semesterSubjects.length > 0 ? (
                     <div className="flex flex-col gap-2">
                       <span className="text-sm font-semibold text-foreground">Subject</span>
                       <div className="relative">
@@ -1876,6 +1876,16 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
                             )}
                           </AnimatePresence>
                         )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2.5">
+                      <WarningCircle size={18} className="shrink-0 text-amber-500 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <p className="font-semibold text-foreground">No courses available for Semester {selectedSemester}</p>
+                        <p className="text-muted-foreground leading-relaxed">
+                          Department administrators have not added courses to Semester {selectedSemester} yet. You cannot submit notes for this semester until courses are configured in the Curriculum manager.
+                        </p>
                       </div>
                     </div>
                   )}
@@ -1918,8 +1928,13 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
                   )}
                   {/* Submit button */}
                   {!uploading?(
-                    <div className="flex flex-col gap-3">
-                      <button type="submit" disabled={!selectedFile} className="rounded-full bg-primary py-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed">Submit note for review</button>
+                    <div className="flex flex-col gap-2">
+                      <button type="submit" disabled={!selectedFile || semesterSubjects.length === 0} className="rounded-full bg-primary py-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed">Submit note for review</button>
+                      {selectedFile && semesterSubjects.length === 0 && (
+                        <p className="text-center text-xs text-amber-600 dark:text-amber-400">
+                          Upload disabled: Please select a semester with active courses.
+                        </p>
+                      )}
                     </div>
                   ):(
                     <button className="rounded-full bg-primary p-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity mt-1">Submit note for review</button>
