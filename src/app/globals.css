@@ -215,57 +215,74 @@
 @keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
-/* ─── iOS Safari / Touch Device Rendering Fixes ────────────────────────────
-   Root cause of the glitch: Safari WebKit has a "layer invalidation cascade" bug.
-   When an element with backdrop-filter: blur() is in the same compositing layer
-   as a nearby JS-animated element (transform/opacity), Safari drops and rebuilds
-   the entire compositor tree on every animation frame — causing the 1-frame flash.
+/* ─── iOS Safari Definitive Fix ─────────────────────────────────────────────
+   TWO root causes confirmed:
 
-   The fix (without removing ANY animations):
-   1. `will-change: backdrop-filter` on blur elements → Safari pre-creates a
-      dedicated GPU tile for the blur, isolated from the animation layer.
-   2. `isolation: isolate` creates a new stacking context so the blur element
-      never shares a compositor layer with its animated siblings.
-   3. `contain: layout style` on animated elements prevents style recalc from
-      propagating up and triggering the blur re-composite.
+   CAUSE 1 — "Full-page repaint cascade":
+   Any `position: sticky` or `position: fixed` element with an alpha background
+   (bg-background/80, bg-card/95) OR backdrop-filter: blur() forces Safari to do
+   a full-page blended repaint on EVERY animation frame — causing ALL animations
+   throughout the entire app to jitter simultaneously. Fix: make these elements
+   fully opaque and remove backdrop-filter on touch devices.
 
-   Desktop is 100% unaffected. All animations (scale, y, opacity) work identically.
-──────────────────────────────────────────────────────────────────────────── */
+   CAUSE 2 — "Post-animation GPU layer de-promotion flash":
+   When Framer Motion finishes an animation (y:0, scale:1 = identity values), it
+   removes its inline transform style. Safari then de-promotes the compositor GPU
+   layer back to software rendering — causing a 1-frame blank flash after each
+   animation completes. Fix: CSS `will-change: transform` via class (CSS is not
+   overridden by FM's inline style cleanup) keeps the GPU layer permanently alive.
+
+   DESKTOP: 100% unaffected. Frosted glass, animations, all identical.
+   MOBILE: Solid backgrounds instead of frosted glass. All animations preserved.
+────────────────────────────────────────────────────────────────────────────── */
 @media (hover: none) and (pointer: coarse) {
-  /* Pre-promote the sticky header blur to its own GPU layer.
-     This isolates it from any animated children so it never re-blurs on frame. */
+
+  /* ── FIX 1: Remove backdrop-filter from ALL elements ──────────────────────
+     This single rule eliminates the full-page repaint cascade.
+     Every Tailwind backdrop-blur-* class is caught by the [class*] selector. */
+  [class*="backdrop-blur"],
+  [style*="backdrop-filter"],
+  [style*="-webkit-backdrop-filter"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  /* Make the sticky header fully opaque (alpha bg on sticky = repaint on every frame) */
   header.sticky {
-    will-change: backdrop-filter;
-    isolation: isolate;
-    contain: layout style;
+    background-color: var(--background) !important;
+    border-bottom-color: var(--border) !important;
+  }
+  .dark header.sticky {
+    background-color: var(--card) !important;
   }
 
-  /* Same treatment for the fixed mobile nav bar blur. */
-  nav[style*="translate3d"] {
-    will-change: backdrop-filter;
-    isolation: isolate;
+  /* Make the fixed mobile nav fully opaque */
+  nav.mobile-nav-pill {
+    background-color: var(--card) !important;
   }
 
-  /* Isolate all dialog/modal backdrops so their blur layer is independent
-     of the motion.div panels animating inside them. */
-  .dialog-backdrop,
-  [class*="backdrop-blur"] {
-    will-change: backdrop-filter;
-    isolation: isolate;
+  /* Make modal backdrops slightly more opaque to compensate for no blur */
+  .dialog-backdrop {
+    background-color: rgba(0, 0, 0, 0.45) !important;
   }
 
-  /* Tell Safari to pre-allocate GPU layers for animated panels/modals BEFORE
-     animation begins — prevents mid-animation layer allocation (the flash). */
-  .dialog-panel {
-    will-change: transform, opacity;
-    contain: layout style paint;
+  /* ── FIX 2: Prevent post-animation GPU layer de-promotion ─────────────────
+     CSS will-change cannot be overridden by Framer Motion's inline style cleanup.
+     When FM finishes an animation and removes its inline transform, this CSS rule
+     keeps the element permanently on the GPU compositor — no de-promotion flash.
+     Applied only to elements that animate: screen panels, dropdowns, modals. */
+  .fm-gpu {
+    will-change: transform;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
   }
 
-  /* Prevent scrollbar-gutter layout shifts which cause width recalc on modal open. */
+  /* Prevent width recalc jank when drawers/modals open on mobile */
   html {
-    scrollbar-gutter: auto;
     overflow-x: hidden;
+    scrollbar-gutter: auto;
   }
+
 }
 
 @media (prefers-reduced-motion: reduce) {

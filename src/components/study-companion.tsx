@@ -246,12 +246,6 @@ export function StudyCompanion({
     : greeting
 
 
-  // willChange pre-promotes GPU layers BEFORE animation starts.
-  // This stops Safari from tearing down and rebuilding compositor layers mid-animation,
-  // which is what caused the 1-frame white/blank flash on iOS.
-  // All animations (scale, opacity, y) are fully preserved — desktop and mobile identical.
-  const screenWillChange: React.CSSProperties = { willChange: 'transform, opacity' }
-
   return (
     <AnimatePresence mode="wait">
       {!user ? (
@@ -262,8 +256,7 @@ export function StudyCompanion({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.02 }}
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-            style={screenWillChange}
-            className="w-full min-h-screen"
+            className="w-full min-h-screen fm-gpu"
           >
             <SignUp onRegister={handleRegister} onSwitchToLogin={() => setAuthView('login')} />
           </motion.div>
@@ -274,8 +267,7 @@ export function StudyCompanion({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.02 }}
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-            style={screenWillChange}
-            className="w-full min-h-screen"
+            className="w-full min-h-screen fm-gpu"
           >
             <Login onLogin={signIn} onSwitchToSignUp={() => setAuthView('signup')} />
           </motion.div>
@@ -287,8 +279,7 @@ export function StudyCompanion({
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 1.02 }}
           transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-          style={screenWillChange}
-          className="w-full min-h-screen"
+          className="w-full min-h-screen fm-gpu"
         >
           <PendingScreen user={user} onLogout={handleLogout} />
         </motion.div>
@@ -299,8 +290,7 @@ export function StudyCompanion({
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.99 }}
           transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-          style={screenWillChange}
-          className="w-full min-h-screen"
+          className="w-full min-h-screen fm-gpu"
         >
           <PdfReader note={reader} onBack={() => setReader(null)} />
         </motion.div>
@@ -311,7 +301,6 @@ export function StudyCompanion({
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.99 }}
           transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-          style={screenWillChange}
           className="min-h-screen bg-background text-foreground"
         >
           <header className="sticky top-0 z-40 border-b border-border/40 bg-background/80 dark:bg-card/80 backdrop-blur-md shadow-xs">
@@ -352,8 +341,7 @@ export function StudyCompanion({
                           animate={{opacity:1, scale:1, y:0}} 
                           exit={{opacity:0, scale:0.95, y:4}} 
                           transition={{duration:0.15}} 
-                          style={{ willChange: 'transform, opacity' }}
-                          className="popover right-0 w-60 overflow-hidden shadow-xl rounded-2xl origin-top-right border bg-card p-0 z-40"
+                          className="popover right-0 w-60 overflow-hidden shadow-xl rounded-2xl origin-top-right border bg-card p-0 z-40 fm-gpu"
                         >
                           <div className="px-4 py-3 border-b bg-secondary/30">
                             <b className="block truncate text-sm font-bold text-foreground">{user?.name || user?.email}</b>
@@ -397,7 +385,7 @@ export function StudyCompanion({
               </div>
             </div>
             <AnimatePresence initial={false}>
-              <motion.div key={screen} initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-6}} transition={{duration:0.18, ease: "easeOut"}} className="w-full transform-gpu">
+              <motion.div key={screen} initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-6}} transition={{duration:0.18, ease: "easeOut"}} className="w-full transform-gpu fm-gpu">
                 {screen==='saved'&&<SavedNotes notes={notes} subjects={subjectsList} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader}/>} 
                 {screen==='semesters'&&<SemesterLibrary user={user} role={role} subjects={subjectsList} notes={notes} select={(n)=>{setSelectedSemester(n);setScreen('subject')}}/>} 
                 {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')}/>} 
@@ -409,7 +397,7 @@ export function StudyCompanion({
             </AnimatePresence>
           </div>
           <nav 
-            className="fixed left-1/2 z-30 flex gap-1 rounded-full border border-border/80 bg-card/95 dark:bg-card/95 backdrop-blur-xl p-1.5 shadow-xl md:hidden"
+            className="fixed left-1/2 z-30 flex gap-1 rounded-full border border-border/80 bg-card/95 dark:bg-card/95 backdrop-blur-xl p-1.5 shadow-xl md:hidden mobile-nav-pill"
             style={{
               bottom: 'max(1.25rem, calc(env(safe-area-inset-bottom, 0px) + 0.85rem))',
               transform: 'translate3d(-50%, 0, 0)',
@@ -647,8 +635,7 @@ function SettingsPage({
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -6, scale: 0.98 }}
                         transition={{ duration: 0.12 }}
-                        style={{ willChange: 'transform, opacity' }}
-                        className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
+                        className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl fm-gpu"
                       >
                         <div 
                           data-lenis-prevent="true"
@@ -1724,7 +1711,7 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
       {mounted && createPortal(
           <AnimatePresence>
             {open&&<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm overscroll-none touch-none" data-lenis-prevent role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={() => setSubjectDropdownOpen(false)}>
-              <motion.form initial={{scale:0.95, y:15, opacity: 0}} animate={{scale:1, y:0, opacity: 1}} exit={{scale:0.95, y:15, opacity: 0}} transition={{type:"spring", bounce:0.15, duration:0.35}} onSubmit={handleUpload} onClick={(e) => e.stopPropagation()} className="relative flex flex-col w-full max-w-lg rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden" data-lenis-prevent>
+              <motion.form initial={{scale:0.95, y:15, opacity: 0}} animate={{scale:1, y:0, opacity: 1}} exit={{scale:0.95, y:15, opacity: 0}} transition={{type:"spring", bounce:0.15, duration:0.35}} onSubmit={handleUpload} onClick={(e) => e.stopPropagation()} className="relative flex flex-col w-full max-w-lg rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden fm-gpu" data-lenis-prevent>
                 
                 {/* Frosted Sticky Header */}
                 <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-5 bg-card/90 backdrop-blur-xl border-b border-border/40">
@@ -1830,8 +1817,7 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
                                     animate={{ opacity: 1, y: 0, scale: 1 }}
                                     exit={{ opacity: 0, y: -6, scale: 0.98 }}
                                     transition={{ duration: 0.12 }}
-                                    style={{ willChange: 'transform, opacity' }}
-                                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
+                                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl fm-gpu"
                                   >
                                     <div 
                                       data-lenis-prevent="true"
@@ -2117,8 +2103,7 @@ function ReviewQueueCard({
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: -6, scale: 0.98 }}
                           transition={{ duration: 0.12 }}
-                          style={{ willChange: 'transform, opacity' }}
-                          className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
+                          className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl fm-gpu"
                         >
                           <div 
                             data-lenis-prevent="true"
@@ -2523,7 +2508,7 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-md rounded-3xl bg-card border p-6 shadow-2xl space-y-4"
+              className="w-full max-w-md rounded-3xl bg-card border p-6 shadow-2xl space-y-4 fm-gpu"
             >
               <h3 className="text-lg font-bold text-foreground">Reject Note Submission</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
@@ -3290,8 +3275,7 @@ function AdminUsersManager() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ duration: 0.18 }}
-              style={{ willChange: 'transform, opacity' }}
-              className="w-full max-w-md rounded-3xl bg-card border p-6 shadow-2xl space-y-4"
+              className="w-full max-w-md rounded-3xl bg-card border p-6 shadow-2xl space-y-4 fm-gpu"
             >
               <h3 className="text-lg font-bold text-foreground">Reject Application</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
@@ -3634,7 +3618,7 @@ function AdminCalendarManager() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-3xl rounded-3xl bg-card border p-6 sm:p-8 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+              className="w-full max-w-3xl rounded-3xl bg-card border p-6 sm:p-8 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden fm-gpu"
             >
               <div className="flex items-center justify-between border-b pb-4">
                 <div>
@@ -3786,7 +3770,7 @@ function AdminCalendarManager() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onSubmit={handleCreateTerm}
-              className="w-full max-w-lg rounded-3xl bg-card border p-6 sm:p-8 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto modal-scroll"
+              className="w-full max-w-lg rounded-3xl bg-card border p-6 sm:p-8 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto modal-scroll fm-gpu"
             >
               <div className="flex items-center justify-between border-b pb-3">
                 <div>
