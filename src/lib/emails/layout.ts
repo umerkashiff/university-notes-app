@@ -14,6 +14,7 @@ export function wrapEmailLayout(options: {
   const { previewText, title, badge, contentHtml, ctaButton, secondaryInfoHtml } = options;
 
   const appUrl = process.env.APP_URL || 'https://university-notes-app.vercel.app';
+  const logoUrl = process.env.APP_URL ? `${process.env.APP_URL}/final.svg?v=3` : '/final.svg?v=3';
   const ctaUrl = ctaButton?.url?.startsWith('http') ? ctaButton.url : `${appUrl}${ctaButton?.url || ''}`;
 
   return `<!DOCTYPE html>
@@ -80,14 +81,23 @@ export function wrapEmailLayout(options: {
               <table role="presentation" border="0" cellspacing="0" cellpadding="0" style="border-collapse: separate; border-spacing: 0;">
                 <tr>
                   <td align="center" style="vertical-align: middle; border: 0;">
-                    <!-- Badge Header -->
-                    <div style="display: inline-block; background-color: #000000; color: #ffffff; font-weight: 800; font-size: 13px; letter-spacing: 0.5px; border-radius: 9999px; padding: 6px 14px 6px 14px; text-transform: uppercase;">
-                      SEMSTACK
-                    </div>
+                    <!-- Brand Pill with Logo -->
+                    <table role="presentation" border="0" cellspacing="0" cellpadding="0" style="border-collapse: separate; border-spacing: 0; background-color: #000000; border-radius: 9999px; padding: 5px 16px 5px 6px;">
+                      <tr>
+                        <td style="vertical-align: middle; padding: 0; border: 0;">
+                          <img src="${logoUrl}" width="24" height="24" alt="Semstack Logo" style="display: block; width: 24px; height: 24px; border-radius: 50%; background-color: #000000; border: 0;" />
+                        </td>
+                        <td style="vertical-align: middle; padding-left: 8px; border: 0;">
+                          <span style="color: #ffffff; font-weight: 800; font-size: 13px; letter-spacing: 0.6px; text-transform: uppercase; line-height: 1; display: inline-block; vertical-align: middle;">
+                            SEMSTACK
+                          </span>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
                 <tr>
-                  <td align="center" style="padding-top: 6px; border: 0;">
+                  <td align="center" style="padding-top: 8px; border: 0;">
                     <span style="font-size: 12px; font-weight: 600; color: #787a80; letter-spacing: 0.2px;">
                       Department of Computer Engineering
                     </span>
