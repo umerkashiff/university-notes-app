@@ -14,18 +14,51 @@ const s3Client = new S3Client({
   },
 })
 
+const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp'
+])
+
+const ALLOWED_EXTENSIONS = new Set([
+  'pdf',
+  'png',
+  'jpg',
+  'jpeg',
+  'webp'
+])
+
 export async function getPresignedUrl(fileName: string, contentType: string) {
   const user = await getCurrentUser()
-  if (!user || (user.role !== 'SENIOR' && user.role !== 'ADMIN')) {
-    return { error: 'Unauthorized' }
+  if (!user || user.status !== 'ACTIVE' || (user.role !== 'SENIOR' && user.role !== 'ADMIN')) {
+    return { error: 'Unauthorized. Only active contributors and administrators can upload files.' }
   }
 
-  // 9.5GB hard limit check
+  // 1. Strict MIME Type Whitelisting
+  const cleanMime = contentType?.trim().toLowerCase()
+  if (!cleanMime || !ALLOWED_MIME_TYPES.has(cleanMime)) {
+    return { error: 'Invalid file format. Only PDF documents and standard images (PNG, JPG, WEBP) are allowed.' }
+  }
+
+  // 2. Path Traversal & Filename Sanitization
+  const cleanKey = fileName
+    .replace(/\.\./g, '')
+    .replace(/[^a-zA-Z0-9_\-\/\.]/g, '_')
+    .replace(/^\/+/, '')
+
+  const ext = cleanKey.split('.').pop()?.toLowerCase()
+  if (!ext || !ALLOWED_EXTENSIONS.has(ext)) {
+    return { error: 'Invalid file extension. Only .pdf, .png, .jpg, .jpeg, and .webp files are supported.' }
+  }
+
+  // 3. Storage Quota Check (9.5GB Hard Limit)
   const storageReq = await getTotalStorage()
   if (storageReq.success && storageReq.totalBytes !== undefined) {
-    const LIMIT = 9.5 * 1024 * 1024 * 1024;
+    const LIMIT = 9.5 * 1024 * 1024 * 1024
     if (storageReq.totalBytes > LIMIT) {
-      return { error: 'Storage limit reached (9.5GB). Please contact an admin.' }
+      return { error: 'Storage limit reached (9.5GB). Please contact a department administrator.' }
     }
   }
 
@@ -34,15 +67,15 @@ export async function getPresignedUrl(fileName: string, contentType: string) {
   try {
     const command = new PutObjectCommand({
       Bucket: bucketName,
-      Key: fileName,
-      ContentType: contentType,
+      Key: cleanKey,
+      ContentType: cleanMime,
     })
 
-    // The URL will expire in 5 minutes
+    // Presigned upload URL expires strictly after 5 minutes
     const url = await getSignedUrl(s3Client, command, { expiresIn: 300 })
-    return { url }
+    return { url, key: cleanKey }
   } catch (err) {
     console.error('Error generating presigned URL:', err)
-    return { error: 'Failed to generate upload URL' }
+    return { error: 'Failed to generate secure upload URL' }
   }
 }

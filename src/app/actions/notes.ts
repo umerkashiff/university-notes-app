@@ -15,9 +15,21 @@ export async function createNote(data: {
   size: string
 }) {
   const user = await getCurrentUser()
-  if (!user || user.role !== 'SENIOR') {
-    return { error: 'Unauthorized. Only seniors can upload notes.' }
+  if (!user || user.status !== 'ACTIVE' || (user.role !== 'SENIOR' && user.role !== 'ADMIN')) {
+    return { error: 'Unauthorized. Only active note contributors and administrators can upload notes.' }
   }
+
+  // Strict file URL validation: Must point to our trusted Cloudflare R2 bucket and be a PDF
+  const publicBase = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || 'https://pub-4c28b39a02ca4952a6c31f0baf9d62e3.r2.dev'
+  const isAllowedOrigin = data.fileUrl.startsWith(publicBase) || data.fileUrl.startsWith('https://pub-4c28b39a02ca4952a6c31f0baf9d62e3.r2.dev')
+  const isPdf = data.fileUrl.toLowerCase().endsWith('.pdf')
+  if (!isAllowedOrigin || !isPdf) {
+    return { error: 'Invalid document URL. Only verified PDF uploads from secure storage are accepted.' }
+  }
+
+  const cleanTitle = data.title?.trim().slice(0, 150)
+  if (!cleanTitle) return { error: 'Note title is required.' }
+  const cleanDesc = data.description?.trim().slice(0, 2000) || null
 
   let subject = await prisma.subject.findUnique({ where: { code: data.subjectCode } })
   if (!subject && data.subjectName) {
@@ -38,17 +50,17 @@ export async function createNote(data: {
   if (!subject) return { error: 'Subject not found.' }
 
   if (user.role === 'SENIOR' && user.semester && subject.semester > user.semester) {
-    return { error: `Unauthorized. As a Semester ${user.semester} senior, you can only upload notes for courses in Semester 1 to ${user.semester}.` }
+    return { error: `Unauthorized. As a Semester ${user.semester} contributor, you can only upload notes for courses in Semester 1 to ${user.semester}.` }
   }
 
   try {
     const note = await prisma.note.create({
       data: {
-        title: data.title,
-        description: data.description || null,
+        title: cleanTitle,
+        description: cleanDesc,
         fileUrl: data.fileUrl,
-        pages: data.pages,
-        size: data.size,
+        pages: Math.max(1, Math.min(data.pages || 1, 2000)),
+        size: data.size || '0 MB',
         authorId: user.id,
         subjectId: subject.id,
         status: 'PENDING',
