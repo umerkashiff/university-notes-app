@@ -82,13 +82,13 @@ export function wrapEmailLayout(options: {
                 <tr>
                   <td align="center" style="vertical-align: middle; border: 0;">
                     <!-- Brand Pill with Logo -->
-                    <table role="presentation" border="0" cellspacing="0" cellpadding="0" style="border-collapse: separate; border-spacing: 0; background-color: #000000; border-radius: 9999px; padding: 6px 18px 6px 8px;">
+                    <table role="presentation" border="0" cellspacing="0" cellpadding="0" style="border-collapse: separate; border-spacing: 0; background-color: #000000; border-radius: 9999px; padding: 6px 22px 6px 8px;">
                       <tr>
                         <td align="center" valign="middle" style="vertical-align: middle; padding: 0; line-height: 0; font-size: 0; border: 0;">
-                          <img src="${logoUrl}" width="30" height="30" alt="Semstack Logo" style="display: block; width: 30px; height: 30px; border-radius: 50%; background-color: #000000; border: 0;" />
+                          <img src="${logoUrl}" width="38" height="38" alt="Semstack Logo" style="display: block; width: 38px; height: 38px; border-radius: 50%; background-color: #000000; border: 0;" />
                         </td>
-                        <td align="left" valign="middle" style="vertical-align: middle; padding-left: 10px; border: 0;">
-                          <span style="color: #ffffff; font-weight: 800; font-size: 14px; letter-spacing: 0.8px; text-transform: uppercase; line-height: 1; font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: inline-block; vertical-align: middle;">
+                        <td align="left" valign="middle" style="vertical-align: middle; padding-left: 12px; border: 0;">
+                          <span style="color: #ffffff; font-weight: 800; font-size: 15px; letter-spacing: 0.8px; text-transform: uppercase; line-height: 1; font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: inline-block; vertical-align: middle; margin-top: 1px;">
                             SEMSTACK
                           </span>
                         </td>
