@@ -18,6 +18,9 @@ import { createClient } from '@/utils/supabase/client'
 import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage, createAnnouncement, deleteNote, updateNote, toggleBookmark, submitContentRequest } from '@/app/actions/notes'
 import { getPresignedUrl } from '@/app/actions/upload'
 import React from 'react'
+import { useIsTouch } from '@/lib/use-touch'
+import { MobilePresence } from '@/components/mobile-anim'
+
 
 const PDFViewer = dynamic(() => import('@/components/pdf-viewer').then(mod => mod.PDFViewer), {
   ssr: false,
@@ -246,6 +249,93 @@ export function StudyCompanion({
     : greeting
 
 
+  // ─── Mobile device detection (all hooks must be called before any early return) ──
+  const isTouch = useIsTouch()
+
+  // ─── MOBILE EARLY RETURN ───────────────────────────────────────────────────────
+  // Replaces ALL Framer Motion with CSS @keyframes (compositor-threaded).
+  // Desktop AnimatePresence path below is completely unchanged.
+  if (isTouch) {
+    const isPending = !!user && (user.status === 'PENDING' || user.status === 'REJECTED') && user.role !== 'ADMIN'
+    const outerKey = !user ? authView : isPending ? 'pending' : reader ? 'pdf' : 'main'
+    return (
+      <div key={outerKey} className="m-screen-enter">
+        {!user ? (
+          authView === 'signup'
+            ? <SignUp onRegister={handleRegister} onSwitchToLogin={() => setAuthView('login')} />
+            : <Login onLogin={signIn} onSwitchToSignUp={() => setAuthView('signup')} />
+        ) : isPending ? (
+          <PendingScreen user={user} onLogout={handleLogout} />
+        ) : reader ? (
+          <PdfReader note={reader} onBack={() => setReader(null)} />
+        ) : (
+          <main className="min-h-screen bg-background text-foreground">
+            <header className="sticky top-0 z-40 border-b border-border/40 bg-background dark:bg-card shadow-xs">
+              <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
+                <button onClick={() => setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} className="flex items-center gap-2.5" aria-label="Semstack home">
+                  <SemstackLogo size={34} className="size-[34px] -rotate-2" />
+                  <span className="text-xl font-bold tracking-tight">Semstack</span>
+                </button>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setScreen('notifications')} className="icon-button relative" aria-label={`${unread} unread notifications`}>
+                    <Bell size={19}/>
+                    {unread>0&&<span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground">{unread}</span>}
+                  </button>
+                  <div className="relative">
+                    <button onClick={() => setShowRole(!showRole)} className="flex size-10 items-center justify-center rounded-full bg-mist text-sm font-bold shadow-xs cursor-pointer" aria-label="User account menu">
+                      {user?.avatar || (user?.name ? user.name.slice(0,2).toUpperCase() : 'ST')}
+                    </button>
+                    {showRole && <div className="fixed inset-0 z-30" onClick={() => setShowRole(false)} />}
+                    <MobilePresence show={showRole} type="popover" className="popover right-0 w-60 overflow-hidden shadow-xl rounded-2xl origin-top-right border bg-card p-0 z-40">
+                      <div className="px-4 py-3 border-b bg-secondary/30">
+                        <b className="block truncate text-sm font-bold text-foreground">{user?.name || user?.email}</b>
+                        <p className="text-xs text-muted-foreground mt-0.5">{roleLabel}</p>
+                      </div>
+                      <div className="p-1.5 flex flex-col gap-0.5">
+                        <button onClick={() => { setScreen('settings'); setShowRole(false); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium hover:bg-secondary text-foreground transition-colors cursor-pointer">
+                          <Settings size={16} className="text-muted-foreground shrink-0" /><span>Settings &amp; Preferences</span>
+                        </button>
+                        <button onClick={handleLogout} disabled={isLoggingOut} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors cursor-pointer disabled:opacity-50">
+                          {isLoggingOut?<div className="size-4 border-2 border-destructive/30 border-t-destructive animate-spin rounded-full shrink-0"/>:<LogOut size={16} className="shrink-0"/>}
+                          <span>{isLoggingOut?'Signing out...':'Sign out'}</span>
+                        </button>
+                      </div>
+                    </MobilePresence>
+                  </div>
+                </div>
+              </div>
+            </header>
+            <div className="mx-auto max-w-7xl px-5 py-8 pb-36 md:px-8 md:py-12" style={{ paddingBottom: 'max(8rem, calc(env(safe-area-inset-bottom, 0px) + 6rem))' }}>
+              <div className="mb-8 flex items-end justify-between">
+                <div>
+                  <p className="section-kicker">{screen==='settings'?'Account & Preferences':role==='admin'?'Department CMS':role==='senior'?'Contributor desk':'Your study library'}</p>
+                  <h1 className="text-balance text-4xl font-semibold tracking-[-.04em] md:text-5xl">{title}</h1>
+                </div>
+              </div>
+              {/* Keyed div → React unmounts old, mounts new → CSS m-screen-enter fires */}
+              <div key={screen} className="w-full m-screen-enter">
+                {screen==='saved'&&<SavedNotes notes={notes} subjects={subjectsList} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader}/>}
+                {screen==='semesters'&&<SemesterLibrary user={user} role={role} subjects={subjectsList} notes={notes} select={(n)=>{setSelectedSemester(n);setScreen('subject')}}/>}
+                {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')}/>}
+                {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts} user={user}/>}
+                {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])}/>}
+                {screen==='cms'&&role==='admin'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n=>n.id===note.id?{...n,status:'PUBLISHED'}:n));setAlerts([{id:Date.now(),audience:note.subject||'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a),...alerts])}/>}
+                {screen==='settings'&&<SettingsPage user={user} theme={theme} onChangeTheme={changeTheme} onLogout={handleLogout} onNavigate={setScreen} isLoggingOut={isLoggingOut}/>}
+              </div>
+            </div>
+            {/* Mobile nav — CSS background-color transition replaces layoutId spring */}
+            <nav className="fixed left-1/2 z-30 flex gap-1 rounded-full border border-border/80 bg-card p-1.5 shadow-xl md:hidden mobile-nav-pill" style={{ bottom:'max(1.25rem, calc(env(safe-area-inset-bottom, 0px) + 0.85rem))', transform:'translate3d(-50%, 0, 0)', WebkitBackfaceVisibility:'hidden' }}>
+              <MobileNavBtn active={role==='admin'?screen==='cms':role==='senior'?screen==='submissions':(screen==='semesters'||screen==='subject')} onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} icon={<Home/>}>Home</MobileNavBtn>
+              {role==='student'?<MobileNavBtn active={screen==='saved'} onClick={()=>setScreen('saved')} icon={<Bookmark/>}>Saved</MobileNavBtn>:<MobileNavBtn active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')} icon={<BookOpen/>}>Library</MobileNavBtn>}
+              <MobileNavBtn active={screen==='notifications'} onClick={()=>setScreen('notifications')} icon={<Bell/>}>Notices</MobileNavBtn>
+            </nav>
+          </main>
+        )}
+      </div>
+    )
+  }
+
+  // ─── DESKTOP RETURN (completely unchanged) ────────────────────────────────
   return (
     <AnimatePresence mode="wait">
       {!user ? (
@@ -424,6 +514,24 @@ function Mobile({active,onClick,icon,children}:{active:boolean,onClick:()=>void,
   <span className="relative z-10 flex flex-col items-center gap-1">{icon}<span>{children}</span></span>
 </button>}
 
+/** Mobile-only nav button: CSS background-color transition instead of Framer Motion layoutId.
+ *  No shared-element animation — the active background fades in/out via CSS transition.
+ *  Used only in the mobile early-return branch; desktop still uses Mobile above. */
+function MobileNavBtn({active,onClick,icon,children}:{active:boolean,onClick:()=>void,icon:React.ReactNode,children:React.ReactNode}){
+  return (
+    <button
+      onClick={onClick}
+      className={`relative flex min-w-14 flex-col items-center gap-1 rounded-full px-3 py-2 text-[10px] ${active?'text-foreground':'text-muted-foreground'}`}
+      style={{
+        backgroundColor: active ? 'var(--secondary)' : 'transparent',
+        transition: 'background-color 150ms ease-out, color 150ms ease-out',
+      }}
+    >
+      <span className="flex flex-col items-center gap-1">{icon}<span>{children}</span></span>
+    </button>
+  )
+}
+
 function Header({kicker,title}:{kicker:string,title:string}){return <div className="mb-6"><p className="section-kicker">{kicker}</p><h2 className="text-3xl font-semibold">{title}</h2></div>}
 
 function SettingsPage({
@@ -441,6 +549,7 @@ function SettingsPage({
   onNavigate: (s: Screen) => void
   isLoggingOut?: boolean
 }) {
+  const isTouch = useIsTouch()
   const role = (user?.role?.toLowerCase() as Role) || 'student'
   const roleLabel = role === 'admin' ? 'Administrator' : role === 'senior' ? 'Note Contributor' : 'Student'
 
@@ -626,40 +735,37 @@ function SettingsPage({
                   <CaretDown size={16} weight="bold" className={`text-muted-foreground transition-transform shrink-0 ml-2 ${typeDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 
-                <AnimatePresence>
-                  {typeDropdownOpen && (
-                    <>
-                      <div className="fixed inset-0 z-20" onClick={() => setTypeDropdownOpen(false)} />
-                      <motion.div
-                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                        transition={{ duration: 0.12 }}
-                        className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl fm-gpu"
-                      >
-                        <div 
-                          data-lenis-prevent="true"
-                          className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
-                          style={{ overscrollBehavior: 'contain' }}
-                        >
-                          {REQUEST_TYPES.map(t => (
-                            <button
-                              key={t}
-                              type="button"
-                              onClick={() => { setReqType(t); setTypeDropdownOpen(false); }}
-                              className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
-                                reqType === t ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                              }`}
-                            >
-                              <span>{t}</span>
-                              {reqType === t && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
-                            </button>
-                          ))}
-                        </div>
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>
+                {isTouch ? (
+                  <>
+                    {typeDropdownOpen && <div className="fixed inset-0 z-20" onClick={() => setTypeDropdownOpen(false)} />}
+                    <MobilePresence show={typeDropdownOpen} type="dropdown" className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl">
+                      <div data-lenis-prevent="true" className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1" style={{ overscrollBehavior: 'contain' }}>
+                        {REQUEST_TYPES.map(t => (
+                          <button key={t} type="button" onClick={() => { setReqType(t); setTypeDropdownOpen(false); }} className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${reqType === t ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'}`}>
+                            <span>{t}</span>{reqType === t && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                          </button>
+                        ))}
+                      </div>
+                    </MobilePresence>
+                  </>
+                ) : (
+                  <AnimatePresence>
+                    {typeDropdownOpen && (
+                      <>
+                        <div className="fixed inset-0 z-20" onClick={() => setTypeDropdownOpen(false)} />
+                        <motion.div initial={{ opacity: 0, y: -6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.98 }} transition={{ duration: 0.12 }} className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl fm-gpu">
+                          <div data-lenis-prevent="true" className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1" style={{ overscrollBehavior: 'contain' }}>
+                            {REQUEST_TYPES.map(t => (
+                              <button key={t} type="button" onClick={() => { setReqType(t); setTypeDropdownOpen(false); }} className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${reqType === t ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'}`}>
+                                <span>{t}</span>{reqType === t && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                              </button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                )}
               </div>
             </div>
 
@@ -676,41 +782,37 @@ function SettingsPage({
                   <CaretDown size={16} weight="bold" className={`text-muted-foreground transition-transform shrink-0 ml-2 ${semDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 
-                <AnimatePresence>
-                  {semDropdownOpen && (
-                    <>
-                      <div className="fixed inset-0 z-20" onClick={() => setSemDropdownOpen(false)} />
-                      <motion.div
-                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                        transition={{ duration: 0.12 }}
-                        style={{ willChange: 'transform, opacity' }}
-                        className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
-                      >
-                        <div 
-                          data-lenis-prevent="true"
-                          className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
-                          style={{ overscrollBehavior: 'contain' }}
-                        >
-                          {availableSemesters.map(s => (
-                            <button
-                              key={s}
-                              type="button"
-                              onClick={() => { setReqSem(s); setSemDropdownOpen(false); }}
-                              className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
-                                reqSem === s ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                              }`}
-                            >
-                              <span>Semester {s}</span>
-                              {reqSem === s && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
-                            </button>
-                          ))}
-                        </div>
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>
+                {isTouch ? (
+                  <>
+                    {semDropdownOpen && <div className="fixed inset-0 z-20" onClick={() => setSemDropdownOpen(false)} />}
+                    <MobilePresence show={semDropdownOpen} type="dropdown" className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl">
+                      <div data-lenis-prevent="true" className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1" style={{ overscrollBehavior: 'contain' }}>
+                        {availableSemesters.map(s => (
+                          <button key={s} type="button" onClick={() => { setReqSem(s); setSemDropdownOpen(false); }} className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${reqSem === s ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'}`}>
+                            <span>Semester {s}</span>{reqSem === s && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                          </button>
+                        ))}
+                      </div>
+                    </MobilePresence>
+                  </>
+                ) : (
+                  <AnimatePresence>
+                    {semDropdownOpen && (
+                      <>
+                        <div className="fixed inset-0 z-20" onClick={() => setSemDropdownOpen(false)} />
+                        <motion.div initial={{ opacity: 0, y: -6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.98 }} transition={{ duration: 0.12 }} className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl">
+                          <div data-lenis-prevent="true" className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1" style={{ overscrollBehavior: 'contain' }}>
+                            {availableSemesters.map(s => (
+                              <button key={s} type="button" onClick={() => { setReqSem(s); setSemDropdownOpen(false); }} className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${reqSem === s ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'}`}>
+                                <span>Semester {s}</span>{reqSem === s && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                              </button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                )}
               </div>
             </div>
           </div>
@@ -1530,6 +1632,7 @@ function Notifications({alerts,setAlerts,user}:{alerts:any[],setAlerts:(a:any[])
 
 
 function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:Note)=>void,notes:Note[],subjects:SubjectItem[]}){
+  const isTouch = useIsTouch()
   const [open,setOpen]=useState(false);
   const [submitted,setSubmitted]=useState(false);
   const [uploading,setUploading]=useState(false);
@@ -1708,248 +1811,147 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
         </ul>
       </aside>
 
-      {mounted && createPortal(
-          <AnimatePresence>
-            {open&&<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm overscroll-none touch-none" data-lenis-prevent role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={() => setSubjectDropdownOpen(false)}>
-              <motion.form initial={{scale:0.95, y:15, opacity: 0}} animate={{scale:1, y:0, opacity: 1}} exit={{scale:0.95, y:15, opacity: 0}} transition={{type:"spring", bounce:0.15, duration:0.35}} onSubmit={handleUpload} onClick={(e) => e.stopPropagation()} className="relative flex flex-col w-full max-w-lg rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden fm-gpu" data-lenis-prevent>
-                
-                {/* Frosted Sticky Header */}
-                <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-5 bg-card/90 backdrop-blur-xl border-b border-border/40">
-                  <div>
-                    <p className="section-kicker mb-0.5">New submission</p>
-                    <h2 id="submit-title" className="text-xl sm:text-2xl font-bold tracking-tight">Upload your note</h2>
-                  </div>
-                  <button 
-                    type="button" 
-                    onClick={()=>setOpen(false)} 
-                    className="flex size-9 items-center justify-center rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label="Close dialog"
-                  >
-                    <X size={16} />
-                  </button>
+      {mounted && (() => {
+        // Shared backdrop + form wrapper
+        // Mobile: MobilePresence (CSS compositor) + plain form
+        // Desktop: AnimatePresence + motion.div + motion.form (Framer Motion)
+        const formInner = (
+          <>
+            {/* Frosted Sticky Header */}
+            <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-5 bg-card/90 backdrop-blur-xl border-b border-border/40">
+              <div>
+                <p className="section-kicker mb-0.5">New submission</p>
+                <h2 id="submit-title" className="text-xl sm:text-2xl font-bold tracking-tight">Upload your note</h2>
+              </div>
+              <button type="button" onClick={()=>setOpen(false)} className="flex size-9 items-center justify-center rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors" aria-label="Close dialog">
+                <X size={18}/>
+              </button>
+            </div>
+            {/* Scrollable Form Body */}
+            <div className="flex-1 overflow-y-auto modal-scroll px-6 py-5 mr-2 pr-4 space-y-5">
+              {submitted ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground mb-4"><Check size={28} weight="bold" /></div>
+                  <h3 className="text-xl font-bold">Uploaded for review!</h3>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-xs">Your note has been submitted to the department.</p>
                 </div>
-
-                {/* Scrollable Form Body */}
-                <div className="flex-1 overflow-y-auto modal-scroll px-6 py-5 mr-2 pr-4 space-y-5">
-                  {submitted ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-center">
-                      <div className="flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground mb-4">
-                        <Check size={28} weight="bold" />
-                      </div>
-                      <h3 className="text-xl font-bold">Uploaded for review!</h3>
-                      <p className="text-sm text-muted-foreground mt-1 max-w-xs">Your note has been submitted to the department.</p>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <label className="field-label">Note title<input required name="title" className="field-input" placeholder="e.g. Week 1–6 Midterm Summary" /></label>
+                  {/* Target Semester Selector */}
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm font-semibold text-foreground">Target semester</span>
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-2 modal-scroll touch-pan-x">
+                      {[1,2,3,4,5,6,7,8].map(n=>(
+                        <button key={n} type="button" onClick={()=>setSelectedSemester(n)} className={`flex shrink-0 h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-all ${selectedSemester===n?'bg-primary text-primary-foreground shadow-sm':'bg-secondary text-muted-foreground hover:bg-secondary/80'}`}>{n}</button>
+                      ))}
                     </div>
-                  ) : (
-                    <div className="flex flex-col gap-4">
-                      <label className="field-label">
-                        Note title
-                        <input required name="title" className="field-input" placeholder="e.g. Week 1–6 Midterm Summary" />
-                      </label>
-
-                      {/* Target Semester Selector with visible scrollbar */}
-                      <div className="flex flex-col gap-2">
-                        <span className="text-sm font-semibold text-foreground">Target semester</span>
-                        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 modal-scroll touch-pan-x">
-                          {Array.from({ length: user?.semester || 8 }, (_, i) => i + 1).map(sem => {
-                            const isActive = selectedSemester === sem
-                            return (
-                              <button
-                                key={sem}
-                                type="button"
-                                onClick={() => handleSemesterChange(sem)}
-                                className={`relative px-4 py-2 text-xs sm:text-sm font-semibold rounded-full whitespace-nowrap transition-colors select-none shrink-0 ${
-                                  isActive
-                                    ? 'text-primary-foreground'
-                                    : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
-                                }`}
-                              >
-                                {isActive && (
-                                  <motion.div
-                                    layoutId="upload-sem-pill"
-                                    className="absolute inset-0 bg-primary rounded-full z-0 shadow-sm"
-                                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                                  />
-                                )}
-                                <span className="relative z-10">Semester {sem}</span>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Course / Subject Dropdown */}
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-sm font-semibold text-foreground">Course / Subject</span>
-                        {semesterSubjects.length === 0 ? (
-                          <div className="rounded-2xl border border-dashed p-4 text-center text-xs text-muted-foreground bg-secondary/30">
-                            No courses registered for Semester {selectedSemester} yet.
-                          </div>
-                        ) : (
-                          <div className="relative">
-                            <button
-                              type="button"
-                              onClick={() => setSubjectDropdownOpen(!subjectDropdownOpen)}
-                              className="flex h-12 w-full items-center justify-between rounded-2xl border bg-background px-4 text-sm font-medium focus:border-foreground transition-colors text-left"
-                            >
-                              <span className="truncate">
-                                {subjects.find(s => s.code === subjectCode)
-                                  ? `${subjects.find(s => s.code === subjectCode)?.name} (${subjectCode})`
-                                  : 'Select a course'}
-                              </span>
-                              <CaretDown
-                                size={16}
-                                weight="bold"
-                                className={`text-muted-foreground transition-transform duration-200 shrink-0 ml-2 ${
-                                  subjectDropdownOpen ? 'rotate-180' : ''
-                                }`}
-                              />
-                            </button>
-
-                            <AnimatePresence>
-                              {subjectDropdownOpen && (
-                                <>
-                                  <div 
-                                    className="fixed inset-0 z-20" 
-                                    onClick={() => setSubjectDropdownOpen(false)} 
-                                  />
-                                  <motion.div
-                                    initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                                    transition={{ duration: 0.12 }}
-                                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl fm-gpu"
-                                  >
-                                    <div 
-                                      data-lenis-prevent="true"
-                                      className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
-                                      style={{ overscrollBehavior: 'contain' }}
-                                    >
-                                      {semesterSubjects.map(s => {
-                                        const isSelected = subjectCode === s.code;
-                                        return (
-                                          <button
-                                            key={s.code}
-                                            type="button"
-                                            onClick={() => {
-                                              setSubjectCode(s.code);
-                                              setSubjectDropdownOpen(false);
-                                            }}
-                                            className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2 text-left text-sm transition-colors ${
-                                              isSelected ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                                            }`}
-                                          >
-                                            <span className="truncate">{s.name} ({s.code})</span>
-                                            {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  </motion.div>
-                                </>
-                              )}
-                            </AnimatePresence>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Senior Advice / Study Tips */}
-                      <label className="field-label flex flex-col gap-1.5">
-                        <span className="flex items-center gap-1.5 font-semibold text-foreground">
-                          <GraduationCap size={16} className="text-primary" />
-                          Senior Advice & Study Tips (Optional)
-                        </span>
-                        <div className="flex h-28 rounded-2xl border bg-background overflow-hidden focus-within:border-foreground transition-colors">
-                          <textarea
-                            value={seniorAdvice}
-                            onChange={e => setSeniorAdvice(e.target.value)}
-                            className="h-full w-full bg-transparent px-4 py-3 text-sm outline-none resize-none placeholder:text-muted-foreground"
-                            placeholder="e.g. Focus on Chapter 3 formulas and past midterm questions."
-                          />
-                        </div>
-                      </label>
-
-                      {/* PDF File Upload Dropzone */}
-                      <label className={`relative flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border transition-all p-4 ${
-                        selectedFile
-                          ? 'border-primary/40 bg-secondary/80 hover:bg-secondary'
-                          : 'border-dashed border-border/80 bg-secondary/40 hover:border-primary/40 hover:bg-secondary/70'
-                      }`}>
-                        {selectedFile ? (
-                          <div className="flex w-full items-center gap-3.5">
-                            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-                              <FileText size={22} weight="fill" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <span className="block font-semibold text-sm text-foreground truncate">{selectedFile.name}</span>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB · Ready for Cloudflare upload
-                              </p>
-                            </div>
-                            <span className="text-xs font-semibold text-primary px-3 py-1.5 rounded-full bg-background border border-border/60 shadow-xs shrink-0">
-                              Change
-                            </span>
-                          </div>
-                        ) : (
-                          <>
-                            <Upload size={22} className="text-muted-foreground mb-1.5" />
-                            <span className="font-semibold text-foreground">Choose PDF document</span>
-                            <span className="text-xs text-muted-foreground mt-0.5">PDF files up to 100 MB</span>
-                          </>
-                        )}
-                        <input
-                          type="file"
-                          name="file"
-                          accept="application/pdf"
-                          className="sr-only"
-                          required
-                          onChange={(e) => {
-                            if (e.target.files && e.target.files[0]) {
-                              const f = e.target.files[0];
-                              if (f.type !== 'application/pdf') {
-                                alert('Please select a valid PDF file.');
-                                return;
-                              }
-                              if (f.size > 100 * 1024 * 1024) {
-                                alert('File size exceeds 100 MB limit.');
-                                return;
-                              }
-                              setSelectedFile(f);
-                            }
-                          }}
-                        />
-                      </label>
-
-                      {uploading ? (
-                        <div className="flex flex-col gap-2 mt-1">
-                          <div className="flex justify-between text-xs font-semibold text-muted-foreground px-1">
-                            <span>Uploading to Cloudflare...</span>
-                            <span>{uploadProgress}%</span>
-                          </div>
-                          <div className="h-2.5 w-full rounded-full bg-secondary overflow-hidden">
-                            <motion.div 
-                              className="h-full bg-primary rounded-full" 
-                              initial={{ width: 0 }} 
-                              animate={{ width: `${uploadProgress}%` }} 
-                              transition={{ ease: "linear", duration: 0.2 }}
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <button className="rounded-full bg-primary p-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity mt-1">
-                          Submit note for review
+                  </div>
+                  {/* Subject Dropdown */}
+                  {semesterSubjects.length>0&&(
+                    <div className="flex flex-col gap-2">
+                      <span className="text-sm font-semibold text-foreground">Subject</span>
+                      <div className="relative">
+                        <button type="button" onClick={()=>setSubjectDropdownOpen(!subjectDropdownOpen)} className="flex h-12 w-full items-center justify-between rounded-2xl border bg-background px-4 text-sm font-medium focus:border-foreground transition-colors text-left">
+                          <span className="truncate">{subjectCode?semesterSubjects.find(s=>s.code===subjectCode)?.name||subjectCode:'Select a course'}</span>
+                          <CaretDown size={16} weight="bold" className={`text-muted-foreground transition-transform duration-200 shrink-0 ml-2 ${subjectDropdownOpen?'rotate-180':''}`}/>
                         </button>
-                      )}
+                        {isTouch ? (
+                          <>
+                            {subjectDropdownOpen&&<div className="fixed inset-0 z-20" onClick={()=>setSubjectDropdownOpen(false)}/>}
+                            <MobilePresence show={subjectDropdownOpen} type="dropdown" className="absolute top-[calc(100%+8px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl">
+                              <div className="max-h-48 overflow-y-auto modal-scroll flex flex-col gap-1 pr-1">
+                                {semesterSubjects.map(s=><button key={s.code} type="button" onClick={()=>{setSubjectCode(s.code);setSubjectDropdownOpen(false);}} className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${subjectCode===s.code?'bg-secondary font-semibold':'hover:bg-secondary/50'}`}>{s.name} ({s.code})</button>)}
+                              </div>
+                            </MobilePresence>
+                          </>
+                        ):(
+                          <AnimatePresence>
+                            {subjectDropdownOpen&&(
+                              <motion.div initial={{opacity:0,y:-8,scale:0.98}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:-8,scale:0.98}} className="absolute top-[calc(100%+8px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl">
+                                <div className="max-h-48 overflow-y-auto modal-scroll flex flex-col gap-1 pr-1">
+                                  {semesterSubjects.map(s=><button key={s.code} type="button" onClick={()=>{setSubjectCode(s.code);setSubjectDropdownOpen(false);}} className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${subjectCode===s.code?'bg-secondary font-semibold':'hover:bg-secondary/50'}`}>{s.name} ({s.code})</button>)}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        )}
+                      </div>
                     </div>
                   )}
+                  {/* Senior Advice */}
+                  <label className="field-label flex flex-col gap-1.5">
+                    <span className="flex items-center gap-1.5 font-semibold text-foreground"><GraduationCap size={16} className="text-primary"/>Senior Advice &amp; Study Tips (Optional)</span>
+                    <div className="flex h-28 rounded-2xl border bg-background overflow-hidden focus-within:border-foreground transition-colors">
+                      <textarea value={seniorAdvice} onChange={e=>setSeniorAdvice(e.target.value)} className="h-full w-full bg-transparent px-4 py-3 text-sm outline-none resize-none placeholder:text-muted-foreground" placeholder="e.g. Focus on Chapter 3 formulas and past midterm questions."/>
+                    </div>
+                  </label>
+                  {/* PDF File Upload */}
+                  <label className={`relative flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border transition-all p-4 ${selectedFile?'border-primary/40 bg-secondary/80 hover:bg-secondary':'border-dashed border-border/80 bg-secondary/40 hover:border-primary/40 hover:bg-secondary/70'}`}>
+                    {selectedFile?(
+                      <div className="flex w-full items-center gap-3.5">
+                        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm"><FileText size={22} weight="fill"/></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate text-sm font-semibold">{selectedFile.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{(selectedFile.size/(1024*1024)).toFixed(1)} MB</p>
+                        </div>
+                        <button type="button" onClick={e=>{e.preventDefault();setSelectedFile(null);}} className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary hover:bg-destructive/10 hover:text-destructive transition-colors"><X size={15}/></button>
+                      </div>
+                    ):(
+                      <div className="flex flex-col items-center gap-2 text-center">
+                        <div className="flex size-10 items-center justify-center rounded-xl bg-secondary"><UploadSimple size={20} className="text-muted-foreground"/></div>
+                        <div><p className="text-sm font-medium">Click to upload PDF</p><p className="text-xs text-muted-foreground mt-0.5">PDF files up to 100 MB</p></div>
+                      </div>
+                    )}
+                    <input type="file" accept=".pdf" className="sr-only" onChange={e=>{if(e.target.files?.[0])setSelectedFile(e.target.files[0]);}}/>
+                  </label>
+                  {/* Upload progress */}
+                  {uploading&&(
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Uploading PDF…</span><span>{uploadProgress}%</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                        <div className="h-full rounded-full bg-primary transition-all duration-300" style={{width:`${uploadProgress}%`}}/>
+                      </div>
+                    </div>
+                  )}
+                  {/* Submit button */}
+                  {!uploading?(
+                    <div className="flex flex-col gap-3">
+                      <button type="submit" disabled={!selectedFile} className="rounded-full bg-primary py-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed">Submit note for review</button>
+                    </div>
+                  ):(
+                    <button className="rounded-full bg-primary p-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity mt-1">Submit note for review</button>
+                  )}
                 </div>
-
-                {/* Bottom cushion spacer */}
-                <div className="h-4 w-full bg-card shrink-0 pointer-events-none" />
-              </motion.form>
-            </motion.div>}
-          </AnimatePresence>,
+              )}
+            </div>
+            {/* Bottom cushion spacer */}
+            <div className="h-4 w-full bg-card shrink-0 pointer-events-none"/>
+          </>
+        )
+        return createPortal(
+          isTouch ? (
+            <MobilePresence show={open} type="backdrop" className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/45 overscroll-none touch-none" data-lenis-prevent role="dialog" aria-modal={true} aria-labelledby="submit-title" onClick={()=>setSubjectDropdownOpen(false)}>
+              <form onSubmit={handleUpload} onClick={e=>e.stopPropagation()} className="relative flex flex-col w-full max-w-lg rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden m-panel-enter" data-lenis-prevent>
+                {formInner}
+              </form>
+            </MobilePresence>
+          ) : (
+            <AnimatePresence>
+              {open&&(
+                <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm overscroll-none touch-none" data-lenis-prevent role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={()=>setSubjectDropdownOpen(false)}>
+                  <motion.form initial={{scale:0.95,y:15,opacity:0}} animate={{scale:1,y:0,opacity:1}} exit={{scale:0.95,y:15,opacity:0}} transition={{type:'spring',bounce:0.15,duration:0.35}} onSubmit={handleUpload} onClick={e=>e.stopPropagation()} className="relative flex flex-col w-full max-w-lg rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden fm-gpu" data-lenis-prevent>
+                    {formInner}
+                  </motion.form>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          ),
           document.body
-        )}
+        )
+      })()}
     </div>
   )
 }
@@ -1967,6 +1969,7 @@ function ReviewQueueCard({
   onDelete: (n: Note) => void
   onUpdate: (updated: Note) => void
 }) {
+  const isTouch = useIsTouch();
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(candidate.title);
   const [description, setDescription] = useState(candidate.description || '');
@@ -2094,40 +2097,56 @@ function ReviewQueueCard({
                     <CaretDown size={16} weight="bold" className={`text-muted-foreground transition-transform shrink-0 ml-2 ${dropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
 
-                  <AnimatePresence>
-                    {dropdownOpen && (
-                      <>
-                        <div className="fixed inset-0 z-20" onClick={() => setDropdownOpen(false)} />
-                        <motion.div
-                          initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                          transition={{ duration: 0.12 }}
-                          className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl fm-gpu"
-                        >
-                          <div 
-                            data-lenis-prevent="true"
-                            className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
-                            style={{ overscrollBehavior: 'contain' }}
+                  {isTouch ? (
+                    <>
+                      {dropdownOpen && <div className="fixed inset-0 z-20" onClick={() => setDropdownOpen(false)} />}
+                      <MobilePresence show={dropdownOpen} type="dropdown" className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl">
+                        <div data-lenis-prevent="true" className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1" style={{ overscrollBehavior: 'contain' }}>
+                          {semSubjects.map(s => (
+                            <button key={s.code} type="button" onClick={() => { setSelectedCode(s.code); setDropdownOpen(false); }} className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2 text-left text-sm transition-colors ${selectedCode === s.code ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'}`}>
+                              <span className="truncate">{s.name} ({s.code})</span>
+                              {selectedCode === s.code && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                            </button>
+                          ))}
+                        </div>
+                      </MobilePresence>
+                    </>
+                  ) : (
+                    <AnimatePresence>
+                      {dropdownOpen && (
+                        <>
+                          <div className="fixed inset-0 z-20" onClick={() => setDropdownOpen(false)} />
+                          <motion.div
+                            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                            transition={{ duration: 0.12 }}
+                            className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl fm-gpu"
                           >
-                            {semSubjects.map(s => (
-                              <button
-                                key={s.code}
-                                type="button"
-                                onClick={() => { setSelectedCode(s.code); setDropdownOpen(false); }}
-                                className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2 text-left text-sm transition-colors ${
-                                  selectedCode === s.code ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                                }`}
-                              >
-                                <span className="truncate">{s.name} ({s.code})</span>
-                                {selectedCode === s.code && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
-                              </button>
-                            ))}
-                          </div>
-                        </motion.div>
-                      </>
-                    )}
-                  </AnimatePresence>
+                            <div 
+                              data-lenis-prevent="true"
+                              className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
+                              style={{ overscrollBehavior: 'contain' }}
+                            >
+                              {semSubjects.map(s => (
+                                <button
+                                  key={s.code}
+                                  type="button"
+                                  onClick={() => { setSelectedCode(s.code); setDropdownOpen(false); }}
+                                  className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2 text-left text-sm transition-colors ${
+                                    selectedCode === s.code ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                                  }`}
+                                >
+                                  <span className="truncate">{s.name} ({s.code})</span>
+                                  {selectedCode === s.code && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                                </button>
+                              ))}
+                            </div>
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
+                  )}
                 </div>
               )}
             </div>
@@ -2254,6 +2273,7 @@ function ReviewQueueCard({
 }
 
 function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:{notes:Note[],setNotes:React.Dispatch<React.SetStateAction<Note[]>>,subjects:SubjectItem[],setSubjects:(s:SubjectItem[])=>void,publish:(n:Note)=>void,addAnnouncement:(a:any)=>void}){
+  const isTouch = useIsTouch();
   const [tab,setTab]=useState<'queue'|'content'|'curriculum'|'users'|'calendar'|'notices'|'requests'>('queue');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [doneId,setDoneId]=useState<any>(null);
@@ -2413,28 +2433,47 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
       <span>{activeTabLabel}</span>
       <ChevronRight size={16} className={`transition-transform duration-200 ${mobileMenuOpen ? '-rotate-90' : 'rotate-90'}`} />
     </button>
-    <AnimatePresence>
-      {mobileMenuOpen && (
-        <motion.div 
-          initial={{ opacity: 0, y: -10, scale: 0.95 }} 
-          animate={{ opacity: 1, y: 0, scale: 1 }} 
-          exit={{ opacity: 0, y: -10, scale: 0.95 }} 
-          transition={{ duration: 0.15 }}
-          className="absolute left-0 right-0 top-14 z-50 rounded-2xl border bg-popover p-2 shadow-lg"
-        >
-          {tabs.map(t => (
-            <button 
-              key={t.id}
-              onClick={() => { setTab(t.id as any); setMobileMenuOpen(false); }}
-              className={`flex w-full items-center justify-between rounded-xl p-3 text-sm font-medium ${tab === t.id ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}
-            >
-              {t.label}
-              {tab === t.id && <Check size={16} className="text-foreground" />}
-            </button>
-          ))}
-        </motion.div>
-      )}
-    </AnimatePresence>
+    {isTouch ? (
+      <MobilePresence
+        show={mobileMenuOpen}
+        type="dropdown"
+        className="absolute left-0 right-0 top-14 z-50 rounded-2xl border bg-popover p-2 shadow-lg"
+      >
+        {tabs.map(t => (
+          <button 
+            key={t.id}
+            onClick={() => { setTab(t.id as any); setMobileMenuOpen(false); }}
+            className={`flex w-full items-center justify-between rounded-xl p-3 text-sm font-medium ${tab === t.id ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}
+          >
+            {t.label}
+            {tab === t.id && <Check size={16} className="text-foreground" />}
+          </button>
+        ))}
+      </MobilePresence>
+    ) : (
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10, scale: 0.95 }} 
+            animate={{ opacity: 1, y: 0, scale: 1 }} 
+            exit={{ opacity: 0, y: -10, scale: 0.95 }} 
+            transition={{ duration: 0.15 }}
+            className="absolute left-0 right-0 top-14 z-50 rounded-2xl border bg-popover p-2 shadow-lg"
+          >
+            {tabs.map(t => (
+              <button 
+                key={t.id}
+                onClick={() => { setTab(t.id as any); setMobileMenuOpen(false); }}
+                className={`flex w-full items-center justify-between rounded-xl p-3 text-sm font-medium ${tab === t.id ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}
+              >
+                {t.label}
+                {tab === t.id && <Check size={16} className="text-foreground" />}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    )}
   </div>
 
   {/* Desktop Pill Navigation */}
@@ -2501,15 +2540,10 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
       </div>}
 
       {/* Note Rejection Modal with Feedback */}
-      <AnimatePresence>
-        {rejectNoteTarget && (
-          <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-sm">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-md rounded-3xl bg-card border p-6 shadow-2xl space-y-4 fm-gpu"
-            >
+      {isTouch ? (
+        <MobilePresence show={!!rejectNoteTarget} type="backdrop" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/45">
+          {rejectNoteTarget && (
+            <div className="w-full max-w-md rounded-3xl bg-card border p-6 shadow-2xl space-y-4 m-panel-enter">
               <h3 className="text-lg font-bold text-foreground">Reject Note Submission</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Rejecting <b className="text-foreground">{rejectNoteTarget.title}</b> submitted by <b className="text-foreground">{rejectNoteTarget.author}</b>.
@@ -2570,10 +2604,84 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
                   {rejectNoteLoading ? 'Rejecting...' : 'Confirm Rejection & Notify'}
                 </button>
               </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+            </div>
+          )}
+        </MobilePresence>
+      ) : (
+        <AnimatePresence>
+          {rejectNoteTarget && (
+            <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-sm">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="w-full max-w-md rounded-3xl bg-card border p-6 shadow-2xl space-y-4 fm-gpu"
+              >
+                <h3 className="text-lg font-bold text-foreground">Reject Note Submission</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Rejecting <b className="text-foreground">{rejectNoteTarget.title}</b> submitted by <b className="text-foreground">{rejectNoteTarget.author}</b>.
+                  An email with your feedback will be sent to the contributor.
+                </p>
+
+                {/* Quick Preset Reasons */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-semibold text-muted-foreground">Select common reason:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      'Blurry scan / unreadable text',
+                      'Incomplete lecture notes',
+                      'Duplicate of existing upload',
+                      'Incorrect course or semester syllabus'
+                    ].map(preset => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setRejectNoteReason(preset)}
+                        className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
+                          rejectNoteReason === preset
+                            ? 'bg-primary text-primary-foreground border-primary font-semibold'
+                            : 'bg-secondary text-muted-foreground hover:text-foreground border-border/60'
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <label className="field-label">
+                  Feedback for Contributor
+                  <textarea
+                    value={rejectNoteReason}
+                    onChange={e => setRejectNoteReason(e.target.value)}
+                    placeholder="Explain why this note cannot be published or what needs improvement..."
+                    className="field-input text-xs min-h-24 resize-none py-2"
+                  />
+                </label>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    disabled={rejectNoteLoading}
+                    onClick={() => setRejectNoteTarget(null)}
+                    className="px-4 py-2 rounded-full text-xs font-semibold bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={rejectNoteLoading}
+                    onClick={handleConfirmNoteRejection}
+                    className="px-4 py-2 rounded-full text-xs font-semibold bg-destructive text-destructive-foreground hover:opacity-95 shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    {rejectNoteLoading ? 'Rejecting...' : 'Confirm Rejection & Notify'}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      )}
 
       {/* Published content */}
       {tab==='content'&&<div className="flex flex-col gap-3">{published.length===0?<p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed bg-card/40">No published notes yet.</p>:published.map((n,i)=><NoteRow key={n.id} note={n} subjects={subjects} index={i} open={()=>{}} onDelete={()=>handleDeleteNote(n)}/>)}</div>}
@@ -2705,12 +2813,13 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
 function AdminCapSelect({
   value,
   onChange,
-  disabled
+  disabled = false
 }: {
   value: number
-  onChange: (val: number) => void
+  onChange: (s: number) => void
   disabled?: boolean
 }) {
+  const isTouch = useIsTouch();
   const [open, setOpen] = useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
 
@@ -2736,43 +2845,72 @@ function AdminCapSelect({
         <CaretDown size={12} className={`shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            data-lenis-prevent="true"
-            initial={{ opacity: 0, y: 4, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 4, scale: 0.96 }}
-            transition={{ duration: 0.12 }}
-            className="absolute left-0 top-full mt-1.5 z-50 rounded-2xl border bg-popover text-popover-foreground p-1.5 shadow-xl space-y-0.5 w-32 max-h-48 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden overscroll-contain"
-            style={{ overscrollBehavior: 'contain' }}
-          >
-            {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
-              <button
-                type="button"
-                key={s}
-                onClick={() => {
-                  onChange(s);
-                  setOpen(false);
-                }}
-                className={`flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                  value === s
-                    ? 'bg-secondary text-foreground font-bold'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                }`}
-              >
-                <span>Semester {s}</span>
-                {value === s && <Check size={14} className="text-foreground shrink-0" />}
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {isTouch ? (
+        <MobilePresence
+          show={open}
+          type="dropdown"
+          className="absolute left-0 top-full mt-1.5 z-50 rounded-2xl border bg-popover text-popover-foreground p-1.5 shadow-xl space-y-0.5 w-32 max-h-48 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden overscroll-contain"
+          data-lenis-prevent="true"
+        >
+          {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+            <button
+              type="button"
+              key={s}
+              onClick={() => {
+                onChange(s);
+                setOpen(false);
+              }}
+              className={`flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                value === s
+                  ? 'bg-secondary text-foreground font-bold'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              }`}
+            >
+              <span>Semester {s}</span>
+              {value === s && <Check size={14} className="text-foreground shrink-0" />}
+            </button>
+          ))}
+        </MobilePresence>
+      ) : (
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              data-lenis-prevent="true"
+              initial={{ opacity: 0, y: 4, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 4, scale: 0.96 }}
+              transition={{ duration: 0.12 }}
+              className="absolute left-0 top-full mt-1.5 z-50 rounded-2xl border bg-popover text-popover-foreground p-1.5 shadow-xl space-y-0.5 w-32 max-h-48 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden overscroll-contain"
+              style={{ overscrollBehavior: 'contain' }}
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                <button
+                  type="button"
+                  key={s}
+                  onClick={() => {
+                    onChange(s);
+                    setOpen(false);
+                  }}
+                  className={`flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                    value === s
+                      ? 'bg-secondary text-foreground font-bold'
+                      : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                  }`}
+                >
+                  <span>Semester {s}</span>
+                  {value === s && <Check size={14} className="text-foreground shrink-0" />}
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
     </div>
   );
 }
 
 function AdminUsersManager() {
+  const isTouch = useIsTouch();
   const [data, setData] = useState<{ pendingUsers: any[]; activeUsers: any[] }>({ pendingUsers: [], activeUsers: [] });
   const [loading, setLoading] = useState(true);
   const [subTab, setSubTab] = useState<'pending' | 'directory'>('pending');
@@ -3267,16 +3405,10 @@ function AdminUsersManager() {
       )}
 
       {/* Reject Modal */}
-      <AnimatePresence>
-        {rejectModalUser && (
-          <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-sm">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              className="w-full max-w-md rounded-3xl bg-card border p-6 shadow-2xl space-y-4 fm-gpu"
-            >
+      {isTouch ? (
+        <MobilePresence show={!!rejectModalUser} type="backdrop" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/45">
+          {rejectModalUser && (
+            <div className="w-full max-w-md rounded-3xl bg-card border p-6 shadow-2xl space-y-4 m-panel-enter">
               <h3 className="text-lg font-bold text-foreground">Reject Application</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Rejecting <b className="text-foreground">{rejectModalUser.name}</b> ({rejectModalUser.regNumber || rejectModalUser.email}).
@@ -3309,15 +3441,63 @@ function AdminUsersManager() {
                   Confirm Rejection
                 </button>
               </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+            </div>
+          )}
+        </MobilePresence>
+      ) : (
+        <AnimatePresence>
+          {rejectModalUser && (
+            <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-sm">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="w-full max-w-md rounded-3xl bg-card border p-6 shadow-2xl space-y-4 fm-gpu"
+              >
+                <h3 className="text-lg font-bold text-foreground">Reject Application</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Rejecting <b className="text-foreground">{rejectModalUser.name}</b> ({rejectModalUser.regNumber || rejectModalUser.email}).
+                  You may optionally provide a reason for the applicant.
+                </p>
+
+                <label className="field-label">
+                  Reason for Rejection
+                  <textarea
+                    value={rejectReason}
+                    onChange={e => setRejectReason(e.target.value)}
+                    placeholder="e.g. Registration number does not match current department roster."
+                    className="field-input text-xs min-h-24 resize-none py-2"
+                  />
+                </label>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setRejectModalUser(null)}
+                    className="px-4 py-2 rounded-full text-xs font-semibold bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRejectConfirm}
+                    className="px-4 py-2 rounded-full text-xs font-semibold bg-destructive text-destructive-foreground hover:opacity-95 shadow-xs cursor-pointer"
+                  >
+                    Confirm Rejection
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      )}
     </div>
   );
 }
 
 function AdminCalendarManager() {
+  const isTouch = useIsTouch();
   const [data, setData] = useState<{ periods: any[]; activePeriod: any; summerBreakPeriod: any }>({ periods: [], activePeriod: null, summerBreakPeriod: null });
   const [loading, setLoading] = useState(true);
 
@@ -3611,287 +3791,556 @@ function AdminCalendarManager() {
       )}
 
       {/* Pre-Advancement Review Modal */}
-      <AnimatePresence>
-        {reviewModalOpen && (
-          <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-3xl rounded-3xl bg-card border p-6 sm:p-8 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden fm-gpu"
-            >
-              <div className="flex items-center justify-between border-b pb-4">
-                <div>
-                  <p className="section-kicker">Pre-Advancement Checklist</p>
-                  <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                    Review Before Advancing Semesters
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setReviewModalOpen(false)}
-                  className="size-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
-                >
-                  <X size={16} />
-                </button>
+      {isTouch ? (
+        <MobilePresence show={reviewModalOpen} type="backdrop" className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/45">
+          <div className="w-full max-w-3xl rounded-3xl bg-card border p-6 sm:p-8 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden m-panel-enter">
+            <div className="flex items-center justify-between border-b pb-4">
+              <div>
+                <p className="section-kicker">Pre-Advancement Checklist</p>
+                <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                  Review Before Advancing Semesters
+                </h2>
               </div>
+              <button
+                type="button"
+                onClick={() => setReviewModalOpen(false)}
+                className="size-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
 
-              {summaryLoading ? (
-                <div className="py-20 text-center text-muted-foreground">
-                  <div className="size-6 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto mb-3" />
-                  <p className="text-xs">Compiling batch rosters and candidate checklist...</p>
-                </div>
-              ) : summaryData ? (
-                <div className="flex-1 overflow-y-auto modal-scroll py-4 space-y-6">
-                  {/* Summary Bar */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="rounded-2xl bg-secondary/60 p-3 text-center border">
-                      <span className="text-[11px] text-muted-foreground block">Total Enrolled</span>
-                      <b className="text-base text-foreground font-bold">{summaryData.stats.total}</b>
-                    </div>
-                    <div className="rounded-2xl bg-primary/10 p-3 text-center border border-primary/20">
-                      <span className="text-[11px] text-primary block font-medium">Advancing</span>
-                      <b className="text-base text-primary font-bold">{summaryData.stats.advancing}</b>
-                    </div>
-                    <div className="rounded-2xl bg-amber-500/10 p-3 text-center border border-amber-500/20">
-                      <span className="text-[11px] text-amber-600 dark:text-amber-400 block font-medium">Held Back (Re-take)</span>
-                      <b className="text-base text-amber-600 dark:text-amber-400 font-bold">{heldBackIds.length}</b>
-                    </div>
-                    <div className="rounded-2xl bg-secondary/60 p-3 text-center border">
-                      <span className="text-[11px] text-muted-foreground block">Graduating 🎓</span>
-                      <b className="text-base text-foreground font-bold">{summaryData.stats.graduating}</b>
-                    </div>
+            {summaryLoading ? (
+              <div className="py-20 text-center text-muted-foreground">
+                <div className="size-6 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto mb-3" />
+                <p className="text-xs">Compiling batch rosters and candidate checklist...</p>
+              </div>
+            ) : summaryData ? (
+              <div className="flex-1 overflow-y-auto modal-scroll py-4 space-y-6">
+                {/* Summary Bar */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="rounded-2xl bg-secondary/60 p-3 text-center border">
+                    <span className="text-[11px] text-muted-foreground block">Total Enrolled</span>
+                    <b className="text-base text-foreground font-bold">{summaryData.stats.total}</b>
                   </div>
+                  <div className="rounded-2xl bg-primary/10 p-3 text-center border border-primary/20">
+                    <span className="text-[11px] text-primary block font-medium">Advancing</span>
+                    <b className="text-base text-primary font-bold">{summaryData.stats.advancing}</b>
+                  </div>
+                  <div className="rounded-2xl bg-amber-500/10 p-3 text-center border border-amber-500/20">
+                    <span className="text-[11px] text-amber-600 dark:text-amber-400 block font-medium">Held Back (Re-take)</span>
+                    <b className="text-base text-amber-600 dark:text-amber-400 font-bold">{heldBackIds.length}</b>
+                  </div>
+                  <div className="rounded-2xl bg-secondary/60 p-3 text-center border">
+                    <span className="text-[11px] text-muted-foreground block">Graduating 🎓</span>
+                    <b className="text-base text-foreground font-bold">{summaryData.stats.graduating}</b>
+                  </div>
+                </div>
 
-                  <p className="text-xs text-muted-foreground leading-relaxed bg-secondary/40 p-3 rounded-xl border">
-                    💡 <b>Review Instructions:</b> Cross-reference each batch with official department examination results. Toggle the <b>Hold Back (Re-take)</b> switch on any student who is repeating courses so their account is preserved at their current semester.
-                  </p>
+                <p className="text-xs text-muted-foreground leading-relaxed bg-secondary/40 p-3 rounded-xl border">
+                  💡 <b>Review Instructions:</b> Cross-reference each batch with official department examination results. Toggle the <b>Hold Back (Re-take)</b> switch on any student who is repeating courses so their account is preserved at their current semester.
+                </p>
 
-                  {/* Batch Sections */}
-                  {Object.values(summaryData.batchGroups).map((group: any) => {
-                    const isGradBatch = group.targetSemester > 8;
+                {/* Batch Sections */}
+                {Object.values(summaryData.batchGroups).map((group: any) => {
+                  const isGradBatch = group.targetSemester > 8;
 
-                    return (
-                      <div key={group.batchYear} className="rounded-2xl border bg-card p-4 space-y-3">
-                        <div className="flex items-center justify-between flex-wrap gap-2 border-b pb-2">
-                          <div className="flex items-center gap-2">
-                            <b className="text-sm font-bold text-foreground">Batch {group.batchYear}</b>
-                            <span className="text-xs text-muted-foreground">
-                              (Currently Sem {group.targetSemester - 1} ➔ {isGradBatch ? '🎓 Graduating' : `Semester ${group.targetSemester}`})
-                            </span>
-                          </div>
-                          <span className="text-xs font-semibold text-muted-foreground">
-                            {group.students.length} {group.students.length === 1 ? 'student' : 'students'}
+                  return (
+                    <div key={group.batchYear} className="rounded-2xl border bg-card p-4 space-y-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2 border-b pb-2">
+                        <div className="flex items-center gap-2">
+                          <b className="text-sm font-bold text-foreground">Batch {group.batchYear}</b>
+                          <span className="text-xs text-muted-foreground">
+                            (Currently Sem {group.targetSemester - 1} ➔ {isGradBatch ? '🎓 Graduating' : `Semester ${group.targetSemester}`})
                           </span>
                         </div>
-
-                        {group.students.length === 0 ? (
-                          <p className="text-xs text-muted-foreground py-2 italic">No registered students in this batch.</p>
-                        ) : (
-                          <div className="space-y-1.5">
-                            {group.students.map((student: any) => {
-                              const isHeld = heldBackIds.includes(student.id);
-
-                              return (
-                                <div
-                                  key={student.id}
-                                  className="flex items-center justify-between p-2.5 rounded-xl bg-secondary/40 text-xs hover:bg-secondary/70 transition-colors gap-3"
-                                >
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <b className="text-foreground font-semibold truncate">{student.name}</b>
-                                      {student.regNumber && (
-                                        <span className="font-mono text-[11px] bg-background px-2 py-0.5 rounded text-foreground">
-                                          {student.regNumber}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-muted-foreground text-[11px] truncate">{student.email}</p>
-                                  </div>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleStudentHeldBackInReview(student.id)}
-                                    className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer border ${
-                                      isHeld
-                                        ? 'bg-amber-500 text-white border-amber-600 shadow-2xs font-bold'
-                                        : 'bg-background text-muted-foreground hover:text-foreground border-border'
-                                    }`}
-                                  >
-                                    {isHeld ? '⚠️ Held Back' : 'Will Advance'}
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                        <span className="text-xs font-semibold text-muted-foreground">
+                          {group.students.length} {group.students.length === 1 ? 'student' : 'students'}
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
-              ) : null}
 
-              <div className="flex items-center justify-between border-t pt-4 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setReviewModalOpen(false)}
-                  className="rounded-full bg-secondary hover:bg-secondary/80 text-foreground text-xs font-semibold py-2.5 px-5 cursor-pointer"
-                >
-                  Cancel
-                </button>
+                      {group.students.length === 0 ? (
+                        <p className="text-xs text-muted-foreground py-2 italic">No registered students in this batch.</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {group.students.map((student: any) => {
+                            const isHeld = heldBackIds.includes(student.id);
 
-                <button
-                  type="button"
-                  disabled={advancingLoading || summaryLoading}
-                  onClick={handleConfirmAdvancement}
-                  className="rounded-full bg-primary hover:opacity-95 text-primary-foreground text-xs font-semibold py-2.5 px-6 cursor-pointer shadow-sm disabled:opacity-50 flex items-center gap-2"
-                >
-                  {advancingLoading ? (
-                    <>
-                      <div className="size-4 border-2 border-primary-foreground/30 border-t-primary-foreground animate-spin rounded-full" />
-                      <span>Advancing cohorts...</span>
-                    </>
-                  ) : (
-                    <span>Confirm & Officially Advance Semesters</span>
-                  )}
-                </button>
+                            return (
+                              <div
+                                key={student.id}
+                                className="flex items-center justify-between p-2.5 rounded-xl bg-secondary/40 text-xs hover:bg-secondary/70 transition-colors gap-3"
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <b className="text-foreground font-semibold truncate">{student.name}</b>
+                                    {student.regNumber && (
+                                      <span className="font-mono text-[11px] bg-background px-2 py-0.5 rounded text-foreground">
+                                        {student.regNumber}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-muted-foreground text-[11px] truncate">{student.email}</p>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => toggleStudentHeldBackInReview(student.id)}
+                                  className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer border ${
+                                    isHeld
+                                      ? 'bg-amber-500 text-white border-amber-600 shadow-2xs font-bold'
+                                      : 'bg-background text-muted-foreground hover:text-foreground border-border'
+                                  }`}
+                                >
+                                  {isHeld ? '⚠️ Held Back' : 'Will Advance'}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            </motion.div>
+            ) : null}
+
+            <div className="flex items-center justify-between border-t pt-4 gap-3">
+              <button
+                type="button"
+                onClick={() => setReviewModalOpen(false)}
+                className="rounded-full bg-secondary hover:bg-secondary/80 text-foreground text-xs font-semibold py-2.5 px-5 cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={advancingLoading || summaryLoading}
+                onClick={handleConfirmAdvancement}
+                className="rounded-full bg-primary hover:opacity-95 text-primary-foreground text-xs font-semibold py-2.5 px-6 cursor-pointer shadow-sm disabled:opacity-50 flex items-center gap-2"
+              >
+                {advancingLoading ? (
+                  <>
+                    <div className="size-4 border-2 border-primary-foreground/30 border-t-primary-foreground animate-spin rounded-full" />
+                    <span>Advancing cohorts...</span>
+                  </>
+                ) : (
+                  <span>Confirm & Officially Advance Semesters</span>
+                )}
+              </button>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
-
-      {/* Create Term Modal */}
-      <AnimatePresence>
-        {createModalOpen && (
-          <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-sm">
-            <motion.form
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              onSubmit={handleCreateTerm}
-              className="w-full max-w-lg rounded-3xl bg-card border p-6 sm:p-8 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto modal-scroll fm-gpu"
-            >
-              <div className="flex items-center justify-between border-b pb-3">
-                <div>
-                  <p className="section-kicker">Academic Schedule</p>
-                  <h3 className="text-xl font-bold text-foreground">Create Academic Term</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCreateModalOpen(false)}
-                  className="size-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              <label className="field-label">
-                Term Name
-                <input
-                  required
-                  value={termName}
-                  onChange={e => setTermName(e.target.value)}
-                  placeholder="e.g. Fall 2026 or Spring 2027"
-                  className="field-input text-xs"
-                />
-              </label>
-
-              <div className="grid grid-cols-2 gap-3">
-                <label className="field-label">
-                  Start Date
-                  <input
-                    required
-                    type="date"
-                    value={startDate}
-                    onChange={e => setStartDate(e.target.value)}
-                    className="field-input text-xs"
-                  />
-                </label>
-                <label className="field-label">
-                  End Date
-                  <input
-                    required
-                    type="date"
-                    value={endDate}
-                    onChange={e => setEndDate(e.target.value)}
-                    className="field-input text-xs"
-                  />
-                </label>
-              </div>
-
-              {/* Batch Semester Matrix */}
-              <div className="space-y-2 pt-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-foreground uppercase tracking-wider">
-                    Batch Cohort Semester Map
-                  </span>
+        </MobilePresence>
+      ) : (
+        <AnimatePresence>
+          {reviewModalOpen && (
+            <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="w-full max-w-3xl rounded-3xl bg-card border p-6 sm:p-8 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden fm-gpu"
+              >
+                <div className="flex items-center justify-between border-b pb-4">
+                  <div>
+                    <p className="section-kicker">Pre-Advancement Checklist</p>
+                    <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                      Review Before Advancing Semesters
+                    </h2>
+                  </div>
                   <button
                     type="button"
-                    onClick={addBatchRow}
-                    className="text-[11px] text-primary font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                    onClick={() => setReviewModalOpen(false)}
+                    className="size-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
                   >
-                    <Plus size={12} /> Add Batch
+                    <X size={16} />
                   </button>
                 </div>
 
-                <div className="space-y-2">
-                  {batchMaps.map((bm, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <div className="flex-1 flex items-center gap-1.5 bg-secondary/50 p-2 rounded-xl border">
-                        <span className="text-xs text-muted-foreground font-medium pl-1">Batch:</span>
-                        <input
-                          type="number"
-                          value={bm.batchYear}
-                          onChange={e => updateBatchMapYear(index, parseInt(e.target.value, 10))}
-                          className="field-input py-1 px-2 text-xs rounded-lg bg-background w-20 font-bold"
-                        />
-                        <span className="text-xs text-muted-foreground font-medium pl-2">➔ Sem:</span>
-                        <select
-                          value={bm.semester}
-                          onChange={e => updateBatchMapSemester(index, parseInt(e.target.value, 10))}
-                          className="field-input py-1 px-2 text-xs rounded-lg bg-background flex-1 cursor-pointer"
-                        >
-                          {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
-                            <option key={s} value={s}>Semester {s}</option>
-                          ))}
-                        </select>
+                {summaryLoading ? (
+                  <div className="py-20 text-center text-muted-foreground">
+                    <div className="size-6 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto mb-3" />
+                    <p className="text-xs">Compiling batch rosters and candidate checklist...</p>
+                  </div>
+                ) : summaryData ? (
+                  <div className="flex-1 overflow-y-auto modal-scroll py-4 space-y-6">
+                    {/* Summary Bar */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="rounded-2xl bg-secondary/60 p-3 text-center border">
+                        <span className="text-[11px] text-muted-foreground block">Total Enrolled</span>
+                        <b className="text-base text-foreground font-bold">{summaryData.stats.total}</b>
                       </div>
-
-                      {batchMaps.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeBatchRow(index)}
-                          className="p-2 text-muted-foreground hover:text-destructive cursor-pointer"
-                        >
-                          <Trash size={15} />
-                        </button>
-                      )}
+                      <div className="rounded-2xl bg-primary/10 p-3 text-center border border-primary/20">
+                        <span className="text-[11px] text-primary block font-medium">Advancing</span>
+                        <b className="text-base text-primary font-bold">{summaryData.stats.advancing}</b>
+                      </div>
+                      <div className="rounded-2xl bg-amber-500/10 p-3 text-center border border-amber-500/20">
+                        <span className="text-[11px] text-amber-600 dark:text-amber-400 block font-medium">Held Back (Re-take)</span>
+                        <b className="text-base text-amber-600 dark:text-amber-400 font-bold">{heldBackIds.length}</b>
+                      </div>
+                      <div className="rounded-2xl bg-secondary/60 p-3 text-center border">
+                        <span className="text-[11px] text-muted-foreground block">Graduating 🎓</span>
+                        <b className="text-base text-foreground font-bold">{summaryData.stats.graduating}</b>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
 
-              <div className="flex items-center justify-end gap-2 pt-4 border-t">
+                    <p className="text-xs text-muted-foreground leading-relaxed bg-secondary/40 p-3 rounded-xl border">
+                      💡 <b>Review Instructions:</b> Cross-reference each batch with official department examination results. Toggle the <b>Hold Back (Re-take)</b> switch on any student who is repeating courses so their account is preserved at their current semester.
+                    </p>
+
+                    {/* Batch Sections */}
+                    {Object.values(summaryData.batchGroups).map((group: any) => {
+                      const isGradBatch = group.targetSemester > 8;
+
+                      return (
+                        <div key={group.batchYear} className="rounded-2xl border bg-card p-4 space-y-3">
+                          <div className="flex items-center justify-between flex-wrap gap-2 border-b pb-2">
+                            <div className="flex items-center gap-2">
+                              <b className="text-sm font-bold text-foreground">Batch {group.batchYear}</b>
+                              <span className="text-xs text-muted-foreground">
+                                (Currently Sem {group.targetSemester - 1} ➔ {isGradBatch ? '🎓 Graduating' : `Semester ${group.targetSemester}`})
+                              </span>
+                            </div>
+                            <span className="text-xs font-semibold text-muted-foreground">
+                              {group.students.length} {group.students.length === 1 ? 'student' : 'students'}
+                            </span>
+                          </div>
+
+                          {group.students.length === 0 ? (
+                            <p className="text-xs text-muted-foreground py-2 italic">No registered students in this batch.</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {group.students.map((student: any) => {
+                                const isHeld = heldBackIds.includes(student.id);
+
+                                return (
+                                  <div
+                                    key={student.id}
+                                    className="flex items-center justify-between p-2.5 rounded-xl bg-secondary/40 text-xs hover:bg-secondary/70 transition-colors gap-3"
+                                  >
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <b className="text-foreground font-semibold truncate">{student.name}</b>
+                                        {student.regNumber && (
+                                          <span className="font-mono text-[11px] bg-background px-2 py-0.5 rounded text-foreground">
+                                            {student.regNumber}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-muted-foreground text-[11px] truncate">{student.email}</p>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleStudentHeldBackInReview(student.id)}
+                                      className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer border ${
+                                        isHeld
+                                          ? 'bg-amber-500 text-white border-amber-600 shadow-2xs font-bold'
+                                          : 'bg-background text-muted-foreground hover:text-foreground border-border'
+                                      }`}
+                                    >
+                                      {isHeld ? '⚠️ Held Back' : 'Will Advance'}
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                <div className="flex items-center justify-between border-t pt-4 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setReviewModalOpen(false)}
+                    className="rounded-full bg-secondary hover:bg-secondary/80 text-foreground text-xs font-semibold py-2.5 px-5 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={advancingLoading || summaryLoading}
+                    onClick={handleConfirmAdvancement}
+                    className="rounded-full bg-primary hover:opacity-95 text-primary-foreground text-xs font-semibold py-2.5 px-6 cursor-pointer shadow-sm disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {advancingLoading ? (
+                      <>
+                        <div className="size-4 border-2 border-primary-foreground/30 border-t-primary-foreground animate-spin rounded-full" />
+                        <span>Advancing cohorts...</span>
+                      </>
+                    ) : (
+                      <span>Confirm & Officially Advance Semesters</span>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      )}
+
+      {/* Create Term Modal */}
+      {isTouch ? (
+        <MobilePresence show={createModalOpen} type="backdrop" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/45">
+          <form
+            onSubmit={handleCreateTerm}
+            className="w-full max-w-lg rounded-3xl bg-card border p-6 sm:p-8 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto modal-scroll m-panel-enter"
+          >
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <p className="section-kicker">Academic Schedule</p>
+                <h3 className="text-xl font-bold text-foreground">Create Academic Term</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreateModalOpen(false)}
+                className="size-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <label className="field-label">
+              Term Name
+              <input
+                required
+                value={termName}
+                onChange={e => setTermName(e.target.value)}
+                placeholder="e.g. Fall 2026 or Spring 2027"
+                className="field-input text-xs"
+              />
+            </label>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="field-label">
+                Start Date
+                <input
+                  required
+                  type="date"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                  className="field-input text-xs"
+                />
+              </label>
+              <label className="field-label">
+                End Date
+                <input
+                  required
+                  type="date"
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                  className="field-input text-xs"
+                />
+              </label>
+            </div>
+
+            {/* Batch Semester Matrix */}
+            <div className="space-y-2 pt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                  Batch Cohort Semester Map
+                </span>
                 <button
                   type="button"
-                  onClick={() => setCreateModalOpen(false)}
-                  className="rounded-full bg-secondary text-foreground text-xs font-semibold py-2.5 px-4 cursor-pointer"
+                  onClick={addBatchRow}
+                  className="text-[11px] text-primary font-semibold hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creatingLoading}
-                  className="rounded-full bg-primary text-primary-foreground text-xs font-semibold py-2.5 px-5 cursor-pointer shadow-xs disabled:opacity-50"
-                >
-                  {creatingLoading ? 'Saving term...' : 'Save & Activate Academic Term'}
+                  <Plus size={12} /> Add Batch
                 </button>
               </div>
-            </motion.form>
-          </div>
-        )}
-      </AnimatePresence>
+
+              <div className="space-y-2">
+                {batchMaps.map((bm, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <div className="flex-1 flex items-center gap-1.5 bg-secondary/50 p-2 rounded-xl border">
+                      <span className="text-xs text-muted-foreground font-medium pl-1">Batch:</span>
+                      <input
+                        type="number"
+                        value={bm.batchYear}
+                        onChange={e => updateBatchMapYear(index, parseInt(e.target.value, 10))}
+                        className="field-input py-1 px-2 text-xs rounded-lg bg-background w-20 font-bold"
+                      />
+                      <span className="text-xs text-muted-foreground font-medium pl-2">➔ Sem:</span>
+                      <select
+                        value={bm.semester}
+                        onChange={e => updateBatchMapSemester(index, parseInt(e.target.value, 10))}
+                        className="field-input py-1 px-2 text-xs rounded-lg bg-background flex-1 cursor-pointer"
+                      >
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                          <option key={s} value={s}>Semester {s}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {batchMaps.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeBatchRow(index)}
+                        className="p-2 text-muted-foreground hover:text-destructive cursor-pointer"
+                      >
+                        <Trash size={15} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-4 border-t">
+              <button
+                type="button"
+                onClick={() => setCreateModalOpen(false)}
+                className="rounded-full bg-secondary text-foreground text-xs font-semibold py-2.5 px-4 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={creatingLoading}
+                className="rounded-full bg-primary text-primary-foreground text-xs font-semibold py-2.5 px-5 cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                {creatingLoading ? 'Saving term...' : 'Save & Activate Academic Term'}
+              </button>
+            </div>
+          </form>
+        </MobilePresence>
+      ) : (
+        <AnimatePresence>
+          {createModalOpen && (
+            <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-sm">
+              <motion.form
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onSubmit={handleCreateTerm}
+                className="w-full max-w-lg rounded-3xl bg-card border p-6 sm:p-8 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto modal-scroll fm-gpu"
+              >
+                <div className="flex items-center justify-between border-b pb-3">
+                  <div>
+                    <p className="section-kicker">Academic Schedule</p>
+                    <h3 className="text-xl font-bold text-foreground">Create Academic Term</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCreateModalOpen(false)}
+                    className="size-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <label className="field-label">
+                  Term Name
+                  <input
+                    required
+                    value={termName}
+                    onChange={e => setTermName(e.target.value)}
+                    placeholder="e.g. Fall 2026 or Spring 2027"
+                    className="field-input text-xs"
+                  />
+                </label>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="field-label">
+                    Start Date
+                    <input
+                      required
+                      type="date"
+                      value={startDate}
+                      onChange={e => setStartDate(e.target.value)}
+                      className="field-input text-xs"
+                    />
+                  </label>
+                  <label className="field-label">
+                    End Date
+                    <input
+                      required
+                      type="date"
+                      value={endDate}
+                      onChange={e => setEndDate(e.target.value)}
+                      className="field-input text-xs"
+                    />
+                  </label>
+                </div>
+
+                {/* Batch Semester Matrix */}
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                      Batch Cohort Semester Map
+                    </span>
+                    <button
+                      type="button"
+                      onClick={addBatchRow}
+                      className="text-[11px] text-primary font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus size={12} /> Add Batch
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {batchMaps.map((bm, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <div className="flex-1 flex items-center gap-1.5 bg-secondary/50 p-2 rounded-xl border">
+                          <span className="text-xs text-muted-foreground font-medium pl-1">Batch:</span>
+                          <input
+                            type="number"
+                            value={bm.batchYear}
+                            onChange={e => updateBatchMapYear(index, parseInt(e.target.value, 10))}
+                            className="field-input py-1 px-2 text-xs rounded-lg bg-background w-20 font-bold"
+                          />
+                          <span className="text-xs text-muted-foreground font-medium pl-2">➔ Sem:</span>
+                          <select
+                            value={bm.semester}
+                            onChange={e => updateBatchMapSemester(index, parseInt(e.target.value, 10))}
+                            className="field-input py-1 px-2 text-xs rounded-lg bg-background flex-1 cursor-pointer"
+                          >
+                            {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                              <option key={s} value={s}>Semester {s}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {batchMaps.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeBatchRow(index)}
+                            className="p-2 text-muted-foreground hover:text-destructive cursor-pointer"
+                          >
+                            <Trash size={15} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-4 border-t">
+                  <button
+                    type="button"
+                    onClick={() => setCreateModalOpen(false)}
+                    className="rounded-full bg-secondary text-foreground text-xs font-semibold py-2.5 px-4 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creatingLoading}
+                    className="rounded-full bg-primary text-primary-foreground text-xs font-semibold py-2.5 px-5 cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    {creatingLoading ? 'Saving term...' : 'Save & Activate Academic Term'}
+                  </button>
+                </div>
+              </motion.form>
+            </div>
+          )}
+        </AnimatePresence>
+      )}
     </div>
   );
 }
@@ -4096,6 +4545,7 @@ function RequestsManager({ onRefreshCount }: { onRefreshCount?: () => void }) {
 }
 
 function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
+  const isTouch = useIsTouch()
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [audience, setAudience] = useState('All students')
@@ -4230,51 +4680,95 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
               />
             </button>
 
-            <AnimatePresence initial={false}>
-              {dropdownOpen && (
-                <>
+            {isTouch ? (
+              <>
+                {dropdownOpen && (
                   <div 
                     className="fixed inset-0 z-20" 
                     onClick={() => setDropdownOpen(false)} 
                   />
-                  <motion.div
-                    initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
+                )}
+                <MobilePresence
+                  show={dropdownOpen}
+                  type="dropdown"
+                  className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
+                >
+                  <div 
+                    data-lenis-prevent="true"
+                    className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
+                    style={{ overscrollBehavior: 'contain' }}
                   >
+                    {AUDIENCE_CHOICES.map(item => {
+                      const isSelected = audience === item;
+                      return (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => {
+                            setAudience(item);
+                            setDropdownOpen(false);
+                          }}
+                          className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
+                            isSelected
+                              ? 'bg-secondary font-semibold text-foreground'
+                              : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                          }`}
+                        >
+                          <span className="truncate">{item}</span>
+                          {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </MobilePresence>
+              </>
+            ) : (
+              <AnimatePresence initial={false}>
+                {dropdownOpen && (
+                  <>
                     <div 
-                      data-lenis-prevent="true"
-                      className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
-                      style={{ overscrollBehavior: 'contain' }}
+                      className="fixed inset-0 z-20" 
+                      onClick={() => setDropdownOpen(false)} 
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
                     >
-                      {AUDIENCE_CHOICES.map(item => {
-                        const isSelected = audience === item;
-                        return (
-                          <button
-                            key={item}
-                            type="button"
-                            onClick={() => {
-                              setAudience(item);
-                              setDropdownOpen(false);
-                            }}
-                            className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
-                              isSelected
-                                ? 'bg-secondary font-semibold text-foreground'
-                                : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                            }`}
-                          >
-                            <span className="truncate">{item}</span>
-                            {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
+                      <div 
+                        data-lenis-prevent="true"
+                        className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
+                        style={{ overscrollBehavior: 'contain' }}
+                      >
+                        {AUDIENCE_CHOICES.map(item => {
+                          const isSelected = audience === item;
+                          return (
+                            <button
+                              key={item}
+                              type="button"
+                              onClick={() => {
+                                setAudience(item);
+                                setDropdownOpen(false);
+                              }}
+                              className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
+                                isSelected
+                                  ? 'bg-secondary font-semibold text-foreground'
+                                  : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                              }`}
+                            >
+                              <span className="truncate">{item}</span>
+                              {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            )}
           </div>
         </div>
 

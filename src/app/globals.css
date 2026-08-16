@@ -215,75 +215,113 @@
 @keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
-/* ─── iOS Safari Definitive Fix ─────────────────────────────────────────────
-   TWO root causes confirmed:
+/* ═══ Mobile / iOS Safari — Complete Animation Rewrite ═══════════════════════
+   Strategy: replace all Framer Motion (JS RAF) with CSS @keyframes.
+   CSS animations run 100% on the GPU compositor thread — no JS involvement,
+   no will-change cleanup bugs, no backdrop-filter cascade, no layer drops.
 
-   CAUSE 1 — "Full-page repaint cascade":
-   Any `position: sticky` or `position: fixed` element with an alpha background
-   (bg-background/80, bg-card/95) OR backdrop-filter: blur() forces Safari to do
-   a full-page blended repaint on EVERY animation frame — causing ALL animations
-   throughout the entire app to jitter simultaneously. Fix: make these elements
-   fully opaque and remove backdrop-filter on touch devices.
+   Rules applied to every mobile animation:
+   1. Only `opacity` + `translate3d(0, Ypx, 0)` — both compositor-native
+   2. No scale() — forces tile rasterization per frame on iOS
+   3. animation-fill-mode: both — prevents flash between render and animation start
+   4. translate3d (not translateY) — forces 3D path → GPU layer guaranteed
 
-   CAUSE 2 — "Post-animation GPU layer de-promotion flash":
-   When Framer Motion finishes an animation (y:0, scale:1 = identity values), it
-   removes its inline transform style. Safari then de-promotes the compositor GPU
-   layer back to software rendering — causing a 1-frame blank flash after each
-   animation completes. Fix: CSS `will-change: transform` via class (CSS is not
-   overridden by FM's inline style cleanup) keeps the GPU layer permanently alive.
-
-   DESKTOP: 100% unaffected. Frosted glass, animations, all identical.
-   MOBILE: Solid backgrounds instead of frosted glass. All animations preserved.
-────────────────────────────────────────────────────────────────────────────── */
+   Desktop: 100% unaffected. All Framer Motion, frosted glass, spring physics
+   remain completely intact for mouse/trackpad devices.
+═══════════════════════════════════════════════════════════════════════════════ */
 @media (hover: none) and (pointer: coarse) {
 
-  /* ── FIX 1: Remove backdrop-filter from ALL elements ──────────────────────
-     This single rule eliminates the full-page repaint cascade.
-     Every Tailwind backdrop-blur-* class is caught by the [class*] selector. */
+  /* ── Remove backdrop-filter: alpha+blur on sticky/fixed = full-page repaint ── */
   [class*="backdrop-blur"],
   [style*="backdrop-filter"],
   [style*="-webkit-backdrop-filter"] {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
-
-  /* Make the sticky header fully opaque (alpha bg on sticky = repaint on every frame) */
   header.sticky {
     background-color: var(--background) !important;
     border-bottom-color: var(--border) !important;
   }
-  .dark header.sticky {
-    background-color: var(--card) !important;
+  .dark header.sticky { background-color: var(--card) !important; }
+  nav.mobile-nav-pill  { background-color: var(--card) !important; }
+
+  /* ── Override scale-using keyframes (card-enter, pop-in, dialog-in) ───────── */
+  @keyframes card-enter {
+    from { opacity: 0; transform: translate3d(0, 8px, 0); }
+    to   { opacity: 1; transform: translate3d(0, 0,  0); }
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: translate3d(0, -4px, 0); }
+    to   { opacity: 1; transform: translate3d(0,  0,   0); }
+  }
+  @keyframes dialog-in {
+    from { opacity: 0; transform: translate3d(0, 8px, 0); }
+    to   { opacity: 1; transform: translate3d(0, 0,  0); }
   }
 
-  /* Make the fixed mobile nav fully opaque */
-  nav.mobile-nav-pill {
-    background-color: var(--card) !important;
+  /* ── Screen transitions ─────────────────────────────────────────────────────
+     Used for: login/signup/app-shell/pdf-reader screen switches.
+     Opacity-only — no transform to avoid layout shifts on full-screen elements. */
+  @keyframes m-screen-in  { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes m-screen-out { from { opacity: 1; } to { opacity: 0; } }
+
+  /* ── Dropdown menus ─────────────────────────────────────────────────────────
+     translateY(-8px) matches the y:-6 on desktop for consistent feel. */
+  @keyframes m-dropdown-in {
+    from { opacity: 0; transform: translate3d(0, -8px, 0); }
+    to   { opacity: 1; transform: translate3d(0,   0,  0); }
+  }
+  @keyframes m-dropdown-out {
+    from { opacity: 1; transform: translate3d(0,   0,  0); }
+    to   { opacity: 0; transform: translate3d(0, -8px, 0); }
   }
 
-  /* Make modal backdrops slightly more opaque to compensate for no blur */
-  .dialog-backdrop {
-    background-color: rgba(0, 0, 0, 0.45) !important;
+  /* ── Account / role popover ─────────────────────────────────────────────────
+     Slides down slightly (y:4 on desktop → translateY(6px) on mobile). */
+  @keyframes m-popover-in {
+    from { opacity: 0; transform: translate3d(0, 6px, 0); }
+    to   { opacity: 1; transform: translate3d(0, 0,   0); }
+  }
+  @keyframes m-popover-out {
+    from { opacity: 1; transform: translate3d(0, 0,   0); }
+    to   { opacity: 0; transform: translate3d(0, 6px, 0); }
   }
 
-  /* ── FIX 2: Prevent post-animation GPU layer de-promotion ─────────────────
-     CSS will-change cannot be overridden by Framer Motion's inline style cleanup.
-     When FM finishes an animation and removes its inline transform, this CSS rule
-     keeps the element permanently on the GPU compositor — no de-promotion flash.
-     Applied only to elements that animate: screen panels, dropdowns, modals. */
-  .fm-gpu {
-    will-change: transform;
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
+  /* ── Modal panels ───────────────────────────────────────────────────────────
+     Slides up from below (matches spring y:15 on desktop). */
+  @keyframes m-modal-in {
+    from { opacity: 0; transform: translate3d(0, 20px, 0); }
+    to   { opacity: 1; transform: translate3d(0,  0,   0); }
+  }
+  @keyframes m-modal-out {
+    from { opacity: 1; transform: translate3d(0,  0,   0); }
+    to   { opacity: 0; transform: translate3d(0, 20px, 0); }
   }
 
-  /* Prevent width recalc jank when drawers/modals open on mobile */
-  html {
-    overflow-x: hidden;
-    scrollbar-gutter: auto;
-  }
+  /* ── Modal backdrops ────────────────────────────────────────────────────────
+     Pure opacity — no transform on fixed overlays (avoids stacking context issues). */
+  @keyframes m-backdrop-in  { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes m-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
 
+  /* ── CSS utility classes used by MobilePresence and inline keyed-div usage ─ */
+  .m-screen-enter   { animation: m-screen-in    180ms ease-out both; }
+  .m-screen-exit    { animation: m-screen-out   120ms ease-in  both; }
+  .m-dropdown-enter { animation: m-dropdown-in  150ms ease-out both; }
+  .m-dropdown-exit  { animation: m-dropdown-out 100ms ease-in  both; }
+  .m-popover-enter  { animation: m-popover-in   150ms ease-out both; }
+  .m-popover-exit   { animation: m-popover-out  100ms ease-in  both; }
+  .m-modal-enter    { animation: m-modal-in     200ms ease-out both; }
+  .m-modal-exit     { animation: m-modal-out    150ms ease-in  both; }
+  .m-backdrop-enter { animation: m-backdrop-in  160ms ease-out both; }
+  .m-backdrop-exit  { animation: m-backdrop-out 150ms ease-in  both; }
+  /* Panel-only enter for forms nested inside a backdrop MobilePresence */
+  .m-panel-enter    { animation: m-modal-in     200ms ease-out both; }
+
+  /* ── Layout and overflow ────────────────────────────────────────────────────*/
+  html { overflow-x: hidden; scrollbar-gutter: auto; }
 }
+
+
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
