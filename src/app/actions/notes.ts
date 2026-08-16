@@ -357,13 +357,14 @@ export async function deleteSubject(subjectIdentifier: string) {
       where: {
         OR: [
           { id: subjectIdentifier },
-          { code: subjectIdentifier }
+          { code: { equals: subjectIdentifier, mode: 'insensitive' } },
+          { name: { equals: subjectIdentifier, mode: 'insensitive' } }
         ]
       }
     })
 
     if (!subject) {
-      return { error: 'Subject not found.' }
+      return { success: true }
     }
 
     const notes = await prisma.note.findMany({ where: { subjectId: subject.id } })

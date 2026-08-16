@@ -2501,12 +2501,12 @@ function AdminCms({
 
   const handleDeleteSubject = async (id: string, code: string) => {
     if(!confirm(`Delete subject ${code}? All attached notes for this course will also be deleted. This cannot be undone.`)) return;
-    const res = await deleteSubject(id);
+    const res = await deleteSubject(id || code);
     if (res.error) {
       setSubMsg(res.error);
       setTimeout(() => setSubMsg(''), 4000);
     } else {
-      setSubjects(subjects.filter(s => s.id !== id));
+      setSubjects(subjects.filter(s => s.id !== id && s.code !== code));
       setNotes(prev => prev.filter(n => n.code !== code));
       setSubMsg(`Deleted subject ${code}.`);
       setTimeout(() => setSubMsg(''), 2500);
