@@ -245,6 +245,13 @@ export function StudyCompanion({
     ? 'Settings'
     : greeting
 
+
+  // willChange pre-promotes GPU layers BEFORE animation starts.
+  // This stops Safari from tearing down and rebuilding compositor layers mid-animation,
+  // which is what caused the 1-frame white/blank flash on iOS.
+  // All animations (scale, opacity, y) are fully preserved — desktop and mobile identical.
+  const screenWillChange: React.CSSProperties = { willChange: 'transform, opacity' }
+
   return (
     <AnimatePresence mode="wait">
       {!user ? (
@@ -255,6 +262,7 @@ export function StudyCompanion({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.02 }}
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            style={screenWillChange}
             className="w-full min-h-screen"
           >
             <SignUp onRegister={handleRegister} onSwitchToLogin={() => setAuthView('login')} />
@@ -266,6 +274,7 @@ export function StudyCompanion({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.02 }}
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            style={screenWillChange}
             className="w-full min-h-screen"
           >
             <Login onLogin={signIn} onSwitchToSignUp={() => setAuthView('signup')} />
@@ -278,6 +287,7 @@ export function StudyCompanion({
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 1.02 }}
           transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          style={screenWillChange}
           className="w-full min-h-screen"
         >
           <PendingScreen user={user} onLogout={handleLogout} />
@@ -289,6 +299,7 @@ export function StudyCompanion({
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.99 }}
           transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          style={screenWillChange}
           className="w-full min-h-screen"
         >
           <PdfReader note={reader} onBack={() => setReader(null)} />
@@ -300,6 +311,7 @@ export function StudyCompanion({
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.99 }}
           transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          style={screenWillChange}
           className="min-h-screen bg-background text-foreground"
         >
           <header className="sticky top-0 z-40 border-b border-border/40 bg-background/80 dark:bg-card/80 backdrop-blur-md shadow-xs">
@@ -340,6 +352,7 @@ export function StudyCompanion({
                           animate={{opacity:1, scale:1, y:0}} 
                           exit={{opacity:0, scale:0.95, y:4}} 
                           transition={{duration:0.15}} 
+                          style={{ willChange: 'transform, opacity' }}
                           className="popover right-0 w-60 overflow-hidden shadow-xl rounded-2xl origin-top-right border bg-card p-0 z-40"
                         >
                           <div className="px-4 py-3 border-b bg-secondary/30">
@@ -633,6 +646,8 @@ function SettingsPage({
                         initial={{ opacity: 0, y: -6, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        transition={{ duration: 0.12 }}
+                        style={{ willChange: 'transform, opacity' }}
                         className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
                       >
                         <div 
@@ -682,6 +697,8 @@ function SettingsPage({
                         initial={{ opacity: 0, y: -6, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        transition={{ duration: 0.12 }}
+                        style={{ willChange: 'transform, opacity' }}
                         className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
                       >
                         <div 
@@ -1812,7 +1829,8 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
                                     initial={{ opacity: 0, y: -6, scale: 0.98 }}
                                     animate={{ opacity: 1, y: 0, scale: 1 }}
                                     exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                                    transition={{ duration: 0.15 }}
+                                    transition={{ duration: 0.12 }}
+                                    style={{ willChange: 'transform, opacity' }}
                                     className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
                                   >
                                     <div 
@@ -2098,6 +2116,8 @@ function ReviewQueueCard({
                           initial={{ opacity: 0, y: -6, scale: 0.98 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                          transition={{ duration: 0.12 }}
+                          style={{ willChange: 'transform, opacity' }}
                           className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
                         >
                           <div 
@@ -3269,6 +3289,8 @@ function AdminUsersManager() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              style={{ willChange: 'transform, opacity' }}
               className="w-full max-w-md rounded-3xl bg-card border p-6 shadow-2xl space-y-4"
             >
               <h3 className="text-lg font-bold text-foreground">Reject Application</h3>

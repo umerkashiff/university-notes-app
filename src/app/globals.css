@@ -215,6 +215,59 @@
 @keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
+/* ─── iOS Safari / Touch Device Rendering Fixes ────────────────────────────
+   Root cause of the glitch: Safari WebKit has a "layer invalidation cascade" bug.
+   When an element with backdrop-filter: blur() is in the same compositing layer
+   as a nearby JS-animated element (transform/opacity), Safari drops and rebuilds
+   the entire compositor tree on every animation frame — causing the 1-frame flash.
+
+   The fix (without removing ANY animations):
+   1. `will-change: backdrop-filter` on blur elements → Safari pre-creates a
+      dedicated GPU tile for the blur, isolated from the animation layer.
+   2. `isolation: isolate` creates a new stacking context so the blur element
+      never shares a compositor layer with its animated siblings.
+   3. `contain: layout style` on animated elements prevents style recalc from
+      propagating up and triggering the blur re-composite.
+
+   Desktop is 100% unaffected. All animations (scale, y, opacity) work identically.
+──────────────────────────────────────────────────────────────────────────── */
+@media (hover: none) and (pointer: coarse) {
+  /* Pre-promote the sticky header blur to its own GPU layer.
+     This isolates it from any animated children so it never re-blurs on frame. */
+  header.sticky {
+    will-change: backdrop-filter;
+    isolation: isolate;
+    contain: layout style;
+  }
+
+  /* Same treatment for the fixed mobile nav bar blur. */
+  nav[style*="translate3d"] {
+    will-change: backdrop-filter;
+    isolation: isolate;
+  }
+
+  /* Isolate all dialog/modal backdrops so their blur layer is independent
+     of the motion.div panels animating inside them. */
+  .dialog-backdrop,
+  [class*="backdrop-blur"] {
+    will-change: backdrop-filter;
+    isolation: isolate;
+  }
+
+  /* Tell Safari to pre-allocate GPU layers for animated panels/modals BEFORE
+     animation begins — prevents mid-animation layer allocation (the flash). */
+  .dialog-panel {
+    will-change: transform, opacity;
+    contain: layout style paint;
+  }
+
+  /* Prevent scrollbar-gutter layout shifts which cause width recalc on modal open. */
+  html {
+    scrollbar-gutter: auto;
+    overflow-x: hidden;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
