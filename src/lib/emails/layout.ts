@@ -13,9 +13,15 @@ export function wrapEmailLayout(options: {
 }): string {
   const { previewText, title, badge, contentHtml, ctaButton, secondaryInfoHtml } = options;
 
-  const appUrl = process.env.APP_URL || 'https://university-notes-app.vercel.app';
-  const logoUrl = process.env.APP_URL ? `${process.env.APP_URL}/final.svg?v=3` : '/final.svg?v=3';
-  const ctaUrl = ctaButton?.url?.startsWith('http') ? ctaButton.url : `${appUrl}${ctaButton?.url || ''}`;
+  const rawAppUrl = process.env.APP_URL 
+    || process.env.NEXT_PUBLIC_APP_URL 
+    || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : '')
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '')
+    || 'https://university-notes-app.vercel.app';
+  
+  const appUrl = rawAppUrl.replace(/\/+$/, '');
+  const logoUrl = appUrl.startsWith('http') ? `${appUrl}/final.svg?v=3` : '/final.svg?v=3';
+  const ctaUrl = ctaButton?.url?.startsWith('http') ? ctaButton.url : `${appUrl}${ctaButton?.url?.startsWith('/') ? ctaButton.url : `/${ctaButton?.url || ''}`}`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -82,13 +88,13 @@ export function wrapEmailLayout(options: {
                 <tr>
                   <td align="center" style="vertical-align: middle; border: 0;">
                     <!-- Brand Pill with Logo -->
-                    <table role="presentation" border="0" cellspacing="0" cellpadding="0" style="border-collapse: separate; border-spacing: 0; background-color: #000000; border-radius: 9999px;">
+                    <table role="presentation" border="0" cellspacing="0" cellpadding="0" style="border-collapse: separate; border-spacing: 0; background-color: #000000; border-radius: 9999px; padding: 4px 14px 4px 5px;">
                       <tr>
-                        <td align="center" valign="middle" style="vertical-align: middle; padding: 5px 0px 5px 8px; border: 0; line-height: 0; font-size: 0;">
-                          <img src="${logoUrl}" width="34" height="34" alt="Semstack Logo" style="display: block; width: 34px; height: 34px; border-radius: 50%; background-color: #000000; border: 0;" />
+                        <td align="center" valign="middle" style="vertical-align: middle; padding: 0; line-height: 0; font-size: 0; border: 0;">
+                          <img src="${logoUrl}" width="28" height="28" alt="Semstack Logo" style="display: block; width: 28px; height: 28px; border-radius: 50%; background-color: #000000; border: 0;" />
                         </td>
-                        <td align="left" valign="middle" style="vertical-align: middle; padding: 5px 16px 5px 6px; border: 0; line-height: 1;">
-                          <span style="color: #ffffff; font-weight: 800; font-size: 14px; letter-spacing: 0.8px; text-transform: uppercase; line-height: 1; font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: inline-block; vertical-align: middle;">
+                        <td align="left" valign="middle" style="vertical-align: middle; padding-left: 8px; padding-right: 2px; border: 0; line-height: 1;">
+                          <span style="color: #ffffff; font-weight: 800; font-size: 13px; letter-spacing: 0.8px; text-transform: uppercase; line-height: 1; font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: inline-block; vertical-align: middle; padding-top: 1px;">
                             SEMSTACK
                           </span>
                         </td>
