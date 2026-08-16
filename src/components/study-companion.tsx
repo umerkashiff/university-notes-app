@@ -713,82 +713,71 @@ function SettingsPage({
         </div>
       </section>
 
-      {/* 3. About Semstack & Creator Note (One-of-One WebGL Card) */}
-      <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0b0d11] text-white shadow-2xl">
-        {/* LightTunnel Canvas Background */}
-        <div className="absolute inset-0 z-0 opacity-45 pointer-events-none">
+      {/* 3. Developer's Note */}
+      <section className="relative overflow-hidden rounded-3xl border border-border bg-card text-foreground shadow-xs">
+        {/* LightTunnel Canvas Background (Theme Adaptive) */}
+        <div className="absolute inset-0 z-0 opacity-25 dark:opacity-35 pointer-events-none">
           <LightTunnel
-            cableColor="#10B981"
-            pulseColor="#34D399"
-            tunnelColor="#064E3B"
-            tunnelOpacity={0.12}
-            speed={0.06}
+            cableColor={theme === 'dark' ? '#818CF8' : '#64748B'}
+            pulseColor={theme === 'dark' ? '#A5B4FC' : '#4F46E5'}
+            tunnelColor={theme === 'dark' ? '#1E1B4B' : '#E2E8F0'}
+            tunnelOpacity={0.08}
+            speed={0.05}
             flowDirection="outward"
-            pulseSpeed={1.5}
-            pulseLength={0.3}
+            pulseSpeed={1.4}
+            pulseLength={0.28}
             pulseBlend={1}
             pulseWidth={1}
-            cableCount={22}
-            thickness={0.3}
+            cableCount={20}
+            thickness={0.28}
             rimWidth={0.12}
             waviness={0.2}
-            sway={0.35}
-            size={1.1}
-            glow={1.1}
+            sway={0.3}
+            size={1.15}
+            glow={0.9}
             fadeNear={0.4}
             fadeFar={2.2}
             brightness={1.0}
             grain={true}
-            grainIntensity={0.03}
-            opacity={0.85}
+            grainIntensity={0.02}
+            opacity={0.8}
             mouseInteraction={true}
-            mouseStrength={0.08}
+            mouseStrength={0.06}
           />
         </div>
 
-        {/* Ambient overlay gradient for pristine contrast & readability */}
-        <div className="absolute inset-0 z-1 bg-gradient-to-t from-[#0b0d11] via-[#0b0d11]/75 to-[#0b0d11]/35 pointer-events-none" />
+        {/* Ambient overlay gradient for pristine contrast & readability in light & dark */}
+        <div className="absolute inset-0 z-1 bg-gradient-to-t from-card via-card/85 to-card/40 pointer-events-none" />
 
         {/* Content */}
         <div className="relative z-10 p-6 sm:p-8 flex flex-col gap-4">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2.5">
-              <span className="text-[11px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full">
-                2025-CE-94
-              </span>
-              <span className="text-xs text-white/65 font-medium">Department of Computer Engineering</span>
-            </div>
-            <span className="text-[11px] font-semibold text-white/40 tracking-wide uppercase">Developer's Note</span>
+          <h3 className="text-xl sm:text-2xl font-semibold text-foreground tracking-tight">
+            Developer's Note
+          </h3>
+
+          <div className="text-sm leading-relaxed text-muted-foreground space-y-2.5 font-normal">
+            <p>
+              Hi, I'm <strong className="text-foreground font-semibold">Umer (2025-CE-94)</strong>.
+            </p>
+            <p>
+              I have started Semstack as an independent crowdsourcing platform where seniors can easily share quality notes, past papers, and study resources to guide and help their juniors succeed.
+            </p>
+            <p>
+              The platform has just started out and is in active early development, so you might run into occasional bugs or rough edges as new features continue to roll out.
+            </p>
+            <p>
+              Your contributions and help make all the difference! Whether you'd like to contribute your notes, help fellow students, or report any problems and suggestions, please feel free to reach out directly through the feedback section below.
+            </p>
           </div>
 
-          <div className="space-y-2.5 pt-1">
-            <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-              About Semstack
-            </h3>
-            <div className="text-sm leading-relaxed text-white/80 space-y-2.5 font-normal">
-              <p>
-                Hi, I'm <strong className="text-white font-semibold">Umer (2025-CE-94)</strong>.
-              </p>
-              <p>
-                I have started Semstack as an independent crowdsourcing platform where seniors can easily share quality notes, past papers, and study resources to guide and help their juniors succeed.
-              </p>
-              <p>
-                The platform has just started out and is in active early development, so you might run into occasional bugs or rough edges as new features continue to roll out.
-              </p>
-              <p>
-                Your contributions and help make all the difference! Whether you'd like to contribute your notes, help fellow students, or report any problems and suggestions, please feel free to reach out directly through the feedback section below.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between pt-4 border-t border-white/10 flex-wrap gap-3">
-            <p className="text-xs text-white/60 font-medium">
+          <div className="flex items-center justify-between pt-4 border-t border-border/80 flex-wrap gap-3">
+            <p className="text-xs text-muted-foreground font-medium">
               Made with ❤️ for UET CE
             </p>
             {role !== 'admin' && (
               <a
                 href="#feedback-section"
-                className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 underline underline-offset-4 transition-colors"
+                className="text-xs font-semibold text-primary hover:underline underline-offset-4 transition-colors"
               >
                 Report a bug or share feedback &darr;
               </a>
