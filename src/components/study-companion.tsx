@@ -26,6 +26,10 @@ const PDFViewer = dynamic(() => import('@/components/pdf-viewer').then(mod => mo
   loading: () => <div className="flex h-96 items-center justify-center text-sm text-muted-foreground">Loading PDF reader...</div>
 })
 
+const LightTunnel = dynamic(() => import('@/components/light-tunnel'), {
+  ssr: false
+})
+
 type Role = 'student' | 'senior' | 'admin'
 type Screen = 'semesters' | 'subject' | 'notifications' | 'submissions' | 'cms' | 'saved' | 'settings'
 type SubjectItem = { id:string; name:string; code:string; semester:number }
@@ -709,9 +713,93 @@ function SettingsPage({
         </div>
       </section>
 
-      {/* 3. Request Content / Feedback (For Students & Contributors only) */}
+      {/* 3. About Semstack & Creator Note (One-of-One WebGL Card) */}
+      <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0b0d11] text-white shadow-2xl">
+        {/* LightTunnel Canvas Background */}
+        <div className="absolute inset-0 z-0 opacity-45 pointer-events-none">
+          <LightTunnel
+            cableColor="#10B981"
+            pulseColor="#34D399"
+            tunnelColor="#064E3B"
+            tunnelOpacity={0.12}
+            speed={0.06}
+            flowDirection="outward"
+            pulseSpeed={1.5}
+            pulseLength={0.3}
+            pulseBlend={1}
+            pulseWidth={1}
+            cableCount={22}
+            thickness={0.3}
+            rimWidth={0.12}
+            waviness={0.2}
+            sway={0.35}
+            size={1.1}
+            glow={1.1}
+            fadeNear={0.4}
+            fadeFar={2.2}
+            brightness={1.0}
+            grain={true}
+            grainIntensity={0.03}
+            opacity={0.85}
+            mouseInteraction={true}
+            mouseStrength={0.08}
+          />
+        </div>
+
+        {/* Ambient overlay gradient for pristine contrast & readability */}
+        <div className="absolute inset-0 z-1 bg-gradient-to-t from-[#0b0d11] via-[#0b0d11]/75 to-[#0b0d11]/35 pointer-events-none" />
+
+        {/* Content */}
+        <div className="relative z-10 p-6 sm:p-8 flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full">
+                2025-CE-94
+              </span>
+              <span className="text-xs text-white/65 font-medium">Department of Computer Engineering</span>
+            </div>
+            <span className="text-[11px] font-semibold text-white/40 tracking-wide uppercase">Developer's Note</span>
+          </div>
+
+          <div className="space-y-2.5 pt-1">
+            <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+              About Semstack
+            </h3>
+            <div className="text-sm leading-relaxed text-white/80 space-y-2.5 font-normal">
+              <p>
+                Hi, I'm <strong className="text-white font-semibold">Umer (2025-CE-94)</strong>.
+              </p>
+              <p>
+                I have started Semstack as an independent crowdsourcing platform where seniors can easily share quality notes, past papers, and study resources to guide and help their juniors succeed.
+              </p>
+              <p>
+                The platform has just started out and is in active early development, so you might run into occasional bugs or rough edges as new features continue to roll out.
+              </p>
+              <p>
+                Your contributions and help make all the difference! Whether you'd like to contribute your notes, help fellow students, or report any problems and suggestions, please feel free to reach out directly through the feedback section below.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-4 border-t border-white/10 flex-wrap gap-3">
+            <p className="text-xs text-white/60 font-medium">
+              Made with ❤️ for UET CE
+            </p>
+            {role !== 'admin' && (
+              <a
+                href="#feedback-section"
+                className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 underline underline-offset-4 transition-colors"
+              >
+                Report a bug or share feedback &darr;
+              </a>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* 4. Request Content / Feedback (For Students & Contributors only) */}
       {role !== 'admin' && (
-      <section className="rounded-3xl border bg-card p-6 sm:p-7 shadow-xs">
+      <section id="feedback-section" className="rounded-3xl border bg-card p-6 sm:p-7 shadow-xs scroll-mt-20">
         <div className="flex items-center gap-2 mb-1">
           <ChatText size={20} className="text-primary" />
           <h3 className="text-lg font-semibold text-foreground">Request Content or Report Changes</h3>
