@@ -269,3 +269,99 @@ export async function getCurrentUser() {
   }
 }
 
+export async function requestPasswordReset(rawEmail: string) {
+  const email = String(rawEmail || '').trim().toLowerCase()
+  if (!email || !email.includes('@')) {
+    return { error: 'Please enter a valid email address.' }
+  }
+
+  // 1. Check if user exists
+  const user = await prisma.user.findUnique({ where: { email } })
+  if (!user) {
+    return { error: 'No account found with this email address. Please check your spelling.' }
+  }
+
+  // 2. Generate a secure 6-digit verification code
+  const code = Math.floor(100000 + Math.random() * 900000).toString()
+
+  // 3. Store the verification code in DB (expires in 15 minutes)
+  await prisma.passwordResetToken.deleteMany({ where: { email } })
+  await prisma.passwordResetToken.create({
+    data: {
+      email,
+      code,
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000)
+    }
+  })
+
+  // 4. Send email notification
+  try {
+    const { passwordResetEmail } = await import('@/lib/emails/templates')
+    const { sendEmail } = await import('@/lib/emails/send')
+    const { subject, html } = passwordResetEmail({
+      name: user.name,
+      code
+    })
+    await sendEmail(email, subject, html)
+  } catch (e) {
+    console.error('Failed to dispatch password reset email:', e)
+    return { error: 'Failed to send reset email. Please try again later.' }
+  }
+
+  return { success: true }
+}
+
+export async function resetPasswordWithCode(data: {
+  email: string
+  code: string
+  newPassword: string
+}) {
+  const email = String(data.email || '').trim().toLowerCase()
+  const code = String(data.code || '').trim()
+  const newPassword = String(data.newPassword || '')
+
+  if (!email || !code || !newPassword) {
+    return { error: 'All fields are required.' }
+  }
+
+  if (newPassword.length < 6) {
+    return { error: 'Password must be at least 6 characters.' }
+  }
+
+  // 1. Verify code
+  const validToken = await prisma.passwordResetToken.findFirst({
+    where: {
+      email,
+      code,
+      expiresAt: { gt: new Date() }
+    }
+  })
+
+  if (!validToken) {
+    return { error: 'Invalid or expired 6-digit code. Please request a new one.' }
+  }
+
+  // 2. Verify user exists
+  const user = await prisma.user.findUnique({ where: { email } })
+  if (!user) {
+    return { error: 'User account not found.' }
+  }
+
+  // 3. Update password in Supabase auth.users table using pgcrypto bcrypt hash
+  try {
+    await prisma.$executeRawUnsafe(
+      `UPDATE auth.users SET encrypted_password = crypt($1, gen_salt('bf', 10)), updated_at = NOW() WHERE LOWER(email) = LOWER($2)`,
+      newPassword,
+      email
+    )
+  } catch (dbErr) {
+    console.error('Failed to update password in auth.users:', dbErr)
+    return { error: 'Failed to update password. Please try again or contact administrator.' }
+  }
+
+  // 4. Delete used token
+  await prisma.passwordResetToken.deleteMany({ where: { email } })
+
+  return { success: true }
+}
+

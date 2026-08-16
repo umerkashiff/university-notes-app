@@ -7,7 +7,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDown, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info, PencilSimple, Moon, Sun, Desktop, UserCircle, Lock, Calendar, CheckCircle, Warning, WarningCircle, UserPlus, Eye, Clock, UserCheck, ShieldWarning, EnvelopeSimple } from '@phosphor-icons/react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { login, logout, register } from '@/app/actions/auth'
+import { login, logout, register, requestPasswordReset, resetPasswordWithCode } from '@/app/actions/auth'
 import { getAdminUsersData, approveUser, rejectUser, updateUserSemester, toggleHeldBack, changeUserRole, submitHeldBackSelfReport, getContentRequests, updateContentRequestStatus, deleteContentRequest } from '@/app/actions/admin'
 import { getAcademicPeriods, createAcademicPeriod, getPreAdvancementSummary, advanceSemestersForPeriod, setPeriodStatus } from '@/app/actions/academic'
 import { SignUp } from '@/components/signup'
@@ -1008,6 +1008,16 @@ function Login({
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // Forgot Password state
+  const [showForgot, setShowForgot] = useState(false)
+  const [forgotStep, setForgotStep] = useState<'email' | 'code'>('email')
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotCode, setForgotCode] = useState('')
+  const [forgotNewPassword, setForgotNewPassword] = useState('')
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [forgotError, setForgotError] = useState('')
+  const [forgotSuccess, setForgotSuccess] = useState('')
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
@@ -1020,6 +1030,64 @@ function Login({
       setError(e?.message || 'Login failed. Please check your credentials.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleOpenForgot = () => {
+    setForgotEmail(identity.trim())
+    setForgotStep('email')
+    setForgotError('')
+    setForgotSuccess('')
+    setForgotCode('')
+    setForgotNewPassword('')
+    setShowForgot(true)
+  }
+
+  const handleRequestReset = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setForgotError('')
+    if (!forgotEmail.trim()) return
+    setForgotLoading(true)
+    try {
+      const res = await requestPasswordReset(forgotEmail)
+      if (res.error) {
+        setForgotError(res.error)
+      } else {
+        setForgotStep('code')
+        setForgotSuccess(`We sent a 6-digit verification code to ${forgotEmail.trim().toLowerCase()}`)
+      }
+    } catch (err: any) {
+      setForgotError(err?.message || 'Failed to send reset code.')
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setForgotError('')
+    if (!forgotCode.trim() || !forgotNewPassword) return
+    setForgotLoading(true)
+    try {
+      const res = await resetPasswordWithCode({
+        email: forgotEmail,
+        code: forgotCode,
+        newPassword: forgotNewPassword
+      })
+      if (res.error) {
+        setForgotError(res.error)
+      } else {
+        setForgotSuccess('Password updated successfully! Signing you in...')
+        setTimeout(async () => {
+          const err = await onLogin({ email: forgotEmail, password: forgotNewPassword })
+          if (err) setError(err)
+          setShowForgot(false)
+        }, 1200)
+      }
+    } catch (err: any) {
+      setForgotError(err?.message || 'Failed to update password.')
+    } finally {
+      setForgotLoading(false)
     }
   }
 
@@ -1079,8 +1147,17 @@ function Login({
                 disabled={loading}
               />
             </label>
-            <label className="field-label">
-              Password
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-foreground">Password</span>
+                <button
+                  type="button"
+                  onClick={handleOpenForgot}
+                  className="text-xs font-semibold text-muted-foreground hover:text-foreground underline underline-offset-4 transition-colors cursor-pointer"
+                >
+                  Forgot password?
+                </button>
+              </div>
               <input 
                 required 
                 name="password"
@@ -1091,7 +1168,7 @@ function Login({
                 placeholder="••••••••"
                 disabled={loading}
               />
-            </label>
+            </div>
 
             {error && (
               <motion.div 
@@ -1131,6 +1208,148 @@ function Login({
           </div>
         </section>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showForgot && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/60 backdrop-blur-xs"
+          onClick={() => setShowForgot(false)}
+        >
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            onClick={e => e.stopPropagation()}
+            className="relative w-full max-w-md rounded-3xl border bg-card p-6 sm:p-8 shadow-2xl overflow-hidden"
+          >
+            <button
+              onClick={() => setShowForgot(false)}
+              className="absolute top-4 right-4 size-8 flex items-center justify-center rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+
+            {forgotStep === 'email' ? (
+              <form onSubmit={handleRequestReset} className="flex flex-col gap-4">
+                <div className="size-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-1">
+                  <EnvelopeSimple size={22} weight="bold" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-foreground tracking-tight">Reset your password</h3>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    Enter your registered email address and we'll send you a 6-digit verification code.
+                  </p>
+                </div>
+
+                <label className="field-label mt-2">
+                  Email address
+                  <input
+                    required
+                    type="email"
+                    value={forgotEmail}
+                    onChange={e => setForgotEmail(e.target.value)}
+                    placeholder="student@uet.edu"
+                    className="field-input"
+                    disabled={forgotLoading}
+                  />
+                </label>
+
+                {forgotError && (
+                  <div className="rounded-2xl border border-destructive/20 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive font-medium flex items-center gap-2">
+                    <WarningCircle size={16} className="shrink-0" />
+                    <span>{forgotError}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="rounded-full bg-primary px-5 py-3.5 font-semibold text-primary-foreground flex items-center justify-center gap-2 hover:opacity-95 transition-opacity cursor-pointer disabled:opacity-70 mt-1 shadow-sm"
+                >
+                  {forgotLoading ? 'Sending verification code...' : 'Send Verification Code'}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleResetSubmit} className="flex flex-col gap-4">
+                <div className="size-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-1">
+                  <ShieldCheck size={22} weight="bold" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-foreground tracking-tight">Enter 6-digit code</h3>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    We sent a verification code to <strong className="text-foreground">{forgotEmail}</strong>.
+                  </p>
+                </div>
+
+                <label className="field-label mt-2">
+                  Verification Code
+                  <input
+                    required
+                    maxLength={6}
+                    value={forgotCode}
+                    onChange={e => setForgotCode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="123456"
+                    className="field-input text-center text-xl font-mono tracking-widest font-bold"
+                    disabled={forgotLoading}
+                  />
+                </label>
+
+                <label className="field-label">
+                  New Password
+                  <input
+                    required
+                    type="password"
+                    value={forgotNewPassword}
+                    onChange={e => setForgotNewPassword(e.target.value)}
+                    placeholder="At least 6 characters"
+                    className="field-input"
+                    disabled={forgotLoading}
+                  />
+                </label>
+
+                {forgotError && (
+                  <div className="rounded-2xl border border-destructive/20 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive font-medium flex items-center gap-2">
+                    <WarningCircle size={16} className="shrink-0" />
+                    <span>{forgotError}</span>
+                  </div>
+                )}
+
+                {forgotSuccess && (
+                  <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-xs text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-2">
+                    <CheckCircle size={16} className="shrink-0" />
+                    <span>{forgotSuccess}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="rounded-full bg-primary px-5 py-3.5 font-semibold text-primary-foreground flex items-center justify-center gap-2 hover:opacity-95 transition-opacity cursor-pointer disabled:opacity-70 mt-1 shadow-sm"
+                >
+                  {forgotLoading ? 'Updating password...' : 'Reset Password & Sign In'}
+                </button>
+
+                <div className="flex items-center justify-between text-xs text-muted-foreground mt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setForgotStep('email'); setForgotError(''); setForgotSuccess(''); }}
+                    className="underline hover:text-foreground cursor-pointer"
+                  >
+                    Change email
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRequestReset}
+                    className="underline hover:text-foreground cursor-pointer"
+                  >
+                    Resend code
+                  </button>
+                </div>
+              </form>
+            )}
+          </motion.div>
+        </div>
+      )}
     </main>
   )
 }

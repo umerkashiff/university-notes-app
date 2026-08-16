@@ -130,3 +130,14 @@ model ContentRequest {
   user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+

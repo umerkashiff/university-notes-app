@@ -11,7 +11,8 @@ import {
   graduatedEmail, 
   departmentAnnouncementEmail, 
   newRegistrationAlertEmail, 
-  noteSubmittedAlertEmail 
+  noteSubmittedAlertEmail,
+  passwordResetEmail 
 } from '@/lib/emails/templates'
 import { 
   Desktop, 
@@ -151,6 +152,16 @@ const TEMPLATES = [
       subjectCode: 'CE-204',
       pages: 48,
       fileSize: '14.2 MB'
+    })
+  },
+  {
+    id: 'password-reset',
+    name: '12. Password Reset OTP Verification',
+    badge: 'Security',
+    badgeColor: 'bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-500/20',
+    getSample: () => passwordResetEmail({
+      name: 'Umer Kashif',
+      code: '849201'
     })
   }
 ]

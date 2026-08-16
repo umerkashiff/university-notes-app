@@ -423,3 +423,46 @@ export function noteSubmittedAlertEmail(options: {
     })
   };
 }
+
+// 12. Password Reset Verification Code (To User)
+export function passwordResetEmail(options: {
+  name?: string | null;
+  code: string;
+}) {
+  const firstName = options.name ? options.name.split(' ')[0] : 'Student';
+
+  const contentHtml = `
+    <p style="margin: 0 0 14px 0;">
+      Hello <strong>${firstName}</strong>,
+    </p>
+    <p style="margin: 0 0 16px 0;">
+      We received a request to reset the password for your Semstack account. Use the 6-digit verification code below to set a new password:
+    </p>
+    <table role="presentation" border="0" cellspacing="0" cellpadding="0" style="margin: 20px auto 20px auto; border-collapse: separate; border-spacing: 0;">
+      <tr>
+        <td align="center" style="background-color: #f0ede6; border-radius: 16px; padding: 14px 28px; border: 1px solid #e2ddd5;">
+          <span style="font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 30px; font-weight: 800; letter-spacing: 8px; color: #252629; display: inline-block;">
+            ${options.code}
+          </span>
+        </td>
+      </tr>
+    </table>
+    <p style="margin: 0 0 10px 0; font-size: 13px; color: #787a80; text-align: center;">
+      This verification code is valid for the next <strong>15 minutes</strong>.
+    </p>
+    <p style="margin: 20px 0 0 0; font-size: 12px; color: #94969c; line-height: 1.5;">
+      If you did not request a password reset, please ignore this email or contact department coordinators. Your existing password remains unchanged.
+    </p>
+  `;
+
+  return {
+    subject: `🔐 Your Semstack Password Reset Code: ${options.code}`,
+    html: wrapEmailLayout({
+      previewText: `Use verification code ${options.code} to reset your Semstack account password.`,
+      title: `Reset Your Password`,
+      badge: { text: `Security`, bg: '#ece8e1', color: '#3d3f44' },
+      contentHtml
+    })
+  };
+}
+
