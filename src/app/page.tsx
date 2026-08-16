@@ -36,6 +36,9 @@ export default async function Page() {
   try {
     if (user && user.role === 'ADMIN') {
       announcements = await prisma.announcement.findMany({ 
+        where: {
+          NOT: { audience: 'ADMIN' }
+        },
         orderBy: { createdAt: 'desc' } 
       })
     } else if (user) {

@@ -1516,8 +1516,8 @@ function Notifications({alerts,setAlerts,user}:{alerts:any[],setAlerts:(a:any[])
 
   const baseFiltered = useMemo(() => {
     return alerts.filter(a => {
-      // If user is not admin, hide any admin notifications
-      if (user?.role !== 'ADMIN' && a.audience === 'ADMIN') return false
+      // Internal admin records are handled in Admin CMS Requests & Users studios
+      if (a.audience === 'ADMIN' || a.title?.startsWith('Request:')) return false
       // If user has a semester and alert is for a specific semester, check match
       if (user?.role !== 'ADMIN' && a.audience && a.audience !== 'ALL' && a.audience !== 'All students' && a.audience !== 'Department') {
         const match = a.audience.match(/Semester\s*(\d)/i) || a.audience.match(/SEM_(\d)/i)
