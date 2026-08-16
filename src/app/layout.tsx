@@ -15,6 +15,7 @@ export const viewport: Viewport = {
   themeColor: '#f7f5f2',
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
 }
 
 import { IconProvider } from '@/components/icon-provider'

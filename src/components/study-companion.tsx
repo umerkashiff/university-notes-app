@@ -376,7 +376,7 @@ export function StudyCompanion({
             </div>
           </header>
 
-          <div className="mx-auto max-w-7xl px-5 py-8 pb-28 md:px-8 md:py-12">
+          <div className="mx-auto max-w-7xl px-5 py-8 pb-36 md:px-8 md:py-12" style={{ paddingBottom: 'max(8rem, calc(env(safe-area-inset-bottom, 0px) + 6rem))' }}>
             <div className="mb-8 flex items-end justify-between">
               <div>
                 <p className="section-kicker">{screen==='settings'?'Account & Preferences':role==='admin'?'Department CMS':role==='senior'?'Contributor desk':'Your study library'}</p>
@@ -395,7 +395,14 @@ export function StudyCompanion({
               </motion.div>
             </AnimatePresence>
           </div>
-          <nav className="fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 gap-1 rounded-full border bg-card p-1.5 shadow-lg md:hidden">
+          <nav 
+            className="fixed left-1/2 z-30 flex gap-1 rounded-full border border-border/80 bg-card/95 dark:bg-card/95 backdrop-blur-xl p-1.5 shadow-xl md:hidden"
+            style={{
+              bottom: 'max(1.25rem, calc(env(safe-area-inset-bottom, 0px) + 0.85rem))',
+              transform: 'translate3d(-50%, 0, 0)',
+              WebkitBackfaceVisibility: 'hidden',
+            }}
+          >
             <Mobile active={role==='admin'?screen==='cms':role==='senior'?screen==='submissions':(screen==='semesters'||screen==='subject')} onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} icon={<Home/>}>Home</Mobile>
             {role==='student'?<Mobile active={screen==='saved'} onClick={()=>setScreen('saved')} icon={<Bookmark/>}>Saved</Mobile>:<Mobile active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')} icon={<BookOpen/>}>Library</Mobile>}
             <Mobile active={screen==='notifications'} onClick={()=>setScreen('notifications')} icon={<Bell/>}>Notices</Mobile>
