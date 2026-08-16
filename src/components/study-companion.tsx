@@ -715,39 +715,39 @@ function SettingsPage({
 
       {/* 3. Developer's Note */}
       <section className="relative overflow-hidden rounded-3xl border border-border bg-card text-foreground shadow-xs">
-        {/* LightTunnel Canvas Background (Theme Adaptive) */}
-        <div className="absolute inset-0 z-0 opacity-25 dark:opacity-35 pointer-events-none">
+        {/* LightTunnel Canvas Background (Theme Adaptive & High Prominence) */}
+        <div className="absolute inset-0 z-0 opacity-60 dark:opacity-75 pointer-events-none">
           <LightTunnel
-            cableColor={theme === 'dark' ? '#818CF8' : '#64748B'}
-            pulseColor={theme === 'dark' ? '#A5B4FC' : '#4F46E5'}
-            tunnelColor={theme === 'dark' ? '#1E1B4B' : '#E2E8F0'}
-            tunnelOpacity={0.08}
-            speed={0.05}
+            cableColor={theme === 'dark' ? '#818CF8' : '#6366F1'}
+            pulseColor={theme === 'dark' ? '#C084FC' : '#4F46E5'}
+            tunnelColor={theme === 'dark' ? '#312E81' : '#C7D2FE'}
+            tunnelOpacity={0.2}
+            speed={0.15}
             flowDirection="outward"
-            pulseSpeed={1.4}
-            pulseLength={0.28}
+            pulseSpeed={2.5}
+            pulseLength={0.38}
             pulseBlend={1}
             pulseWidth={1}
-            cableCount={20}
-            thickness={0.28}
-            rimWidth={0.12}
-            waviness={0.2}
-            sway={0.3}
-            size={1.15}
-            glow={0.9}
-            fadeNear={0.4}
+            cableCount={24}
+            thickness={0.34}
+            rimWidth={0.16}
+            waviness={0.25}
+            sway={0.4}
+            size={1.1}
+            glow={1.5}
+            fadeNear={0.35}
             fadeFar={2.2}
-            brightness={1.0}
+            brightness={1.25}
             grain={true}
-            grainIntensity={0.02}
-            opacity={0.8}
+            grainIntensity={0.03}
+            opacity={1.0}
             mouseInteraction={true}
-            mouseStrength={0.06}
+            mouseStrength={0.12}
           />
         </div>
 
         {/* Ambient overlay gradient for pristine contrast & readability in light & dark */}
-        <div className="absolute inset-0 z-1 bg-gradient-to-t from-card via-card/85 to-card/40 pointer-events-none" />
+        <div className="absolute inset-0 z-1 bg-gradient-to-t from-card/95 via-card/65 to-transparent pointer-events-none" />
 
         {/* Content */}
         <div className="relative z-10 p-6 sm:p-8 flex flex-col gap-4">
