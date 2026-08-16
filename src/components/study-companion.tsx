@@ -318,7 +318,7 @@ export function StudyCompanion({
                 {screen==='semesters'&&<SemesterLibrary user={user} role={role} subjects={subjectsList} notes={notes} select={(n)=>{setSelectedSemester(n);setScreen('subject')}}/>}
                 {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')}/>}
                 {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts} user={user}/>}
-                {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])}/>}
+                {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])} onNavigateToSettings={()=>setScreen('settings')}/>}
                 {screen==='cms'&&role==='admin'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n=>n.id===note.id?{...n,status:'PUBLISHED'}:n));setAlerts([{id:Date.now(),audience:note.subject||'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a),...alerts])}/>}
                 {screen==='settings'&&<SettingsPage user={user} theme={theme} onChangeTheme={changeTheme} onLogout={handleLogout} onNavigate={setScreen} isLoggingOut={isLoggingOut}/>}
               </div>
@@ -480,7 +480,7 @@ export function StudyCompanion({
                 {screen==='semesters'&&<SemesterLibrary user={user} role={role} subjects={subjectsList} notes={notes} select={(n)=>{setSelectedSemester(n);setScreen('subject')}}/>} 
                 {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')}/>} 
                 {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts} user={user}/>} 
-                {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])}/>} 
+                {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])} onNavigateToSettings={()=>setScreen('settings')}/>} 
                 {screen==='cms'&&role==='admin'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),audience: note.subject || 'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
                 {screen==='settings'&&<SettingsPage user={user} theme={theme} onChangeTheme={changeTheme} onLogout={handleLogout} onNavigate={setScreen} isLoggingOut={isLoggingOut}/>}
               </motion.div>
@@ -1631,9 +1631,21 @@ function Notifications({alerts,setAlerts,user}:{alerts:any[],setAlerts:(a:any[])
 }
 
 
-function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:Note)=>void,notes:Note[],subjects:SubjectItem[]}){
+function ContributorDesk({
+  user,
+  add,
+  notes,
+  subjects,
+  onNavigateToSettings
+}: {
+  user: PrismaUser | null
+  add: (n: Note) => void
+  notes: Note[]
+  subjects: SubjectItem[]
+  onNavigateToSettings?: () => void
+}) {
   const isTouch = useIsTouch()
-  const [open,setOpen]=useState(false);
+  const [open, setOpen] = useState(false);
   const [submitted,setSubmitted]=useState(false);
   const [uploading,setUploading]=useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -1879,12 +1891,23 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2.5">
-                      <WarningCircle size={18} className="shrink-0 text-amber-500 mt-0.5" />
-                      <div className="space-y-0.5">
+                    <div className="rounded-2xl border border-primary/20 bg-sage/40 p-3.5 text-xs text-foreground flex items-start gap-2.5">
+                      <GraduationCap size={18} className="shrink-0 text-primary mt-0.5" />
+                      <div className="space-y-1">
                         <p className="font-semibold text-foreground">No courses available for Semester {selectedSemester}</p>
                         <p className="text-muted-foreground leading-relaxed">
-                          Department administrators have not added courses to Semester {selectedSemester} yet. You cannot submit notes for this semester until courses are configured in the Curriculum manager.
+                          Department administrators haven&apos;t set up courses for this semester yet. You can{' '}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpen(false);
+                              onNavigateToSettings?.();
+                            }}
+                            className="underline underline-offset-2 font-semibold text-primary hover:text-primary/80 transition-colors cursor-pointer inline"
+                          >
+                            Request Content or Report Changes
+                          </button>{' '}
+                          so that admin adds them.
                         </p>
                       </div>
                     </div>
@@ -1931,8 +1954,18 @@ function ContributorDesk({user,add,notes,subjects}:{user:PrismaUser|null,add:(n:
                     <div className="flex flex-col gap-2">
                       <button type="submit" disabled={!selectedFile || semesterSubjects.length === 0} className="rounded-full bg-primary py-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed">Submit note for review</button>
                       {selectedFile && semesterSubjects.length === 0 && (
-                        <p className="text-center text-xs text-amber-600 dark:text-amber-400">
-                          Upload disabled: Please select a semester with active courses.
+                        <p className="text-center text-xs text-muted-foreground">
+                          Upload disabled: Please select a semester with active courses or{' '}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpen(false);
+                              onNavigateToSettings?.();
+                            }}
+                            className="underline underline-offset-2 font-semibold text-primary hover:text-primary/80 transition-colors cursor-pointer"
+                          >
+                            Request Content or Report Changes
+                          </button>.
                         </p>
                       )}
                     </div>
