@@ -161,7 +161,7 @@ export function wrapEmailLayout(options: {
                 University of Engineering and Technology · Lahore
               </p>
               <p style="margin: 8px 0 0 0; font-size: 11px; color: #a4a6ac;">
-                You received this notification because your account is registered on Semstack.
+                You received this notification because your account is registered on Semstack. &middot; <a href="${appUrl}" target="_blank" style="color: #b3b5bb; text-decoration: underline; text-underline-offset: 2px;">Stop receiving these emails</a>
               </p>
             </td>
           </tr>
