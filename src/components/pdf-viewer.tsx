@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, Maximize2, Minimize2, ArrowLeft, ExternalLink } from 'lucide-react'
+import { useIsTouch } from '@/lib/use-touch'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 
@@ -18,6 +19,7 @@ interface PDFViewerProps {
 }
 
 export function PDFViewer({ url, title, author, code, onBack }: PDFViewerProps) {
+  const isTouch = useIsTouch()
   const [numPages, setNumPages] = useState<number | null>(null)
   const [pageNumber, setPageNumber] = useState(1)
   const [scale, setScale] = useState(1.0)
@@ -176,25 +178,25 @@ export function PDFViewer({ url, title, author, code, onBack }: PDFViewerProps) 
             </div>
           }
         >
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
+          {isTouch ? (
+            <div
               key={pageNumber}
-              drag="x"
-              dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={0.15}
-              onDragEnd={(e, { offset }) => {
-                const swipe = offset.x
-                if (swipe < -50 && pageNumber < (numPages || 1)) {
-                  changePage(1)
-                } else if (swipe > 50 && pageNumber > 1) {
-                  changePage(-1)
+              onTouchStart={e => {
+                const touch = e.touches[0]
+                const startX = touch.clientX
+                const handleTouchEnd = (evt: TouchEvent) => {
+                  const endX = evt.changedTouches[0].clientX
+                  const diff = endX - startX
+                  if (diff < -50 && pageNumber < (numPages || 1)) {
+                    changePage(1)
+                  } else if (diff > 50 && pageNumber > 1) {
+                    changePage(-1)
+                  }
+                  document.removeEventListener('touchend', handleTouchEnd)
                 }
+                document.addEventListener('touchend', handleTouchEnd, { once: true })
               }}
-              initial={{ opacity: 0, scale: 0.99 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.99 }}
-              transition={{ duration: 0.15 }}
-              className="shadow-xl sm:shadow-2xl rounded-xl sm:rounded-2xl overflow-hidden bg-white border border-black/5 cursor-grab active:cursor-grabbing touch-pan-y"
+              className="shadow-xl sm:shadow-2xl rounded-xl sm:rounded-2xl overflow-hidden bg-white border border-black/5 touch-pan-y m-screen-enter"
             >
               <Page
                 pageNumber={pageNumber}
@@ -203,8 +205,38 @@ export function PDFViewer({ url, title, author, code, onBack }: PDFViewerProps) 
                 renderAnnotationLayer={true}
                 className="max-w-none pointer-events-none sm:pointer-events-auto"
               />
-            </motion.div>
-          </AnimatePresence>
+            </div>
+          ) : (
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={pageNumber}
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.15}
+                onDragEnd={(e, { offset }) => {
+                  const swipe = offset.x
+                  if (swipe < -50 && pageNumber < (numPages || 1)) {
+                    changePage(1)
+                  } else if (swipe > 50 && pageNumber > 1) {
+                    changePage(-1)
+                  }
+                }}
+                initial={{ opacity: 0, scale: 0.99 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.99 }}
+                transition={{ duration: 0.15 }}
+                className="shadow-xl sm:shadow-2xl rounded-xl sm:rounded-2xl overflow-hidden bg-white border border-black/5 cursor-grab active:cursor-grabbing touch-pan-y fm-gpu"
+              >
+                <Page
+                  pageNumber={pageNumber}
+                  width={pageWidth * scale}
+                  renderTextLayer={true}
+                  renderAnnotationLayer={true}
+                  className="max-w-none pointer-events-none sm:pointer-events-auto"
+                />
+              </motion.div>
+            </AnimatePresence>
+          )}
         </Document>
 
         {/* Mobile Swipe Hint */}

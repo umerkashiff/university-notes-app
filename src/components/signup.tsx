@@ -15,6 +15,8 @@ import {
   Lock
 } from 'lucide-react'
 import { SemstackLogo } from '@/components/logo'
+import { useIsTouch } from '@/lib/use-touch'
+import { MobilePresence } from '@/components/mobile-anim'
 
 interface SignUpProps {
   onRegister: (formData: FormData) => Promise<string | void>
@@ -65,6 +67,7 @@ function CustomSelect({
   options: { value: string | number; label: string }[]
   disabled?: boolean
 }) {
+  const isTouch = useIsTouch()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -99,45 +102,81 @@ function CustomSelect({
         />
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: 4, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 4, scale: 0.98 }}
-            transition={{ duration: 0.12, ease: 'easeOut' }}
-            className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-[1.25rem] border bg-card/98 backdrop-blur-xl shadow-2xl overflow-hidden p-1.5"
+      {isTouch ? (
+        <MobilePresence
+          show={open}
+          type="dropdown"
+          className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-[1.25rem] border bg-card shadow-2xl overflow-hidden p-1.5"
+        >
+          <div 
+            data-lenis-prevent="true"
+            className="max-h-44 overflow-y-auto overscroll-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden space-y-1"
+            style={{ overscrollBehavior: 'contain' }}
           >
-            <div 
-              data-lenis-prevent="true"
-              className="max-h-44 overflow-y-auto overscroll-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden space-y-1"
-              style={{ overscrollBehavior: 'contain' }}
+            {options.map(opt => {
+              const isSelected = String(opt.value) === String(value)
+              return (
+                <button
+                  type="button"
+                  key={opt.value}
+                  onClick={() => {
+                    onChange(opt.value)
+                    setOpen(false)
+                  }}
+                  className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-all flex items-center justify-between cursor-pointer ${
+                    isSelected
+                      ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                      : 'text-foreground hover:bg-secondary/80 font-medium'
+                  }`}
+                >
+                  <span>{opt.label}</span>
+                  {isSelected && <Check size={16} className="shrink-0 text-primary-foreground" />}
+                </button>
+              )
+            })}
+          </div>
+        </MobilePresence>
+      ) : (
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              initial={{ opacity: 0, y: 4, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 4, scale: 0.98 }}
+              transition={{ duration: 0.12, ease: 'easeOut' }}
+              className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-[1.25rem] border bg-card/98 backdrop-blur-xl shadow-2xl overflow-hidden p-1.5 fm-gpu"
             >
-              {options.map(opt => {
-                const isSelected = String(opt.value) === String(value)
-                return (
-                  <button
-                    type="button"
-                    key={opt.value}
-                    onClick={() => {
-                      onChange(opt.value)
-                      setOpen(false)
-                    }}
-                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-all flex items-center justify-between cursor-pointer ${
-                      isSelected
-                        ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
-                        : 'text-foreground hover:bg-secondary/80 font-medium'
-                    }`}
-                  >
-                    <span>{opt.label}</span>
-                    {isSelected && <Check size={16} className="shrink-0 text-primary-foreground" />}
-                  </button>
-                )
-              })}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <div 
+                data-lenis-prevent="true"
+                className="max-h-44 overflow-y-auto overscroll-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden space-y-1"
+                style={{ overscrollBehavior: 'contain' }}
+              >
+                {options.map(opt => {
+                  const isSelected = String(opt.value) === String(value)
+                  return (
+                    <button
+                      type="button"
+                      key={opt.value}
+                      onClick={() => {
+                        onChange(opt.value)
+                        setOpen(false)
+                      }}
+                      className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-all flex items-center justify-between cursor-pointer ${
+                        isSelected
+                          ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                          : 'text-foreground hover:bg-secondary/80 font-medium'
+                      }`}
+                    >
+                      <span>{opt.label}</span>
+                      {isSelected && <Check size={16} className="shrink-0 text-primary-foreground" />}
+                    </button>
+                  )
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
     </div>
   )
 }
