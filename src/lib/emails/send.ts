@@ -1,9 +1,25 @@
+import nodemailer from 'nodemailer';
 import { executeWithResendPool } from '@/lib/resend';
 
-const DEFAULT_FROM = process.env.RESEND_FROM || 'Semstack <onboarding@resend.dev>';
+function getSmtpTransporter() {
+  const user = process.env.SMTP_USER?.trim();
+  const pass = process.env.SMTP_PASS?.replace(/\s+/g, '').trim();
+  if (!user || !pass) return null;
+
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user, pass },
+  });
+}
+
+const DEFAULT_FROM =
+  process.env.SMTP_FROM ||
+  (process.env.SMTP_USER ? `Semstack <${process.env.SMTP_USER}>` : null) ||
+  process.env.RESEND_FROM ||
+  'Semstack <onboarding@resend.dev>';
 
 /**
- * Send an email to one or multiple recipients with automatic Resend API key pool failover.
+ * Send an email to one or multiple recipients with SMTP support and Resend failover pool.
  * Never throws an unhandled error so email operations never disrupt critical DB mutations.
  */
 export async function sendEmail(
@@ -20,7 +36,29 @@ export async function sendEmail(
       return { success: false, error: 'No recipient email specified' };
     }
 
-    // For 1-3 recipients, use standard send
+    const smtpTransporter = getSmtpTransporter();
+
+    // 1. Try sending via Gmail SMTP if configured (Works with ANY recipient worldwide)
+    if (smtpTransporter) {
+      try {
+        const fromAddress = DEFAULT_FROM;
+
+        for (const recipient of recipients) {
+          await smtpTransporter.sendMail({
+            from: fromAddress,
+            to: recipient,
+            subject,
+            html,
+          });
+        }
+
+        return { success: true };
+      } catch (smtpErr: any) {
+        console.warn('[sendEmail] SMTP dispatch failed, falling back to Resend:', smtpErr?.message || smtpErr);
+      }
+    }
+
+    // 2. Fallback to Resend API pool
     if (recipients.length <= 3) {
       for (const recipient of recipients) {
         const { error } = await executeWithResendPool(async (resend) => {
@@ -40,8 +78,7 @@ export async function sendEmail(
       return { success: true };
     }
 
-    // For larger audience (e.g. Department announcements, batch semester advancements),
-    // use batch sending in chunks of 50 to 100 with small pacing
+    // Batch sending for larger audience via Resend
     const CHUNK_SIZE = 50;
     for (let i = 0; i < recipients.length; i += CHUNK_SIZE) {
       const chunk = recipients.slice(i, i + CHUNK_SIZE);
@@ -60,7 +97,6 @@ export async function sendEmail(
         console.error(`[sendEmail] Batch send error for chunk ${i / CHUNK_SIZE + 1}:`, error.message);
       }
 
-      // Small 250ms spacing between chunks to respect rate limits
       if (i + CHUNK_SIZE < recipients.length) {
         await new Promise(res => setTimeout(res, 250));
       }
