@@ -17,7 +17,7 @@ export function wrapEmailLayout(options: {
     || process.env.NEXT_PUBLIC_APP_URL 
     || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : '')
     || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '')
-    || 'https://university-notes-app.vercel.app';
+    || 'https://semstack.vercel.app';
   
   const appUrl = rawAppUrl.replace(/\/+$/, '');
   const logoUrl = appUrl.startsWith('http') ? `${appUrl}/final.svg?v=3` : '/final.svg?v=3';
