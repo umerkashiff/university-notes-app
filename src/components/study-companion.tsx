@@ -14,8 +14,7 @@ import { SignUp } from '@/components/signup'
 import { PendingScreen } from '@/components/pending-screen'
 import { SemstackLogo } from '@/components/logo'
 import type { User as PrismaUser } from '@prisma/client'
-import { createClient } from '@/utils/supabase/client'
-import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage, createAnnouncement, deleteNote, updateNote, toggleBookmark, submitContentRequest } from '@/app/actions/notes'
+import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage, createAnnouncement, deleteAnnouncement, broadcastAnnouncementEmail, deleteNote, updateNote, toggleBookmark, submitContentRequest } from '@/app/actions/notes'
 import { getPresignedUrl } from '@/app/actions/upload'
 import React from 'react'
 import { useIsTouch } from '@/lib/use-touch'
@@ -320,7 +319,7 @@ export function StudyCompanion({
                 {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')}/>}
                 {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts} user={user}/>}
                 {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])} onNavigateToSettings={()=>setScreen('settings')}/>}
-                {screen==='cms'&&role==='admin'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n=>n.id===note.id?{...n,status:'PUBLISHED'}:n));setAlerts([{id:Date.now(),audience:note.subject||'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a),...alerts])}/>}
+                {screen==='cms'&&role==='admin'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} alerts={alerts} setAlerts={setAlerts} publish={(note)=>{setNotes(notes.map(n=>n.id===note.id?{...n,status:'PUBLISHED'}:n));setAlerts([{id:Date.now(),audience:note.subject||'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a),...alerts])}/>}
                 {screen==='settings'&&<SettingsPage user={user} theme={theme} onChangeTheme={changeTheme} onLogout={handleLogout} onNavigate={setScreen} isLoggingOut={isLoggingOut}/>}
               </div>
             </div>
@@ -482,7 +481,7 @@ export function StudyCompanion({
                 {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')}/>} 
                 {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts} user={user}/>} 
                 {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])} onNavigateToSettings={()=>setScreen('settings')}/>} 
-                {screen==='cms'&&role==='admin'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),audience: note.subject || 'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
+                {screen==='cms'&&role==='admin'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} alerts={alerts} setAlerts={setAlerts} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),audience: note.subject || 'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
                 {screen==='settings'&&<SettingsPage user={user} theme={theme} onChangeTheme={changeTheme} onLogout={handleLogout} onNavigate={setScreen} isLoggingOut={isLoggingOut}/>}
               </motion.div>
             </AnimatePresence>
@@ -2322,7 +2321,25 @@ function ReviewQueueCard({
   );
 }
 
-function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:{notes:Note[],setNotes:React.Dispatch<React.SetStateAction<Note[]>>,subjects:SubjectItem[],setSubjects:(s:SubjectItem[])=>void,publish:(n:Note)=>void,addAnnouncement:(a:any)=>void}){
+function AdminCms({
+  notes,
+  setNotes,
+  subjects,
+  setSubjects,
+  alerts,
+  setAlerts,
+  publish,
+  addAnnouncement
+}: {
+  notes: Note[]
+  setNotes: React.Dispatch<React.SetStateAction<Note[]>>
+  subjects: SubjectItem[]
+  setSubjects: (s: SubjectItem[]) => void
+  alerts: any[]
+  setAlerts: (a: any[]) => void
+  publish: (n: Note) => void
+  addAnnouncement: (a: any) => void
+}) {
   const isTouch = useIsTouch();
   const [tab,setTab]=useState<'queue'|'content'|'curriculum'|'users'|'calendar'|'notices'|'requests'>('queue');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -2856,7 +2873,7 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
       {tab==='calendar'&&<AdminCalendarManager />}
 
       {/* Announcements Studio */}
-      {tab==='notices'&&<Announcement onPublish={addAnnouncement}/>}
+      {tab==='notices'&&<Announcement alerts={alerts} setAlerts={setAlerts} onPublish={addAnnouncement}/>}
     </motion.div>
   </AnimatePresence></div>}
 
@@ -4594,16 +4611,29 @@ function RequestsManager({ onRefreshCount }: { onRefreshCount?: () => void }) {
   );
 }
 
-function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
+function Announcement({
+  alerts,
+  setAlerts,
+  onPublish
+}: {
+  alerts: any[]
+  setAlerts: (a: any[]) => void
+  onPublish?: (a: any) => void
+}) {
   const isTouch = useIsTouch()
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [audience, setAudience] = useState('All students')
+  const [sendEmail, setSendEmail] = useState(true)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState(false)
+  const [broadcastingId, setBroadcastingId] = useState<string | number | null>(null)
+  const [deletingId, setDeletingId] = useState<string | number | null>(null)
+  const [actionMsg, setActionMsg] = useState('')
+  const [previewModalImg, setPreviewModalImg] = useState<string | null>(null)
 
   const AUDIENCE_CHOICES = [
     'All students',
@@ -4616,6 +4646,10 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
     'Semester 7',
     'Semester 8',
   ]
+
+  const deptNotices = useMemo(() => {
+    return alerts.filter(a => a.kind !== 'New note')
+  }, [alerts])
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -4671,6 +4705,7 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
       body,
       audience: audience === 'All students' ? 'ALL' : audience,
       imageUrl: uploadedImageUrl,
+      sendEmailNotification: sendEmail,
     })
 
     if (res.error) {
@@ -4683,205 +4718,354 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
       setAudience('All students')
       setImageFile(null)
       setImagePreview(null)
-      setTimeout(() => setSent(false), 3000)
+      setActionMsg(sendEmail ? 'Notice published & emailed to students!' : 'Notice published to app feed!')
+      setTimeout(() => { setSent(false); setActionMsg(''); }, 3500)
     }
     setSubmitting(false)
   }
 
+  const handleDeleteNotice = async (id: string | number) => {
+    if (!confirm('Are you sure you want to delete this announcement? It will be removed from the in-app notice feed for all students.')) return
+    setDeletingId(id)
+    const res = await deleteAnnouncement(String(id))
+    if (res.error) {
+      alert(res.error)
+    } else {
+      setAlerts(alerts.filter(a => a.id !== id))
+      setActionMsg('Notice deleted from app feed.')
+      setTimeout(() => setActionMsg(''), 3000)
+    }
+    setDeletingId(null)
+  }
+
+  const handleBroadcastEmail = async (id: string | number) => {
+    setBroadcastingId(id)
+    const res = await broadcastAnnouncementEmail(String(id))
+    if (res.error) {
+      alert(res.error)
+    } else {
+      setActionMsg(`Email broadcast sent to ${res.count || 'targeted'} active student(s)!`)
+      setTimeout(() => setActionMsg(''), 4000)
+    }
+    setBroadcastingId(null)
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="max-w-2xl rounded-3xl border bg-card p-6 md:p-8 shadow-xs">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          <Megaphone size={20} />
-        </span>
-      </div>
-      <h2 className="mt-4 text-2xl font-bold tracking-tight">Broadcast Department Notice</h2>
-      <p className="text-sm text-muted-foreground mt-1">Publish official notices, circulars, or schedules with instant email dispatch.</p>
+    <div className="flex flex-col gap-10 max-w-3xl">
+      {/* Broadcast Form Card */}
+      <form onSubmit={handleSubmit} className="rounded-3xl border bg-card p-6 md:p-8 shadow-xs">
+        <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <Megaphone size={20} />
+            </span>
+          </div>
+          {actionMsg && (
+            <span className="text-xs font-semibold text-primary bg-primary/10 border border-primary/20 px-3.5 py-1.5 rounded-full flex items-center gap-1.5">
+              <CheckCircle size={15} /> {actionMsg}
+            </span>
+          )}
+        </div>
+        <h2 className="mt-4 text-2xl font-bold tracking-tight">Broadcast Department Notice</h2>
+        <p className="text-sm text-muted-foreground mt-1">Publish official circulars, exam schedules, and alerts with optional email broadcast.</p>
 
-      <div className="mt-7 flex flex-col gap-5">
-        <label className="field-label">
-          Title
-          <input 
-            required 
-            value={title} 
-            onChange={e => setTitle(e.target.value)} 
-            className="field-input" 
-            placeholder="e.g. Midterm exam schedule released" 
-          />
-        </label>
+        <div className="mt-7 flex flex-col gap-5">
+          <label className="field-label">
+            Title
+            <input 
+              required 
+              value={title} 
+              onChange={e => setTitle(e.target.value)} 
+              className="field-input" 
+              placeholder="e.g. Midterm exam schedule released" 
+            />
+          </label>
 
-        {/* Custom Audience Dropdown */}
-        <div className="flex flex-col gap-1.5">
-          <span className="text-sm font-semibold text-foreground">Target Audience</span>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex h-12 w-full items-center justify-between rounded-2xl border bg-background px-4 text-sm font-medium focus:border-foreground transition-colors text-left"
-            >
-              <span className="truncate">
-                {audience === 'All students' ? 'All students (Department-wide)' : audience}
-              </span>
-              <CaretDown
-                size={16}
-                weight="bold"
-                className={`text-muted-foreground transition-transform duration-200 shrink-0 ml-2 ${
-                  dropdownOpen ? 'rotate-180' : ''
-                }`}
-              />
-            </button>
+          {/* Custom Audience Dropdown */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm font-semibold text-foreground">Target Audience</span>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="flex h-12 w-full items-center justify-between rounded-2xl border bg-background px-4 text-sm font-medium focus:border-foreground transition-colors text-left"
+              >
+                <span className="truncate">
+                  {audience === 'All students' ? 'All students (Department-wide)' : audience}
+                </span>
+                <CaretDown
+                  size={16}
+                  weight="bold"
+                  className={`text-muted-foreground transition-transform duration-200 shrink-0 ml-2 ${
+                    dropdownOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
 
-            {isTouch ? (
-              <>
-                {dropdownOpen && (
-                  <div 
-                    className="fixed inset-0 z-20" 
-                    onClick={() => setDropdownOpen(false)} 
-                  />
-                )}
-                <MobilePresence
-                  show={dropdownOpen}
-                  type="dropdown"
-                  className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
-                >
-                  <div 
-                    data-lenis-prevent="true"
-                    className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
-                    style={{ overscrollBehavior: 'contain' }}
-                  >
-                    {AUDIENCE_CHOICES.map(item => {
-                      const isSelected = audience === item;
-                      return (
-                        <button
-                          key={item}
-                          type="button"
-                          onClick={() => {
-                            setAudience(item);
-                            setDropdownOpen(false);
-                          }}
-                          className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
-                            isSelected
-                              ? 'bg-secondary font-semibold text-foreground'
-                              : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                          }`}
-                        >
-                          <span className="truncate">{item}</span>
-                          {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </MobilePresence>
-              </>
-            ) : (
-              <AnimatePresence initial={false}>
-                {dropdownOpen && (
-                  <>
+              {isTouch ? (
+                <>
+                  {dropdownOpen && (
                     <div 
                       className="fixed inset-0 z-20" 
                       onClick={() => setDropdownOpen(false)} 
                     />
-                    <motion.div
-                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
+                  )}
+                  <MobilePresence
+                    show={dropdownOpen}
+                    type="dropdown"
+                    className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
+                  >
+                    <div 
+                      data-lenis-prevent="true"
+                      className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
+                      style={{ overscrollBehavior: 'contain' }}
                     >
+                      {AUDIENCE_CHOICES.map(item => {
+                        const isSelected = audience === item;
+                        return (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => {
+                              setAudience(item);
+                              setDropdownOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
+                              isSelected
+                                ? 'bg-secondary font-semibold text-foreground'
+                                : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                            }`}
+                          >
+                            <span className="truncate">{item}</span>
+                            {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </MobilePresence>
+                </>
+              ) : (
+                <AnimatePresence initial={false}>
+                  {dropdownOpen && (
+                    <>
                       <div 
-                        data-lenis-prevent="true"
-                        className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
-                        style={{ overscrollBehavior: 'contain' }}
+                        className="fixed inset-0 z-20" 
+                        onClick={() => setDropdownOpen(false)} 
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl"
                       >
-                        {AUDIENCE_CHOICES.map(item => {
-                          const isSelected = audience === item;
-                          return (
-                            <button
-                              key={item}
-                              type="button"
-                              onClick={() => {
-                                setAudience(item);
-                                setDropdownOpen(false);
-                              }}
-                              className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
-                                isSelected
-                                  ? 'bg-secondary font-semibold text-foreground'
-                                  : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                              }`}
-                            >
-                              <span className="truncate">{item}</span>
-                              {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
+                        <div 
+                          data-lenis-prevent="true"
+                          className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1"
+                          style={{ overscrollBehavior: 'contain' }}
+                        >
+                          {AUDIENCE_CHOICES.map(item => {
+                            const isSelected = audience === item;
+                            return (
+                              <button
+                                key={item}
+                                type="button"
+                                onClick={() => {
+                                  setAudience(item);
+                                  setDropdownOpen(false);
+                                }}
+                                className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm transition-colors ${
+                                  isSelected
+                                    ? 'bg-secondary font-semibold text-foreground'
+                                    : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                                }`}
+                              >
+                                <span className="truncate">{item}</span>
+                                {isSelected && <Check size={16} weight="bold" className="text-primary shrink-0 ml-2" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              )}
+            </div>
+          </div>
+
+          <label className="field-label">
+            Message
+            <textarea 
+              required 
+              value={body} 
+              onChange={e => setBody(e.target.value)} 
+              className="field-input min-h-32 py-3 resize-none" 
+              placeholder="Write a clear, concise announcement..." 
+            />
+          </label>
+
+          {/* Optional Image Attachment */}
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-semibold text-foreground">Attach Circular / Schedule Image (Optional)</span>
+            {imagePreview ? (
+              <div className="relative rounded-2xl border p-3 bg-secondary/30 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <img src={imagePreview} alt="Preview" className="size-14 rounded-xl object-cover border shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-foreground truncate">{imageFile?.name}</p>
+                    <p className="text-[11px] text-muted-foreground">{((imageFile?.size || 0) / (1024 * 1024)).toFixed(2)} MB</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setImageFile(null); setImagePreview(null); }}
+                  className="p-2 text-muted-foreground hover:text-destructive transition-colors cursor-pointer rounded-full hover:bg-secondary"
+                  title="Remove image"
+                >
+                  <Trash size={16} />
+                </button>
+              </div>
+            ) : (
+              <label className="border border-dashed rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer bg-background hover:bg-secondary/40 transition-colors text-center">
+                <UploadSimple size={20} className="text-primary" />
+                <div>
+                  <span className="text-xs font-semibold text-foreground">Upload official notice image</span>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">PNG, JPG, or WEBP up to 10MB</p>
+                </div>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handleImageChange} 
+                  className="hidden" 
+                />
+              </label>
             )}
+          </div>
+
+          {/* Email Option Toggle */}
+          <label className="flex items-start gap-3 p-3.5 rounded-2xl border bg-secondary/30 hover:bg-secondary/50 transition-colors cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={sendEmail}
+              onChange={e => setSendEmail(e.target.checked)}
+              className="mt-0.5 size-4 rounded accent-primary cursor-pointer"
+            />
+            <div className="flex flex-col">
+              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <EnvelopeSimple size={15} className="text-primary" /> Send instant email broadcast to target students
+              </span>
+              <span className="text-[11px] text-muted-foreground mt-0.5">
+                If unchecked, the notice will only be posted to the in-app Notices feed. You can broadcast via email later at any time from the list below.
+              </span>
+            </div>
+          </label>
+
+          <button 
+            type="submit" 
+            disabled={submitting} 
+            className="flex items-center justify-center gap-2 rounded-full bg-primary p-3.5 font-semibold text-primary-foreground hover:opacity-95 transition-opacity shadow-sm mt-1 cursor-pointer disabled:opacity-50"
+          >
+            <Send size={17}/>
+            {sent ? 'Notice Published!' : submitting ? 'Publishing...' : sendEmail ? 'Publish Announcement & Email Students' : 'Publish to In-App Feed Only'}
+          </button>
+        </div>
+      </form>
+
+      {/* Published Announcements Management Section */}
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between border-b pb-3">
+          <div>
+            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+              <Megaphone size={18} className="text-primary" />
+              Active Department Notices ({deptNotices.length})
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Manage live department circulars, broadcast follow-up emails, or remove old notices.</p>
           </div>
         </div>
 
-        <label className="field-label">
-          Message
-          <textarea 
-            required 
-            value={body} 
-            onChange={e => setBody(e.target.value)} 
-            className="field-input min-h-32 py-3 resize-none" 
-            placeholder="Write a clear, concise announcement..." 
-          />
-        </label>
+        {deptNotices.length === 0 ? (
+          <div className="rounded-3xl border border-dashed p-8 text-center text-muted-foreground bg-card/40">
+            <Megaphone size={28} className="mx-auto mb-2 opacity-40" />
+            <p className="font-semibold text-foreground text-sm">No department notices published yet</p>
+            <p className="text-xs mt-1">Notices created above will appear here with controls to email or delete.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {deptNotices.map((notice) => (
+              <div key={notice.id} className="rounded-3xl border bg-card p-5 flex flex-col gap-3.5 shadow-xs hover:border-primary/30 transition-colors">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20 px-2.5 py-0.5 rounded-full">
+                        {notice.audience === 'ALL' || notice.audience === 'All students' ? 'All Students' : notice.audience}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{notice.time}</span>
+                    </div>
+                    <h4 className="text-base font-semibold text-foreground mt-1">{notice.title}</h4>
+                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed whitespace-pre-wrap">{notice.body}</p>
+                  </div>
+                  {notice.imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewModalImg(notice.imageUrl)}
+                      className="shrink-0 group relative cursor-pointer"
+                      title="Click to view image"
+                    >
+                      <img src={notice.imageUrl} alt={notice.title} className="size-16 rounded-xl object-cover border group-hover:opacity-90 transition-opacity" />
+                    </button>
+                  )}
+                </div>
 
-        {/* Optional Image Attachment */}
-        <div className="flex flex-col gap-2">
-          <span className="text-sm font-semibold text-foreground">Attach Circular / Schedule Image (Optional)</span>
-          {imagePreview ? (
-            <div className="relative rounded-2xl border p-3 bg-secondary/30 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <img src={imagePreview} alt="Preview" className="size-14 rounded-xl object-cover border shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-foreground truncate">{imageFile?.name}</p>
-                  <p className="text-[11px] text-muted-foreground">{((imageFile?.size || 0) / (1024 * 1024)).toFixed(2)} MB</p>
+                {/* Actions Toolbar */}
+                <div className="flex items-center justify-between gap-2 border-t pt-3 flex-wrap">
+                  <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                    <Info size={14} /> Visible to active students in {notice.audience === 'ALL' || notice.audience === 'All students' ? 'all semesters' : notice.audience}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={broadcastingId === notice.id}
+                      onClick={() => handleBroadcastEmail(notice.id)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-secondary text-foreground hover:bg-secondary/80 border border-border/60 transition-colors cursor-pointer disabled:opacity-50"
+                      title="Send or resend this notice via email"
+                    >
+                      <EnvelopeSimple size={14} className="text-primary" />
+                      {broadcastingId === notice.id ? 'Dispatching...' : 'Broadcast Email'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deletingId === notice.id}
+                      onClick={() => handleDeleteNotice(notice.id)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-destructive hover:bg-destructive/10 border border-destructive/20 transition-colors cursor-pointer disabled:opacity-50"
+                      title="Delete notice from in-app feed"
+                    >
+                      <Trash size={14} />
+                      {deletingId === notice.id ? 'Deleting...' : 'Delete'}
+                    </button>
+                  </div>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => { setImageFile(null); setImagePreview(null); }}
-                className="p-2 text-muted-foreground hover:text-destructive transition-colors cursor-pointer rounded-full hover:bg-secondary"
-                title="Remove image"
-              >
-                <Trash size={16} />
-              </button>
-            </div>
-          ) : (
-            <label className="border border-dashed rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer bg-background hover:bg-secondary/40 transition-colors text-center">
-              <UploadSimple size={20} className="text-primary" />
-              <div>
-                <span className="text-xs font-semibold text-foreground">Upload official notice image</span>
-                <p className="text-[11px] text-muted-foreground mt-0.5">PNG, JPG, or WEBP up to 10MB</p>
-              </div>
-              <input 
-                type="file" 
-                accept="image/*" 
-                onChange={handleImageChange} 
-                className="hidden" 
-              />
-            </label>
-          )}
-        </div>
-
-        <button 
-          type="submit" 
-          disabled={submitting} 
-          className="flex items-center justify-center gap-2 rounded-full bg-primary p-3.5 font-semibold text-primary-foreground hover:opacity-95 transition-opacity shadow-sm mt-1 cursor-pointer disabled:opacity-50"
-        >
-          <Send size={17}/>
-          {sent ? 'Published & Emailed Notice!' : submitting ? 'Publishing & Dispatching Emails...' : 'Publish Announcement & Email Students'}
-        </button>
+            ))}
+          </div>
+        )}
       </div>
-    </form>
+
+      {/* Image Preview Modal */}
+      {previewModalImg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/60 backdrop-blur-xs" onClick={() => setPreviewModalImg(null)}>
+          <div className="relative max-w-2xl max-h-[90vh] bg-card rounded-3xl p-3 border shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setPreviewModalImg(null)}
+              className="absolute top-4 right-4 z-10 size-8 flex items-center justify-center rounded-full bg-background/80 hover:bg-background border text-foreground transition-colors cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+            <img src={previewModalImg} alt="Enlarged notice" className="w-full h-auto max-h-[80vh] object-contain rounded-2xl" />
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 

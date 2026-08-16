@@ -426,6 +426,7 @@ export async function createAnnouncement(data: {
   body: string
   audience?: string
   imageUrl?: string
+  sendEmailNotification?: boolean
 }) {
   const user = await getCurrentUser()
   if (!user || user.role !== 'ADMIN') {
@@ -451,37 +452,126 @@ export async function createAnnouncement(data: {
       }
     })
 
-    // Broadcast email to targeted active students
-    try {
-      const whereClause: any = { status: 'ACTIVE' }
-      if (data.audience && data.audience !== 'ALL' && data.audience !== 'All students' && data.audience !== 'Department') {
-        const semMatch = data.audience.match(/Semester\s*(\d)/i) || data.audience.match(/SEM_(\d)/i)
-        if (semMatch) {
-          whereClause.semester = parseInt(semMatch[1], 10)
+    // Broadcast email to targeted active students if email option is enabled
+    if (data.sendEmailNotification !== false) {
+      try {
+        const whereClause: any = { status: 'ACTIVE' }
+        if (data.audience && data.audience !== 'ALL' && data.audience !== 'All students' && data.audience !== 'Department') {
+          const semMatch = data.audience.match(/Semester\s*(\d)/i) || data.audience.match(/SEM_(\d)/i)
+          if (semMatch) {
+            whereClause.semester = parseInt(semMatch[1], 10)
+          }
         }
-      }
 
-      const targetedUsers = await prisma.user.findMany({
-        where: whereClause,
-        select: { email: true }
-      })
-
-      if (targetedUsers.length > 0) {
-        const { departmentAnnouncementEmail } = await import('@/lib/emails/templates')
-        const { sendEmail } = await import('@/lib/emails/send')
-        const { subject: emailSubj, html } = departmentAnnouncementEmail({
-          title: data.title,
-          body: data.body,
-          audienceLabel: data.audience || 'All Students',
-          hasImage: !!cleanImageUrl
+        const targetedUsers = await prisma.user.findMany({
+          where: whereClause,
+          select: { email: true }
         })
-        await sendEmail(targetedUsers.map(u => u.email), emailSubj, html)
+
+        if (targetedUsers.length > 0) {
+          const { departmentAnnouncementEmail } = await import('@/lib/emails/templates')
+          const { sendEmail } = await import('@/lib/emails/send')
+          const { subject: emailSubj, html } = departmentAnnouncementEmail({
+            title: data.title,
+            body: data.body,
+            audienceLabel: data.audience || 'All Students',
+            hasImage: !!cleanImageUrl
+          })
+          await sendEmail(targetedUsers.map(u => u.email), emailSubj, html)
+        }
+      } catch (broadcastErr) {
+        console.warn('Failed to broadcast announcement email:', broadcastErr)
       }
-    } catch (broadcastErr) {
-      console.warn('Failed to broadcast announcement email:', broadcastErr)
     }
 
     return { success: true, announcement }
+  } catch (err) {
+    return { error: (err as Error).message }
+  }
+}
+
+export async function deleteAnnouncement(announcementId: string) {
+  const user = await getCurrentUser()
+  if (!user || user.role !== 'ADMIN') {
+    return { error: 'Unauthorized. Only admins can delete announcements.' }
+  }
+
+  try {
+    const existing = await prisma.announcement.findUnique({ where: { id: announcementId } })
+    if (!existing) return { error: 'Announcement not found.' }
+
+    // Clean up image from R2 if present
+    if (existing.imageUrl) {
+      try {
+        const filePath = existing.imageUrl.split('/announcements/').pop()
+        if (filePath && process.env.R2_ENDPOINT) {
+          const s3Client = new S3Client({
+            region: 'auto',
+            endpoint: process.env.R2_ENDPOINT,
+            credentials: {
+              accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+              secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+            },
+          })
+          await s3Client.send(new DeleteObjectCommand({
+            Bucket: process.env.R2_BUCKET_NAME!,
+            Key: `announcements/${filePath}`
+          }))
+        }
+      } catch (r2Err) {
+        console.warn('Failed to delete announcement image from R2:', r2Err)
+      }
+    }
+
+    await prisma.announcement.delete({ where: { id: announcementId } })
+    return { success: true }
+  } catch (err) {
+    return { error: (err as Error).message }
+  }
+}
+
+export async function broadcastAnnouncementEmail(announcementId: string) {
+  const user = await getCurrentUser()
+  if (!user || user.role !== 'ADMIN') {
+    return { error: 'Unauthorized. Only admins can broadcast announcement emails.' }
+  }
+
+  try {
+    const announcement = await prisma.announcement.findUnique({ where: { id: announcementId } })
+    if (!announcement) return { error: 'Announcement not found.' }
+
+    const whereClause: any = { status: 'ACTIVE' }
+    if (announcement.audience && announcement.audience !== 'ALL' && announcement.audience !== 'All students' && announcement.audience !== 'Department') {
+      const semMatch = announcement.audience.match(/Semester\s*(\d)/i) || announcement.audience.match(/SEM_(\d)/i)
+      if (semMatch) {
+        whereClause.semester = parseInt(semMatch[1], 10)
+      }
+    }
+
+    const targetedUsers = await prisma.user.findMany({
+      where: whereClause,
+      select: { email: true }
+    })
+
+    if (targetedUsers.length === 0) {
+      return { error: 'No active student accounts found for this target audience.' }
+    }
+
+    const { departmentAnnouncementEmail } = await import('@/lib/emails/templates')
+    const { sendEmail } = await import('@/lib/emails/send')
+    const { subject: emailSubj, html } = departmentAnnouncementEmail({
+      title: announcement.title,
+      body: announcement.body,
+      audienceLabel: announcement.audience || 'All Students',
+      hasImage: !!announcement.imageUrl
+    })
+
+    const emailRes = await sendEmail(targetedUsers.map(u => u.email), emailSubj, html)
+    if (emailRes.error) {
+      return { error: `Failed to dispatch emails: ${emailRes.error}` }
+    }
+
+    return { success: true, count: targetedUsers.length }
   } catch (err) {
     return { error: (err as Error).message }
   }
