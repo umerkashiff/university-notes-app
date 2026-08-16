@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { 
   accountApprovedEmail, 
   accountRejectedEmail, 
@@ -156,9 +156,14 @@ const TEMPLATES = [
 ]
 
 export default function EmailPreviewPage() {
+  const [mounted, setMounted] = useState(false)
   const [selectedId, setSelectedId] = useState<string>('approved')
   const [viewMode, setViewMode] = useState<'desktop' | 'mobile' | 'full'>('desktop')
   const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const activeTemplate = useMemo(() => {
     return TEMPLATES.find(t => t.id === selectedId) || TEMPLATES[0]
@@ -298,12 +303,19 @@ export default function EmailPreviewPage() {
                 : 'w-full h-[820px]'
             }`}
           >
-            <iframe
-              title="Email Preview"
-              srcDoc={renderedEmail.html}
-              className="w-full h-full border-0 bg-[#f7f5f2]"
-              sandbox="allow-same-origin"
-            />
+            {mounted ? (
+              <iframe
+                title="Email Preview"
+                srcDoc={renderedEmail.html}
+                className="w-full h-full border-0 bg-[#f7f5f2]"
+                sandbox="allow-same-origin"
+                suppressHydrationWarning
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-[#f7f5f2] text-xs text-muted-foreground">
+                Rendering preview...
+              </div>
+            )}
           </div>
         </main>
       </div>

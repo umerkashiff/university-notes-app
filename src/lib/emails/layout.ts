@@ -13,10 +13,8 @@ export function wrapEmailLayout(options: {
 }): string {
   const { previewText, title, badge, contentHtml, ctaButton, secondaryInfoHtml } = options;
 
-  const rawAppUrl = process.env.APP_URL 
-    || process.env.NEXT_PUBLIC_APP_URL 
-    || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : '')
-    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '')
+  const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL 
+    || process.env.APP_URL 
     || 'https://semstack.vercel.app';
   
   const appUrl = rawAppUrl.replace(/\/+$/, '');
