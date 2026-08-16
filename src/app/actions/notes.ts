@@ -346,14 +346,27 @@ export async function deleteNote(noteId: string, rejectionReason?: string) {
   }
 }
 
-export async function deleteSubject(subjectId: string) {
+export async function deleteSubject(subjectIdentifier: string) {
   const user = await getCurrentUser()
   if (!user || user.role !== 'ADMIN') {
     return { error: 'Unauthorized. Only admins can manage subjects.' }
   }
 
   try {
-    const notes = await prisma.note.findMany({ where: { subjectId } })
+    const subject = await prisma.subject.findFirst({
+      where: {
+        OR: [
+          { id: subjectIdentifier },
+          { code: subjectIdentifier }
+        ]
+      }
+    })
+
+    if (!subject) {
+      return { error: 'Subject not found.' }
+    }
+
+    const notes = await prisma.note.findMany({ where: { subjectId: subject.id } })
     
     // Clean up all notes, their bookmarks, and their R2 files
     for (const note of notes) {
@@ -382,10 +395,10 @@ export async function deleteSubject(subjectId: string) {
     }
 
     if (notes.length > 0) {
-      await prisma.note.deleteMany({ where: { subjectId } })
+      await prisma.note.deleteMany({ where: { subjectId: subject.id } })
     }
 
-    await prisma.subject.delete({ where: { id: subjectId } })
+    await prisma.subject.delete({ where: { id: subject.id } })
     return { success: true }
   } catch (err) {
     return { error: (err as Error).message }

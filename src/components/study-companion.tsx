@@ -1694,9 +1694,10 @@ function ContributorDesk({
   const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setUploading(true);
+    setUploadProgress(0);
     const form = new FormData(e.currentTarget);
-    const file = form.get('file') as File;
-    const title = String(form.get('title'));
+    const file = selectedFile || (form.get('file') as File | null);
+    const title = String(form.get('title') || '').trim();
     
     const matchedSubject = subjects.find(s => s.code === subjectCode);
     if (!matchedSubject) { alert('Please select a course for this semester.'); setUploading(false); return; }
@@ -1937,7 +1938,7 @@ function ContributorDesk({
                         <div><p className="text-sm font-medium">Click to upload PDF</p><p className="text-xs text-muted-foreground mt-0.5">PDF files up to 100 MB</p></div>
                       </div>
                     )}
-                    <input type="file" accept=".pdf" className="sr-only" onChange={e=>{if(e.target.files?.[0])setSelectedFile(e.target.files[0]);}}/>
+                    <input type="file" name="file" accept=".pdf" className="sr-only" onChange={e=>{if(e.target.files?.[0])setSelectedFile(e.target.files[0]);}}/>
                   </label>
                   {/* Upload progress */}
                   {uploading&&(
