@@ -251,10 +251,10 @@ export function StudyCompanion({
         authView === 'signup' ? (
           <motion.div
             key="signup-screen"
-            initial={{ opacity: 0, scale: 0.97 }}
+            initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.05, filter: 'blur(8px)' }}
-            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ opacity: 0, scale: 1.02 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
             className="w-full min-h-screen"
           >
             <SignUp onRegister={handleRegister} onSwitchToLogin={() => setAuthView('login')} />
@@ -262,10 +262,10 @@ export function StudyCompanion({
         ) : (
           <motion.div
             key="login-screen"
-            initial={{ opacity: 0, scale: 0.97 }}
+            initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.05, filter: 'blur(8px)' }}
-            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ opacity: 0, scale: 1.02 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
             className="w-full min-h-screen"
           >
             <Login onLogin={signIn} onSwitchToSignUp={() => setAuthView('signup')} />
@@ -274,10 +274,10 @@ export function StudyCompanion({
       ) : ((user.status === 'PENDING' || user.status === 'REJECTED') && user.role !== 'ADMIN') ? (
         <motion.div
           key="pending-screen"
-          initial={{ opacity: 0, scale: 0.97 }}
+          initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 1.05, filter: 'blur(8px)' }}
-          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          exit={{ opacity: 0, scale: 1.02 }}
+          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
           className="w-full min-h-screen"
         >
           <PendingScreen user={user} onLogout={handleLogout} />
@@ -285,10 +285,10 @@ export function StudyCompanion({
       ) : reader ? (
         <motion.div
           key="pdf-reader-screen"
-          initial={{ opacity: 0, scale: 0.98 }}
+          initial={{ opacity: 0, scale: 0.99 }}
           animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.98 }}
-          transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          exit={{ opacity: 0, scale: 0.99 }}
+          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
           className="w-full min-h-screen"
         >
           <PdfReader note={reader} onBack={() => setReader(null)} />
@@ -296,13 +296,13 @@ export function StudyCompanion({
       ) : (
         <motion.main
           key="app-main-shell"
-          initial={{ opacity: 0, scale: 0.96, filter: 'blur(6px)' }}
-          animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-          exit={{ opacity: 0, scale: 0.96, filter: 'blur(6px)' }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          initial={{ opacity: 0, scale: 0.99 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.99 }}
+          transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
           className="min-h-screen bg-background text-foreground"
         >
-          <header className="sticky top-0 z-40 border-b border-white/30 bg-white/40 dark:bg-card/40 backdrop-blur-xl shadow-sm supports-[backdrop-filter]:bg-white/30 transform-gpu will-change-transform">
+          <header className="sticky top-0 z-40 border-b border-border/40 bg-background/80 dark:bg-card/80 backdrop-blur-md shadow-xs">
             <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
               <button onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} className="flex items-center gap-2.5" aria-label="Semstack home">
                 <SemstackLogo size={34} className="size-[34px] -rotate-2" />
@@ -383,8 +383,8 @@ export function StudyCompanion({
                 <h1 className="text-balance text-4xl font-semibold tracking-[-.04em] md:text-5xl">{title}</h1>
               </div>
             </div>
-            <AnimatePresence mode="wait">
-              <motion.div key={screen} initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} transition={{duration:0.2}}>
+            <AnimatePresence initial={false}>
+              <motion.div key={screen} initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-6}} transition={{duration:0.18, ease: "easeOut"}} className="w-full transform-gpu">
                 {screen==='saved'&&<SavedNotes notes={notes} subjects={subjectsList} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader}/>} 
                 {screen==='semesters'&&<SemesterLibrary user={user} role={role} subjects={subjectsList} notes={notes} select={(n)=>{setSelectedSemester(n);setScreen('subject')}}/>} 
                 {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')}/>} 
@@ -1458,8 +1458,8 @@ function Notifications({alerts,setAlerts,user}:{alerts:any[],setAlerts:(a:any[])
       </div>
 
       <div className="flex flex-col gap-3">
-        <AnimatePresence mode="wait">
-          <motion.div key={filter} initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} transition={{duration:0.2}} className="flex flex-col gap-3">
+        <AnimatePresence initial={false}>
+          <motion.div key={filter} initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-6}} transition={{duration:0.15, ease: "easeOut"}} className="flex flex-col gap-3 transform-gpu">
             {shown.length === 0 ? (
               <div className="py-16 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40">
                 <Bell size={32} className="mx-auto mb-2 opacity-30"/>
@@ -2461,8 +2461,8 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
     </div>
   </div>
 
-  <AnimatePresence mode="wait">
-    <motion.div key={tab} initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} transition={{duration:0.2}}>
+  <AnimatePresence initial={false}>
+    <motion.div key={tab} initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-6}} transition={{duration:0.15, ease: "easeOut"}} className="transform-gpu">
       
       {/* Student Requests & Reports tab */}
       {tab==='requests'&&<RequestsManager onRefreshCount={fetchPendingUserCount} />}
@@ -2602,8 +2602,8 @@ function AdminCms({notes,setNotes,subjects,setSubjects,publish,addAnnouncement}:
               <span className="text-xs text-muted-foreground font-normal">{semSubjects.length} subject(s)</span>
             </h3>
 
-            <AnimatePresence mode="wait">
-              <motion.div key={curriculumSem} initial={{opacity:0, x:-10}} animate={{opacity:1, x:0}} exit={{opacity:0, x:10}} transition={{duration:0.2, ease: "easeInOut"}}>
+            <AnimatePresence initial={false}>
+              <motion.div key={curriculumSem} initial={{opacity:0, x:-6}} animate={{opacity:1, x:0}} exit={{opacity:0, x:6}} transition={{duration:0.15, ease: "easeOut"}} className="transform-gpu">
                 {semSubjects.length === 0 ? (
                   <div className="rounded-3xl border border-dashed p-8 text-center text-muted-foreground bg-card/40">
                     <GraduationCap size={28} className="mx-auto mb-2 opacity-50" />
@@ -4217,7 +4217,7 @@ function Announcement({ onPublish }: { onPublish?: (a: any) => void }) {
               />
             </button>
 
-            <AnimatePresence>
+            <AnimatePresence initial={false}>
               {dropdownOpen && (
                 <>
                   <div 
