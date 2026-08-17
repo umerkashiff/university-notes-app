@@ -13,11 +13,14 @@ export function wrapEmailLayout(options: {
 }): string {
   const { previewText, title, badge, contentHtml, ctaButton, secondaryInfoHtml } = options;
 
-  const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL 
-    || process.env.APP_URL 
-    || 'https://semstack.vercel.app';
+  const rawAppUrl = 
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null) ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    (process.env.APP_URL && !process.env.APP_URL.includes('localhost') ? process.env.APP_URL : null) ||
+    'https://semstack.vercel.app';
   
-  const appUrl = rawAppUrl.replace(/\/+$/, '');
+  const appUrl = rawAppUrl.startsWith('http') ? rawAppUrl.replace(/\/+$/, '') : `https://${rawAppUrl.replace(/\/+$/, '')}`;
   const logoUrl = 'cid:semstack-logo';
   const ctaUrl = ctaButton?.url?.startsWith('http') ? ctaButton.url : `${appUrl}${ctaButton?.url?.startsWith('/') ? ctaButton.url : `/${ctaButton?.url || ''}`}`;
 
