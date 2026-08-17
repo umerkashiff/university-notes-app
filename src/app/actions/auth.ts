@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { prisma } from '@/lib/prisma'
+import { computeDefaultSemesterForBatch } from '@/lib/academic'
 
 export async function login(
   credentials: FormData | { email: string; password?: string } | string,
@@ -114,10 +115,10 @@ export async function register(formData: FormData) {
       if (mapped) {
         expectedSemester = mapped.semester
       } else {
-        expectedSemester = batchYear >= 2026 ? 1 : batchYear === 2025 ? 3 : batchYear === 2024 ? 5 : batchYear === 2023 ? 7 : 8
+        expectedSemester = computeDefaultSemesterForBatch(batchYear)
       }
     } else {
-      expectedSemester = batchYear >= 2026 ? 1 : batchYear === 2025 ? 3 : batchYear === 2024 ? 5 : batchYear === 2023 ? 7 : 8
+      expectedSemester = computeDefaultSemesterForBatch(batchYear)
     }
 
     let finalSemester = expectedSemester

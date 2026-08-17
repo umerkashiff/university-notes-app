@@ -17,6 +17,8 @@ import {
 import { SemstackLogo } from '@/components/logo'
 import { useIsTouch } from '@/lib/use-touch'
 import { MobilePresence } from '@/components/mobile-anim'
+import { getSignupAcademicContext } from '@/app/actions/academic'
+import { type SignupAcademicContext, computeDefaultSemesterForBatch } from '@/lib/academic'
 
 interface SignUpProps {
   onRegister: (formData: FormData) => Promise<string | void>
@@ -190,6 +192,7 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
   const [section, setSection] = useState('A')
   const [isRepeating, setIsRepeating] = useState(false)
   const [repeatSemester, setRepeatSemester] = useState<number>(1)
+  const [academicContext, setAcademicContext] = useState<SignupAcademicContext | null>(null)
   
   // Contributor details
   const [isContributor, setIsContributor] = useState(false)
@@ -198,6 +201,12 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    getSignupAcademicContext().then(ctx => {
+      if (ctx) setAcademicContext(ctx)
+    }).catch(() => {})
+  }, [])
 
   // Reg number format regex: YYYY-CE-XX or YYYY-CE-XXX
   const regPattern = /^\d{4}-CE-\d{2,3}$/i
@@ -221,13 +230,12 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
   // Auto-derived semester from academic calendar and batch year
   const autoDerivedSemester = useMemo(() => {
     if (!parsedBatchYear || isInvalidBatchYear) return 1
-    if (parsedBatchYear >= 2026) return 1
-    if (parsedBatchYear === 2025) return 3
-    if (parsedBatchYear === 2024) return 5
-    if (parsedBatchYear === 2023) return 7
-    if (parsedBatchYear <= 2022) return 8
-    return Math.max(1, Math.min(8, (2026 - parsedBatchYear) * 2 + 1))
-  }, [parsedBatchYear, isInvalidBatchYear])
+    if (academicContext?.batchMaps && academicContext.batchMaps.length > 0) {
+      const mapped = academicContext.batchMaps.find(b => b.batchYear === parsedBatchYear)
+      if (mapped) return mapped.semester
+    }
+    return computeDefaultSemesterForBatch(parsedBatchYear)
+  }, [parsedBatchYear, isInvalidBatchYear, academicContext])
 
   const effectiveSemester = (isRepeating && isRegValid && !isInvalidBatchYear && autoDerivedSemester > 1) ? repeatSemester : autoDerivedSemester
 

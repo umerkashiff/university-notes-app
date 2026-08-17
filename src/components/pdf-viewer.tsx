@@ -133,7 +133,7 @@ export function PDFViewer({ url, title, author, code, onBack }: PDFViewerProps) 
           </button>
           <div className="w-px h-4 bg-border/80 mx-0.5 sm:mx-1" />
           <a 
-            href={url} 
+            href={`/api/download?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title || 'study-material')}`} 
             download 
             className="p-1.5 sm:p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
             title="Download PDF"

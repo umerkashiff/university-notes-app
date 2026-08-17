@@ -1797,9 +1797,8 @@ function NoteRow({
             </button>
           )}
           <a 
-            href={note.fileUrl || `/api/download?title=${encodeURIComponent(note.title)}`} 
-            target="_blank" 
-            rel="noopener noreferrer" 
+            href={note.fileUrl ? `/api/download?url=${encodeURIComponent(note.fileUrl)}&title=${encodeURIComponent(note.title)}` : '#'} 
+            download 
             className="icon-button bg-primary text-primary-foreground hover:opacity-90 transition-opacity" 
             title="Download PDF file"
           >
@@ -2068,7 +2067,14 @@ function ContributorDesk({
   const [submitted,setSubmitted]=useState(false);
   const [uploading,setUploading]=useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [selectedSemester, setSelectedSemester] = useState(1);
+  const maxSemesterCap = user?.role === 'ADMIN' ? 8 : Math.max(1, Math.min(8, user?.semester || 1));
+  const allowedSemesters = useMemo(() => {
+    return Array.from({ length: maxSemesterCap }, (_, i) => i + 1);
+  }, [maxSemesterCap]);
+
+  const [selectedSemester, setSelectedSemester] = useState(() => (
+    user?.role === 'ADMIN' ? 1 : Math.min(8, Math.max(1, user?.semester || 1))
+  ));
   const [subjectDropdownOpen, setSubjectDropdownOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -2077,6 +2083,15 @@ function ContributorDesk({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (open) {
+      const initialSem = user?.role === 'ADMIN' ? 1 : Math.min(maxSemesterCap, user?.semester || 1);
+      setSelectedSemester(initialSem);
+      const subList = subjects.filter(s => s.semester === initialSem);
+      setSubjectCode(subList.length > 0 ? subList[0].code : '');
+    }
+  }, [open, maxSemesterCap, user?.role, user?.semester, subjects]);
 
   useEffect(() => {
     if (open) {
@@ -2274,7 +2289,7 @@ function ContributorDesk({
                   <div className="flex flex-col gap-2">
                     <span className="text-sm font-semibold text-foreground">Target semester</span>
                     <div className="flex items-center gap-1.5 overflow-x-auto pb-2 modal-scroll touch-pan-x">
-                      {[1,2,3,4,5,6,7,8].map(n=>(
+                      {allowedSemesters.map(n=>(
                         <button key={n} type="button" onClick={()=>handleSemesterChange(n)} className={`flex shrink-0 h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-all ${selectedSemester===n?'bg-primary text-primary-foreground shadow-sm':'bg-secondary text-muted-foreground hover:bg-secondary/80'}`}>{n}</button>
                       ))}
                     </div>

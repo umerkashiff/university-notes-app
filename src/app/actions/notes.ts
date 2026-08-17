@@ -49,8 +49,9 @@ export async function createNote(data: {
 
   if (!subject) return { error: 'Subject not found.' }
 
-  if (user.role === 'SENIOR' && user.semester && subject.semester > user.semester) {
-    return { error: `Unauthorized. As a Semester ${user.semester} contributor, you can only upload notes for courses in Semester 1 to ${user.semester}.` }
+  const maxAllowedSemester = user.role === 'ADMIN' ? 8 : (user.semester || 1)
+  if (user.role === 'SENIOR' && subject.semester > maxAllowedSemester) {
+    return { error: `Unauthorized. As a Semester ${user.semester || 1} contributor, you can only upload notes for courses up to Semester ${maxAllowedSemester}.` }
   }
 
   try {
