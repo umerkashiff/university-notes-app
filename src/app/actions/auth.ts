@@ -2,7 +2,6 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { prisma } from '@/lib/prisma'
-import { computeDefaultSemesterForBatch } from '@/lib/academic'
 
 export async function login(
   credentials: FormData | { email: string; password?: string } | string,
@@ -109,17 +108,20 @@ export async function register(formData: FormData) {
       include: { batchMaps: true }
     })
     
-    let expectedSemester = 1
-    if (activePeriod) {
-      const mapped = activePeriod.batchMaps.find(b => b.batchYear === batchYear)
-      if (mapped) {
-        expectedSemester = mapped.semester
-      } else {
-        expectedSemester = computeDefaultSemesterForBatch(batchYear)
+    if (!activePeriod || !activePeriod.batchMaps || activePeriod.batchMaps.length === 0) {
+      return {
+        error: 'Registration is currently paused: Department administrators have not published the active academic calendar schedule yet. Please notify the administrator.'
       }
-    } else {
-      expectedSemester = computeDefaultSemesterForBatch(batchYear)
     }
+
+    const mapped = activePeriod.batchMaps.find(b => b.batchYear === batchYear)
+    if (!mapped) {
+      return {
+        error: `Batch ${batchYear} is not mapped in the active academic term (${activePeriod.name}). Please contact the administrator.`
+      }
+    }
+
+    const expectedSemester = mapped.semester
 
     let finalSemester = expectedSemester
     let isHeldBack = false

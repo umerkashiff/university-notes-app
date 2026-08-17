@@ -12,13 +12,14 @@ import {
   ArrowRight,
   ChevronDown,
   Check,
-  Lock
+  Lock,
+  Calendar
 } from 'lucide-react'
 import { SemstackLogo } from '@/components/logo'
 import { useIsTouch } from '@/lib/use-touch'
 import { MobilePresence } from '@/components/mobile-anim'
 import { getSignupAcademicContext } from '@/app/actions/academic'
-import { type SignupAcademicContext, computeDefaultSemesterForBatch } from '@/lib/academic'
+import { type SignupAcademicContext } from '@/lib/academic'
 
 interface SignUpProps {
   onRegister: (formData: FormData) => Promise<string | void>
@@ -227,14 +228,14 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
 
   const showRegWarning = regNumber.length > 3 && (!isRegValid || isInvalidBatchYear)
 
-  // Auto-derived semester from academic calendar and batch year
+  // Auto-derived semester from active academic calendar batch mappings
   const autoDerivedSemester = useMemo(() => {
     if (!parsedBatchYear || isInvalidBatchYear) return 1
-    if (academicContext?.batchMaps && academicContext.batchMaps.length > 0) {
+    if (academicContext?.hasActivePeriod && academicContext.batchMaps && academicContext.batchMaps.length > 0) {
       const mapped = academicContext.batchMaps.find(b => b.batchYear === parsedBatchYear)
       if (mapped) return mapped.semester
     }
-    return computeDefaultSemesterForBatch(parsedBatchYear)
+    return 1
   }, [parsedBatchYear, isInvalidBatchYear, academicContext])
 
   const effectiveSemester = (isRepeating && isRegValid && !isInvalidBatchYear && autoDerivedSemester > 1) ? repeatSemester : autoDerivedSemester
@@ -384,6 +385,18 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
             Fill in your official university details for administrative approval.
           </p>
 
+          {academicContext !== null && !academicContext.hasActivePeriod && (
+            <div className="mt-4 rounded-2xl border bg-secondary/50 p-4 text-xs text-foreground flex items-start gap-3">
+              <Calendar size={18} className="shrink-0 text-muted-foreground mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold text-foreground">Academic Schedule Not Active</p>
+                <p className="text-muted-foreground leading-relaxed">
+                  The department administrator has not published an active academic schedule yet. Account registration will open once the administrator sets the current academic period in the Calendar Studio.
+                </p>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-3.5 sm:gap-4">
             
             {/* Full Name & Phone */}
@@ -428,7 +441,7 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
                   onChange={e => setEmail(e.target.value)} 
                   type="email" 
                   className="field-input text-sm" 
-                  placeholder="student@uet.edu.pk"
+                  placeholder="name@gmail.com"
                   disabled={loading}
                 />
               </label>
@@ -442,7 +455,7 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
                   onChange={e => setPassword(e.target.value)} 
                   type="password" 
                   className="field-input text-sm" 
-                  placeholder="Min 6 characters"
+                  placeholder="Min. 6 characters"
                   disabled={loading}
                 />
               </label>
@@ -450,19 +463,18 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
 
             {/* Registration Number */}
             <label className="field-label">
-              <span>Registration Number</span>
-              <div className="relative w-full">
+              Registration Number
+              <div className="relative">
                 <input 
                   required 
                   name="regNumber"
                   value={regNumber} 
                   onChange={handleRegNumberChange} 
                   type="text" 
-                  className={`field-input uppercase placeholder:normal-case text-sm ${isRegValid && parsedBatchYear ? 'pr-28' : 'pr-4'} ${
-                    showRegWarning ? 'border-amber-500/60 focus:border-amber-500' : isRegValid ? 'border-primary/60' : ''
-                  }`}
-                  placeholder="YYYY-CE-XX (e.g. 2024-CE-15)"
+                  className="field-input uppercase tracking-wider font-mono text-sm" 
+                  placeholder="2024-CE-15"
                   disabled={loading}
+                  maxLength={12}
                 />
                 
                 {/* Clean inline Batch Pill with Checkmark */}
@@ -506,7 +518,9 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
               <div className="field-label">
                 <span>Current Semester</span>
                 <div className="flex h-11 w-full items-center justify-between rounded-2xl border bg-secondary/40 px-3.5 text-sm select-none border-border/70">
-                  {isRegValid && parsedBatchYear && !isInvalidBatchYear ? (
+                  {academicContext !== null && !academicContext.hasActivePeriod ? (
+                    <span className="text-muted-foreground text-xs">Awaiting Academic Schedule</span>
+                  ) : isRegValid && parsedBatchYear && !isInvalidBatchYear ? (
                     <span className="font-semibold text-foreground truncate">
                       {isAlumni && !isRepeating ? 'Graduated Alumni (Semester 8)' : `Semester ${effectiveSemester}`}
                     </span>
@@ -578,21 +592,23 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
               </div>
             )}
 
-            {/* Optional Senior Contributor Application Toggle */}
-            <div className="rounded-2xl border bg-card/60 p-4 mt-1 transition-all">
+            {/* Contributor Opt-In */}
+            <div className="rounded-2xl border bg-card/60 p-4 transition-all text-xs">
               <label className="flex items-start gap-3 cursor-pointer">
                 <input 
                   type="checkbox"
+                  name="isContributor"
                   checked={isContributor}
                   onChange={e => setIsContributor(e.target.checked)}
-                  className="mt-1 size-4 rounded border-border text-primary focus:ring-primary accent-primary cursor-pointer"
+                  className="mt-0.5 size-4 rounded border-border text-primary focus:ring-primary accent-primary cursor-pointer"
                   disabled={loading}
                 />
-                <div>
-                  <b className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <FileUp size={15} className="text-primary" /> Apply as Note Contributor
-                  </b>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-foreground">Apply as Note Contributor</span>
+                    <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-[10px] font-bold">Recommended</span>
+                  </div>
+                  <p className="text-muted-foreground leading-relaxed text-[11px]">
                     I want permission to upload verified study material, past papers, and lecture notes for junior semesters.
                   </p>
                 </div>
@@ -600,12 +616,12 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
 
               <AnimatePresence>
                 {isContributor && (
-                  <motion.div 
-                    initial={{ opacity: 0, height: 0 }} 
-                    animate={{ opacity: 1, height: 'auto' }} 
-                    exit={{ opacity: 0, height: 0 }} 
-                    transition={{ duration: 0.2 }}
-                    className="mt-3.5 pt-3.5 border-t border-border flex flex-col gap-3"
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="mt-4 pt-4 border-t border-border space-y-3"
                   >
                     <label className="field-label">
                       Which semesters do you have notes for?
@@ -658,14 +674,16 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
 
             <button 
               type="submit"
-              disabled={loading}
-              className="rounded-full bg-primary px-6 py-3.5 sm:py-4 font-semibold text-primary-foreground flex items-center justify-center gap-2 hover:opacity-95 active:scale-[0.99] transition-all disabled:opacity-70 shadow-sm cursor-pointer mt-2 w-full"
+              disabled={loading || (academicContext !== null && !academicContext.hasActivePeriod)}
+              className="rounded-full bg-primary px-6 py-3.5 sm:py-4 font-semibold text-primary-foreground flex items-center justify-center gap-2 hover:opacity-95 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm cursor-pointer mt-2 w-full"
             >
               {loading ? (
                 <>
                   <div className="size-4 border-2 border-primary-foreground/30 border-t-primary-foreground animate-spin rounded-full" />
                   <span>Submitting application...</span>
                 </>
+              ) : academicContext !== null && !academicContext.hasActivePeriod ? (
+                <span>Registration Closed — Awaiting Academic Schedule</span>
               ) : (
                 <span>Submit for Department Approval</span>
               )}

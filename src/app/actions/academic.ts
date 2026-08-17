@@ -26,6 +26,7 @@ export async function getSignupAcademicContext(): Promise<SignupAcademicContext>
 
     if (activePeriod && activePeriod.batchMaps.length > 0) {
       return {
+        hasActivePeriod: true,
         activePeriodName: activePeriod.name,
         batchMaps: activePeriod.batchMaps.map(b => ({
           batchYear: b.batchYear,
@@ -38,18 +39,9 @@ export async function getSignupAcademicContext(): Promise<SignupAcademicContext>
   }
 
   return {
+    hasActivePeriod: false,
     activePeriodName: undefined,
-    batchMaps: [
-      { batchYear: 2026, semester: 1 },
-      { batchYear: 2025, semester: 2 },
-      { batchYear: 2024, semester: 4 },
-      { batchYear: 2023, semester: 6 },
-      { batchYear: 2022, semester: 8 },
-      { batchYear: 2021, semester: 8 },
-      { batchYear: 2020, semester: 8 },
-      { batchYear: 2019, semester: 8 },
-      { batchYear: 2018, semester: 8 }
-    ]
+    batchMaps: []
   }
 }
 
