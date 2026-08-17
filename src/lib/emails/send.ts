@@ -79,13 +79,9 @@ export async function sendEmail(
             text: plainText,
             html,
             headers: {
-              'X-Priority': '1',
-              'Priority': 'urgent',
-              'Importance': 'high',
-              'X-MSMail-Priority': 'High',
               'X-Entity-Ref-ID': `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
               'X-Auto-Response-Suppress': 'OOF, AutoReply',
-              'Feedback-ID': 'semstack:academic:uet',
+              'Auto-Submitted': 'auto-generated',
               'List-Unsubscribe': `<mailto:${replyToAddress}?subject=unsubscribe>`,
             }
           });

@@ -26,6 +26,7 @@ export function wrapEmailLayout(options: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>${title}</title>
   <!--[if mso]>
   <style type="text/css">
@@ -33,7 +34,6 @@ export function wrapEmailLayout(options: {
   </style>
   <![endif]-->
   <style type="text/css">
-    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
     body {
       margin: 0;
       padding: 0;
@@ -41,7 +41,7 @@ export function wrapEmailLayout(options: {
       -webkit-text-size-adjust: 100%;
       -ms-text-size-adjust: 100%;
       background-color: #f7f5f2;
-      font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
     img {
       border: 0;
@@ -68,11 +68,7 @@ export function wrapEmailLayout(options: {
     }
   </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f7f5f2; color: #252629; font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-  <!-- Preview Text Hidden Snippet -->
-  <div style="display: none; font-size: 1px; color: #f7f5f2; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden;">
-    ${previewText}
-  </div>
+<body style="margin: 0; padding: 0; background-color: #f7f5f2; color: #252629; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
 
   <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="border-collapse: separate; border-spacing: 0; background-color: #f7f5f2; width: 100%;">
     <tr>

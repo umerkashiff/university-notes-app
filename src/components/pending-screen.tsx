@@ -97,6 +97,15 @@ export function PendingScreen({ user, onLogout }: PendingScreenProps) {
             {user.status || 'PENDING'}
           </span>
         </div>
+
+        {!isRejected && (
+          <div className="rounded-xl bg-primary/5 border border-primary/20 p-2.5 text-[11px] text-muted-foreground flex items-start gap-2 mt-2">
+            <Mail size={14} className="text-primary shrink-0 mt-0.5" />
+            <span>
+              A confirmation email was sent to <b className="text-foreground">{user.email}</b>. You will receive an email once your account is verified.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Actions */}

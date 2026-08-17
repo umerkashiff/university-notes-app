@@ -35,7 +35,7 @@ export function accountApprovedEmail(options: {
   `;
 
   return {
-    subject: `Welcome to Semstack — Your account has been activated!`,
+    subject: `Semstack: Account approved for ${options.name || 'Student'} (Semester ${options.semester})`,
     html: wrapEmailLayout({
       previewText: `Your Semstack account for Semester ${options.semester} has been approved. Start browsing your courses now.`,
       title: `Your account is active and ready`,
@@ -73,7 +73,7 @@ export function accountRejectedEmail(options: {
   `;
 
   return {
-    subject: `Semstack — Account application update`,
+    subject: `Semstack: Application update for ${options.name || 'Applicant'}`,
     html: wrapEmailLayout({
       previewText: `Update regarding your Semstack account application.`,
       title: `Account application update`,
@@ -104,7 +104,7 @@ export function rolePromotedEmail(options: {
   `;
 
   return {
-    subject: `🌟 You've been promoted to Note Contributor on Semstack!`,
+    subject: `Semstack: Note Contributor status granted for ${options.name || 'Student'}`,
     html: wrapEmailLayout({
       previewText: `You now have contributor privileges to upload notes on Semstack.`,
       title: `You are now a Note Contributor`,
@@ -150,7 +150,7 @@ export function notePublishedEmail(options: {
   `;
 
   return {
-    subject: `🎉 Your note "${options.noteTitle}" is now live!`,
+    subject: `Semstack: Notes published for ${options.subjectCode} (${options.noteTitle})`,
     html: wrapEmailLayout({
       previewText: `Your notes for ${options.subjectCode} are now published and visible to all students.`,
       title: `Your notes are live on Semstack`,
@@ -193,7 +193,7 @@ export function noteRejectedEmail(options: {
   `;
 
   return {
-    subject: `Semstack — Note review update for "${options.noteTitle}"`,
+    subject: `Semstack: Note review update for "${options.noteTitle}"`,
     html: wrapEmailLayout({
       previewText: `Review feedback regarding your note submission "${options.noteTitle}".`,
       title: `Submission Review Update`,
@@ -240,7 +240,7 @@ export function semesterAdvancedEmail(options: {
   `;
 
   return {
-    subject: `📚 Welcome to Semester ${options.toSem} — New courses unlocked!`,
+    subject: `Semstack: Academic progression to Semester ${options.toSem}`,
     html: wrapEmailLayout({
       previewText: `Your Semstack portal has been updated for Semester ${options.toSem}. Explore your courses.`,
       title: `Welcome to Semester ${options.toSem}`,
@@ -275,7 +275,7 @@ export function graduatedEmail(options: {
   `;
 
   return {
-    subject: `🎓 Congratulations Batch ${options.batchYear || ''} Graduate!`,
+    subject: `Semstack: Department graduation and alumni access for Batch ${options.batchYear || 'Graduate'}`,
     html: wrapEmailLayout({
       previewText: `Congratulations on graduating from UET Computer Engineering! Your alumni library access is permanently active.`,
       title: `Congratulations on your graduation!`,
@@ -302,17 +302,17 @@ export function departmentAnnouncementEmail(options: {
     ${options.hasImage ? `
     <div style="margin-top: 20px; padding: 16px; background-color: #f7f5f2; border-radius: 16px; border: 1px solid #e8e4de; text-align: center;">
       <p style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #252629;">
-        📎 Official Circular / Image Attached
+        Attachment Note
       </p>
       <p style="margin: 0; font-size: 12px; color: #6f706f;">
-        An official department document or schedule scan is attached to this notice.
+        An official department document or schedule scan is attached to this notice on the web portal.
       </p>
     </div>
     ` : ''}
   `;
 
   return {
-    subject: `📢 [Department Notice] ${options.title}`,
+    subject: `Semstack Notice: ${options.title}`,
     html: wrapEmailLayout({
       previewText: `${options.title} — Official Department Announcement.`,
       title: options.title,
@@ -358,13 +358,13 @@ export function newRegistrationAlertEmail(options: {
       </tr>
       <tr>
         <td style="padding: 4px 0; color: #787a80;">Role Requested:</td>
-        <td align="right" style="font-weight: 700; color: #252629;">${options.isContributor ? '⭐ Note Contributor' : 'Student'}</td>
+        <td align="right" style="font-weight: 700; color: #252629;">${options.isContributor ? 'Note Contributor' : 'Student'}</td>
       </tr>
     </table>
   `;
 
   return {
-    subject: `👤 New Registration: ${options.name} (${options.regNumber})`,
+    subject: `Semstack Admin: New registration pending for ${options.name} (${options.regNumber})`,
     html: wrapEmailLayout({
       previewText: `New registration pending: ${options.name} (${options.regNumber}, Semester ${options.semester}).`,
       title: `New Student Registration Pending`,
@@ -412,7 +412,7 @@ export function noteSubmittedAlertEmail(options: {
   `;
 
   return {
-    subject: `📄 Note Submitted for Review: "${options.noteTitle}" (${options.subjectCode})`,
+    subject: `Semstack Admin: Note review pending for "${options.noteTitle}" (${options.subjectCode})`,
     html: wrapEmailLayout({
       previewText: `New note pending review: "${options.noteTitle}" by ${options.contributorName}.`,
       title: `New Note Submitted for Review`,
@@ -424,7 +424,7 @@ export function noteSubmittedAlertEmail(options: {
   };
 }
 
-// 12. Password Reset Verification Code (To User)
+// 11. Password Reset Verification Code (To User)
 export function passwordResetEmail(options: {
   name?: string | null;
   code: string;
@@ -451,12 +451,12 @@ export function passwordResetEmail(options: {
       This verification code is valid for the next <strong>15 minutes</strong>.
     </p>
     <p style="margin: 20px 0 0 0; font-size: 12px; color: #94969c; line-height: 1.5;">
-      If you did not request a password reset, please ignore this email or contact department coordinators. Your existing password remains unchanged.
+      If you did not request a password reset, please ignore this email. Your existing password remains unchanged.
     </p>
   `;
 
   return {
-    subject: `🔐 Your Semstack Password Reset Code: ${options.code}`,
+    subject: `Semstack: Password reset verification code ${options.code}`,
     html: wrapEmailLayout({
       previewText: `Use verification code ${options.code} to reset your Semstack account password.`,
       title: `Reset Your Password`,
@@ -505,7 +505,7 @@ export function registrationReceivedStudentEmail(options: {
   `;
 
   return {
-    subject: `Application Received — Semstack (${options.regNumber})`,
+    subject: `Semstack: Application received for ${options.name} (${options.regNumber})`,
     html: wrapEmailLayout({
       previewText: `Your registration for Semester ${options.semester} is pending review by administrators.`,
       title: `Registration Received`,
@@ -515,5 +515,3 @@ export function registrationReceivedStudentEmail(options: {
     })
   };
 }
-
-
