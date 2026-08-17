@@ -2051,6 +2051,166 @@ function Notifications({alerts,setAlerts,user}:{alerts:any[],setAlerts:(a:any[])
   )
 }
 
+// Helper to recursively extract all files from dropped DataTransfer items (including nested subfolders)
+async function extractFilesFromDataTransfer(dataTransfer: DataTransfer): Promise<Array<{ file: File; fullPath: string }>> {
+  const results: Array<{ file: File; fullPath: string }> = [];
+  const items = dataTransfer.items;
+
+  const ALLOWED_EXTS = new Set(['pdf', 'png', 'jpg', 'jpeg', 'webp', 'docx', 'doc', 'pptx', 'ppt', 'txt', 'xlsx', 'xls']);
+
+  if (items && items.length > 0) {
+    const queue: any[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const entry = (items[i] as any).webkitGetAsEntry ? (items[i] as any).webkitGetAsEntry() : null;
+      if (entry) {
+        queue.push(entry);
+      } else {
+        const f = items[i].getAsFile();
+        if (f) results.push({ file: f, fullPath: f.name });
+      }
+    }
+
+    async function readEntry(entry: any, path: string = ''): Promise<void> {
+      if (entry.isFile) {
+        return new Promise<void>((resolve) => {
+          entry.file((file: File) => {
+            const ext = file.name.split('.').pop()?.toLowerCase() || '';
+            if (ALLOWED_EXTS.has(ext)) {
+              results.push({ file, fullPath: path ? `${path}/${file.name}` : file.name });
+            }
+            resolve();
+          }, () => resolve());
+        });
+      } else if (entry.isDirectory) {
+        const dirReader = entry.createReader();
+        const readAllEntries = async (): Promise<any[]> => {
+          let all: any[] = [];
+          while (true) {
+            const batch: any[] = await new Promise((resolve) => dirReader.readEntries(resolve, () => resolve([])));
+            if (!batch || batch.length === 0) break;
+            all = all.concat(batch);
+          }
+          return all;
+        };
+        const childEntries = await readAllEntries();
+        for (const child of childEntries) {
+          await readEntry(child, path ? `${path}/${entry.name}` : entry.name);
+        }
+      }
+    }
+
+    for (const entry of queue) {
+      await readEntry(entry);
+    }
+  } else if (dataTransfer.files && dataTransfer.files.length > 0) {
+    for (let i = 0; i < dataTransfer.files.length; i++) {
+      const f = dataTransfer.files[i];
+      const ext = f.name.split('.').pop()?.toLowerCase() || '';
+      if (ALLOWED_EXTS.has(ext)) {
+        results.push({ file: f, fullPath: f.name });
+      }
+    }
+  }
+
+  return results;
+}
+
+// Clean human-readable title formatter
+function formatCleanTitle(filename: string): string {
+  const withoutExt = filename.replace(/\.[^/.]+$/, '');
+  return withoutExt
+    .replace(/[_\-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Intelligent keyword matching to auto-select subject and semester from file/folder names
+function autoDetectSubjectAndSemester(
+  filePath: string,
+  fileName: string,
+  subjects: SubjectItem[],
+  fallbackSemester: number
+): { semester: number; subjectCode: string } {
+  const combined = `${filePath} ${fileName}`.toLowerCase();
+
+  // 1. Direct Subject Code Match (e.g. "CE-221", "CE221", "CS-101")
+  for (const s of subjects) {
+    const codeClean = s.code.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const combinedClean = combined.replace(/[^a-z0-9]/g, '');
+    if (codeClean && combinedClean.includes(codeClean)) {
+      return { semester: s.semester, subjectCode: s.code };
+    }
+  }
+
+  // 2. Direct Subject Name Match
+  for (const s of subjects) {
+    const nameLower = s.name.toLowerCase();
+    if (nameLower && combined.includes(nameLower)) {
+      return { semester: s.semester, subjectCode: s.code };
+    }
+  }
+
+  // 3. Common Acronyms & Subject Synonyms
+  const synonyms: Record<string, string[]> = {
+    'dld': ['digital logic', 'dld', 'logic design', 'switching theory'],
+    'dsa': ['data structures', 'dsa', 'algorithms'],
+    'oop': ['object oriented', 'oop', 'java', 'c++'],
+    'coa': ['computer organization', 'architecture', 'coa', 'assembly'],
+    'ca': ['computer architecture', 'microprocessor'],
+    'dbms': ['database', 'dbms', 'sql', 'rdbms'],
+    'os': ['operating systems', 'os', 'linux kernel'],
+    'signals': ['signals and systems', 'dsp', 'signal processing'],
+    'calc': ['calculus', 'integration', 'derivatives', 'differentiation'],
+    'la': ['linear algebra', 'matrices', 'vectors'],
+    'de': ['differential equations', 'ode', 'pde'],
+    'comm': ['communication systems', 'data communication', 'networking', 'networks'],
+    'ai': ['artificial intelligence', 'machine learning', 'deep learning'],
+    'se': ['software engineering', 'sdlc', 'agile'],
+  };
+
+  for (const s of subjects) {
+    const sNameLower = s.name.toLowerCase();
+    for (const [key, aliases] of Object.entries(synonyms)) {
+      const matchesSubject = aliases.some(a => sNameLower.includes(a));
+      if (matchesSubject) {
+        const matchesFile = aliases.some(a => combined.includes(a)) || combined.split(/[\s_\-\/\.\(\)]+/).includes(key);
+        if (matchesFile) {
+          return { semester: s.semester, subjectCode: s.code };
+        }
+      }
+    }
+  }
+
+  // 4. Match semester if path has "sem 3", "semester 3", "3rd sem"
+  const semMatch = combined.match(/(?:semester|sem|term)\s*([1-8])|(?:([1-8])(?:st|nd|rd|th)\s*sem)/i);
+  if (semMatch) {
+    const semNum = parseInt(semMatch[1] || semMatch[2], 10);
+    const subList = subjects.filter(s => s.semester === semNum);
+    if (subList.length > 0) {
+      return { semester: semNum, subjectCode: subList[0].code };
+    }
+  }
+
+  // Fallback
+  const defaultSubs = subjects.filter(s => s.semester === fallbackSemester);
+  return {
+    semester: fallbackSemester,
+    subjectCode: defaultSubs[0]?.code || (subjects[0]?.code || '')
+  };
+}
+
+interface StagedUploadItem {
+  id: string
+  file: File
+  fullPath: string
+  title: string
+  semester: number
+  subjectCode: string
+  seniorAdvice: string
+  status: 'idle' | 'uploading' | 'done' | 'error'
+  progress: number
+  error?: string
+}
 
 function ContributorDesk({
   user,
@@ -2065,18 +2225,26 @@ function ContributorDesk({
   subjects: SubjectItem[]
   onNavigateToSettings?: () => void
 }) {
-  const isTouch = useIsTouch()
+  const isTouch = useIsTouch();
   const [open, setOpen] = useState(false);
-  const [submitted,setSubmitted]=useState(false);
-  const [uploading,setUploading]=useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [batchProgress, setBatchProgress] = useState(0);
+  const [batchCurrentIndex, setBatchCurrentIndex] = useState(0);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const [stagedFiles, setStagedFiles] = useState<StagedUploadItem[]>([]);
+  const [singleTitle, setSingleTitle] = useState('');
+  const [singleAdvice, setSeniorAdvice] = useState('');
+
   const maxSemesterCap = user?.role === 'ADMIN' ? 8 : Math.max(1, Math.min(8, user?.semester || 1));
   const allowedSemesters = useMemo(() => {
     return Array.from({ length: maxSemesterCap }, (_, i) => i + 1);
   }, [maxSemesterCap]);
 
-  const [selectedSemester, setSelectedSemester] = useState(() => (
-    user?.role === 'ADMIN' ? 1 : Math.min(8, Math.max(1, user?.semester || 1))
+  const [selectedSemester, setSelectedSemester] = useState<number>(() => (
+    user?.role === 'ADMIN' ? 1 : Math.min(maxSemesterCap, user?.semester || 1)
   ));
   const [subjectDropdownOpen, setSubjectDropdownOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -2093,6 +2261,12 @@ function ContributorDesk({
       setSelectedSemester(initialSem);
       const subList = subjects.filter(s => s.semester === initialSem);
       setSubjectCode(subList.length > 0 ? subList[0].code : '');
+      setStagedFiles([]);
+      setSelectedFile(null);
+      setSingleTitle('');
+      setSeniorAdvice('');
+      setUploadProgress(0);
+      setBatchProgress(0);
     }
   }, [open, maxSemesterCap, user?.role, user?.semester, subjects]);
 
@@ -2111,7 +2285,6 @@ function ContributorDesk({
   }, [open, lenis]);
 
   const [subjectCode, setSubjectCode] = useState('');
-  const [seniorAdvice, setSeniorAdvice] = useState('');
 
   const semesterSubjects = useMemo(() => subjects.filter(s => s.semester === selectedSemester), [subjects, selectedSemester]);
 
@@ -2127,100 +2300,272 @@ function ContributorDesk({
     setSubjectCode(subList.length > 0 ? subList[0].code : '');
   };
 
-  const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setUploading(true);
-    setUploadProgress(0);
-    const form = new FormData(e.currentTarget);
-    const file = selectedFile || (form.get('file') as File | null);
-    const title = String(form.get('title') || '').trim();
-    
-    const matchedSubject = subjects.find(s => s.code === subjectCode);
-    if (!matchedSubject) { alert('Please select a course for this semester.'); setUploading(false); return; }
-    const finalCode = matchedSubject.code;
-    const finalSubjectName = matchedSubject.name;
+  const addExtractedFiles = (incoming: Array<{ file: File; fullPath: string }>) => {
+    if (incoming.length === 0) return;
+    const newItems: StagedUploadItem[] = incoming.map(item => {
+      const auto = autoDetectSubjectAndSemester(item.fullPath, item.file.name, subjects, selectedSemester);
+      return {
+        id: `${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        file: item.file,
+        fullPath: item.fullPath,
+        title: formatCleanTitle(item.file.name),
+        semester: auto.semester,
+        subjectCode: auto.subjectCode,
+        seniorAdvice: '',
+        status: 'idle',
+        progress: 0
+      };
+    });
 
-    if (!file || file.size === 0) { alert('Please select a note file to upload (PDF, DOCX, PPTX, XLSX, TXT, or Image)'); setUploading(false); return; }
-    const ext = file.name.split('.').pop()?.toLowerCase() || '';
-    const isImage = ['png', 'jpg', 'jpeg', 'webp'].includes(ext) || file.type.startsWith('image/');
-    const isAllowedExt = ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'docx', 'doc', 'pptx', 'ppt', 'txt', 'xlsx', 'xls'].includes(ext);
-    const isAllowedMime = file.type === 'application/pdf' || file.type.startsWith('image/') || file.type.includes('officedocument') || file.type.includes('word') || file.type.includes('presentation') || file.type.includes('text');
-    if (!isAllowedExt && !isAllowedMime) {
-      alert('Supported formats: PDF documents, Office files (DOCX, PPTX, XLSX), TXT files, and Images (PNG, JPG, WEBP).');
+    setStagedFiles(prev => {
+      const combined = [...prev, ...newItems];
+      if (combined.length === 1) {
+        setSelectedFile(combined[0].file);
+        setSingleTitle(combined[0].title);
+        setSelectedSemester(combined[0].semester);
+        setSubjectCode(combined[0].subjectCode);
+        setSeniorAdvice(combined[0].seniorAdvice);
+      } else {
+        setSelectedFile(null);
+      }
+      return combined;
+    });
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    if (e.dataTransfer) {
+      const extracted = await extractFilesFromDataTransfer(e.dataTransfer);
+      addExtractedFiles(extracted);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const applyBatchSettingsToAll = (targetSem: number, targetCode: string) => {
+    setStagedFiles(prev => prev.map(item => ({
+      ...item,
+      semester: targetSem,
+      subjectCode: targetCode
+    })));
+  };
+
+  // Submit Handler (Supports both single file and batch mode)
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    // 1. Single file mode
+    if (stagedFiles.length <= 1) {
+      const form = new FormData(e.currentTarget);
+      const file = selectedFile || (stagedFiles[0]?.file) || (form.get('file') as File | null);
+      const title = singleTitle.trim() || String(form.get('title') || '').trim();
+      
+      const matchedSubject = subjects.find(s => s.code === subjectCode);
+      if (!matchedSubject) { alert('Please select a course for this semester.'); return; }
+      const finalCode = matchedSubject.code;
+      const finalSubjectName = matchedSubject.name;
+
+      if (!file || file.size === 0) { alert('Please select a note file to upload (PDF, DOCX, PPTX, XLSX, TXT, or Image)'); return; }
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      const isImage = ['png', 'jpg', 'jpeg', 'webp'].includes(ext) || file.type.startsWith('image/');
+      const isAllowedExt = ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'docx', 'doc', 'pptx', 'ppt', 'txt', 'xlsx', 'xls'].includes(ext);
+      const isAllowedMime = file.type === 'application/pdf' || file.type.startsWith('image/') || file.type.includes('officedocument') || file.type.includes('word') || file.type.includes('presentation') || file.type.includes('text');
+      if (!isAllowedExt && !isAllowedMime) {
+        alert('Supported formats: PDF documents, Office files (DOCX, PPTX, XLSX), TXT files, and Images (PNG, JPG, WEBP).');
+        return;
+      }
+      if (file.size > 100 * 1024 * 1024) { alert('File size must be less than 100 MB'); return; }
+
+      setUploading(true);
+      setUploadProgress(0);
+
+      const finalExt = ext || (file.type === 'application/pdf' ? 'pdf' : isImage ? 'png' : 'bin');
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${finalExt}`;
+      const contentType = file.type || 'application/octet-stream';
+
+      const { url, error: presignError } = await getPresignedUrl(fileName, contentType);
+      if (presignError || !url) { alert(presignError || 'Failed to get secure upload link'); setUploading(false); return; }
+
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+              const percent = Math.round((event.loaded / event.total) * 100);
+              setUploadProgress(percent);
+            }
+          };
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) resolve();
+            else reject(new Error('Failed to upload file to storage'));
+          };
+          xhr.onerror = () => reject(new Error('Network error during upload'));
+          xhr.open('PUT', url);
+          xhr.setRequestHeader('Content-Type', contentType);
+          xhr.send(file);
+        });
+      } catch (err) {
+        alert((err as Error).message); setUploading(false); setUploadProgress(0); return;
+      }
+
+      const fileUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${fileName}`;
+
+      const res = await createNote({
+        title: title || formatCleanTitle(file.name),
+        subjectCode: finalCode,
+        subjectName: finalSubjectName,
+        semester: selectedSemester,
+        description: singleAdvice.trim() || undefined,
+        fileUrl,
+        pages: isImage ? 1 : 12,
+        size: (file.size / (1024*1024)).toFixed(1) + ' MB'
+      });
+
+      if (res.error) {
+        alert(res.error);
+      } else if (res.note) {
+        add({
+          id: res.note.id,
+          authorId: user?.id,
+          title: res.note.title,
+          subject: finalSubjectName,
+          code: finalCode,
+          author: user?.name || 'You',
+          date: 'Just now',
+          pages: res.note.pages,
+          size: res.note.size,
+          tone: res.note.tone,
+          status: res.note.status,
+          fileUrl,
+          description: singleAdvice.trim() || undefined
+        });
+        setSubmitted(true);
+        setSeniorAdvice('');
+        setSelectedFile(null);
+        setStagedFiles([]);
+        setTimeout(()=>{setOpen(false);setSubmitted(false);setUploadProgress(0);},1500);
+      }
       setUploading(false);
       return;
     }
-    if (file.size > 100 * 1024 * 1024) { alert('File size must be less than 100 MB'); setUploading(false); return; }
-    if (!finalCode) { alert('Please choose or enter a subject code'); setUploading(false); return; }
 
-    const finalExt = ext || (file.type === 'application/pdf' ? 'pdf' : isImage ? 'png' : 'bin');
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${finalExt}`;
-    const contentType = file.type || 'application/octet-stream';
-
-    const { url, error: presignError } = await getPresignedUrl(fileName, contentType);
-    if (presignError || !url) { alert(presignError || 'Failed to get secure upload link'); setUploading(false); return; }
-
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const percent = Math.round((event.loaded / event.total) * 100);
-            setUploadProgress(percent);
-          }
-        };
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) resolve();
-          else reject(new Error('Failed to upload file to storage'));
-        };
-        xhr.onerror = () => reject(new Error('Network error during upload'));
-        xhr.open('PUT', url);
-        xhr.setRequestHeader('Content-Type', contentType);
-        xhr.send(file);
-      });
-    } catch (err) {
-      alert((err as Error).message); setUploading(false); setUploadProgress(0); return;
+    // 2. Batch Mode
+    const invalidItem = stagedFiles.find(item => !item.subjectCode || !subjects.some(s => s.code === item.subjectCode));
+    if (invalidItem) {
+      alert(`Please select a valid subject for "${invalidItem.title}" before submitting.`);
+      return;
     }
 
-    const fileUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${fileName}`;
+    setUploading(true);
+    setUploadProgress(0);
+    setBatchProgress(0);
 
-    const res = await createNote({
-      title,
-      subjectCode: finalCode,
-      subjectName: finalSubjectName,
-      semester: selectedSemester,
-      description: seniorAdvice.trim() || undefined,
-      fileUrl,
-      pages: isImage ? 1 : 12,
-      size: (file.size / (1024*1024)).toFixed(1) + ' MB'
-    });
+    let completedCount = 0;
+    const totalCount = stagedFiles.length;
 
-    if (res.error) {
-      alert(res.error);
-    } else if (res.note) {
-      add({
-        id: res.note.id,
-        authorId: user?.id,
-        title: res.note.title,
-        subject: finalSubjectName,
-        code: finalCode,
-        author: user?.name || 'You',
-        date: 'Just now',
-        pages: res.note.pages,
-        size: res.note.size,
-        tone: res.note.tone,
-        status: res.note.status,
-        fileUrl,
-        description: seniorAdvice.trim() || undefined
-      });
-      setSubmitted(true);
-      setSeniorAdvice('');
+    for (let i = 0; i < stagedFiles.length; i++) {
+      const item = stagedFiles[i];
+      setBatchCurrentIndex(i + 1);
+      setStagedFiles(prev => prev.map((it, idx) => idx === i ? { ...it, status: 'uploading', progress: 10 } : it));
+
+      const file = item.file;
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      const isImage = ['png', 'jpg', 'jpeg', 'webp'].includes(ext) || file.type.startsWith('image/');
+      const finalExt = ext || (file.type === 'application/pdf' ? 'pdf' : isImage ? 'png' : 'bin');
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${finalExt}`;
+      const contentType = file.type || 'application/octet-stream';
+
+      try {
+        const { url, error: presignError } = await getPresignedUrl(fileName, contentType);
+        if (presignError || !url) throw new Error(presignError || 'Failed to obtain upload ticket');
+
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+              const percent = Math.round((event.loaded / event.total) * 100);
+              setStagedFiles(prev => prev.map((it, idx) => idx === i ? { ...it, progress: percent } : it));
+              const overallPercent = Math.round(((completedCount * 100) + percent) / totalCount);
+              setBatchProgress(overallPercent);
+              setUploadProgress(overallPercent);
+            }
+          };
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) resolve();
+            else reject(new Error('Failed to upload file to storage'));
+          };
+          xhr.onerror = () => reject(new Error('Network error'));
+          xhr.open('PUT', url);
+          xhr.setRequestHeader('Content-Type', contentType);
+          xhr.send(file);
+        });
+
+        const fileUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${fileName}`;
+        const matchedSubject = subjects.find(s => s.code === item.subjectCode);
+
+        const res = await createNote({
+          title: item.title.trim() || formatCleanTitle(file.name),
+          subjectCode: item.subjectCode,
+          subjectName: matchedSubject?.name || item.subjectCode,
+          semester: item.semester,
+          description: item.seniorAdvice.trim() || undefined,
+          fileUrl,
+          pages: isImage ? 1 : 12,
+          size: (file.size / (1024 * 1024)).toFixed(1) + ' MB'
+        });
+
+        if (res.error) throw new Error(res.error);
+
+        if (res.note) {
+          add({
+            id: res.note.id,
+            authorId: user?.id,
+            title: res.note.title,
+            subject: matchedSubject?.name || item.subjectCode,
+            code: item.subjectCode,
+            author: user?.name || 'You',
+            date: 'Just now',
+            pages: res.note.pages,
+            size: res.note.size,
+            tone: res.note.tone,
+            status: res.note.status,
+            fileUrl,
+            description: item.seniorAdvice.trim() || undefined
+          });
+        }
+
+        completedCount++;
+        setStagedFiles(prev => prev.map((it, idx) => idx === i ? { ...it, status: 'done', progress: 100 } : it));
+      } catch (err: any) {
+        setStagedFiles(prev => prev.map((it, idx) => idx === i ? { ...it, status: 'error', error: err?.message || 'Upload failed' } : it));
+      }
+    }
+
+    setSubmitted(true);
+    setTimeout(() => {
+      setOpen(false);
+      setSubmitted(false);
+      setUploading(false);
+      setStagedFiles([]);
       setSelectedFile(null);
-      setTimeout(()=>{setOpen(false);setSubmitted(false);setUploadProgress(0);},1500);
-    }
-    setUploading(false);
+      setUploadProgress(0);
+      setBatchProgress(0);
+    }, 1800);
   };
 
+  const isBatchMode = stagedFiles.length > 1;
   const myNotes = notes.filter(n => (user && n.authorId === user.id) || n.author === user?.name || n.author === 'You');
 
   return (
@@ -2230,9 +2575,11 @@ function ContributorDesk({
           <Upload size={25}/>
           <h2 className="mt-10 text-3xl font-semibold">Share what helped you learn.</h2>
           <p className="mt-2 max-w-xl text-muted-foreground">Every note is reviewed by the department before students can see it.</p>
-          <button onClick={()=>setOpen(true)} className="mt-6 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground">
-            Submit a note
-          </button>
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <button onClick={()=>setOpen(true)} className="rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity">
+              Submit notes or folder
+            </button>
+          </div>
         </div>
         <div className="mt-8">
           <Header kicker="Your contributions" title="Submission history"/>
@@ -2263,73 +2610,362 @@ function ContributorDesk({
       <aside className="rounded-3xl bg-secondary p-6 lg:self-start border border-border/60">
         <h3 className="font-semibold text-foreground">Before you submit</h3>
         <ul className="mt-4 flex flex-col gap-3 text-sm leading-relaxed text-muted-foreground">
-          <li>Select your target semester & subject.</li>
-          <li>Add helpful exam tips or study advice.</li>
-          <li>Only upload material you can share.</li>
+          <li>Drop individual files, multiple files, or full folders.</li>
+          <li>Auto-detects course &amp; semester from filenames.</li>
+          <li>Add helpful exam tips or study advice per note.</li>
           <li>PDF, DOCX, PPTX, TXT, or images up to 100 MB.</li>
         </ul>
       </aside>
 
       {mounted && (() => {
-        // Shared backdrop + form wrapper
-        // Mobile: MobilePresence (CSS compositor) + plain form
-        // Desktop: AnimatePresence + motion.div + motion.form (Framer Motion)
         const formInner = (
           <>
             {/* Frosted Sticky Header */}
             <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-5 bg-card/90 backdrop-blur-xl border-b border-border/40">
               <div>
-                <p className="section-kicker mb-0.5">New submission</p>
-                <h2 id="submit-title" className="text-xl sm:text-2xl font-bold tracking-tight">Upload your note</h2>
+                <p className="section-kicker mb-0.5">{isBatchMode ? `Bulk upload (${stagedFiles.length} files)` : 'New submission'}</p>
+                <h2 id="submit-title" className="text-xl sm:text-2xl font-bold tracking-tight">
+                  {isBatchMode ? 'Review & Upload Notes' : 'Upload your note'}
+                </h2>
               </div>
-              <button type="button" onClick={()=>setOpen(false)} className="flex size-9 items-center justify-center rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors" aria-label="Close dialog">
+              <button 
+                type="button" 
+                onClick={()=>setOpen(false)} 
+                className="flex size-9 items-center justify-center rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors" 
+                aria-label="Close dialog"
+              >
                 <X size={18}/>
               </button>
             </div>
+
             {/* Scrollable Form Body */}
-            <div className="flex-1 overflow-y-auto modal-scroll px-6 py-5 mr-2 pr-4 space-y-5">
+            <div className="flex-1 overflow-y-auto modal-scroll px-6 py-5 space-y-5">
               {submitted ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <div className="flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground mb-4"><Check size={28} weight="bold" /></div>
-                  <h3 className="text-xl font-bold">Uploaded for review!</h3>
-                  <p className="text-sm text-muted-foreground mt-1 max-w-xs">Your note has been submitted to the department.</p>
+                  <h3 className="text-xl font-bold">{isBatchMode ? `All ${stagedFiles.length} notes submitted!` : 'Uploaded for review!'}</h3>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-xs">Your submissions have been sent to the department queue.</p>
+                </div>
+              ) : isBatchMode ? (
+                /* BATCH STAGING MODE */
+                <div className="space-y-5">
+                  {/* Global Apply-To-All Bar */}
+                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-primary">Quick Apply to All Files</span>
+                      <span className="text-xs text-muted-foreground">{stagedFiles.length} files staged</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr_auto] gap-2.5 items-center">
+                      <select
+                        value={selectedSemester}
+                        onChange={e => {
+                          const sem = Number(e.target.value);
+                          setSelectedSemester(sem);
+                          const subs = subjects.filter(s => s.semester === sem);
+                          setSubjectCode(subs[0]?.code || '');
+                        }}
+                        className="h-10 rounded-xl border bg-background px-3 text-xs font-semibold focus:border-foreground"
+                      >
+                        {allowedSemesters.map(s => (
+                          <option key={s} value={s}>Semester {s}</option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={subjectCode}
+                        onChange={e => setSubjectCode(e.target.value)}
+                        className="h-10 rounded-xl border bg-background px-3 text-xs font-medium focus:border-foreground truncate"
+                      >
+                        {semesterSubjects.length === 0 ? (
+                          <option value="">No subjects in Sem {selectedSemester}</option>
+                        ) : (
+                          semesterSubjects.map(s => (
+                            <option key={s.code} value={s.code}>{s.name} ({s.code})</option>
+                          ))
+                        )}
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={() => applyBatchSettingsToAll(selectedSemester, subjectCode)}
+                        disabled={!subjectCode || semesterSubjects.length === 0}
+                        className="h-10 px-4 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap"
+                      >
+                        Apply to All
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Staged Items List */}
+                  <div className="space-y-3">
+                    {stagedFiles.map((item, idx) => {
+                      const itemSemSubjects = subjects.filter(s => s.semester === item.semester);
+                      const fileExt = item.file.name.split('.').pop()?.toUpperCase() || 'FILE';
+                      const isImg = ['PNG', 'JPG', 'JPEG', 'WEBP'].includes(fileExt);
+
+                      return (
+                        <div key={item.id} className="rounded-2xl border bg-secondary/30 p-4 space-y-3 relative group">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary font-bold text-xs">
+                                {isImg ? <ImageSquare size={18} /> : <FileText size={18} />}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{fileExt} · {(item.file.size / (1024 * 1024)).toFixed(1)} MB</span>
+                                {item.fullPath && item.fullPath !== item.file.name && (
+                                  <p className="text-[11px] text-muted-foreground truncate">{item.fullPath}</p>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setStagedFiles(prev => prev.filter((_, i) => i !== idx))}
+                              className="size-7 flex items-center justify-center rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                              title="Remove file"
+                            >
+                              <X size={15} />
+                            </button>
+                          </div>
+
+                          {/* Editable Title */}
+                          <input
+                            type="text"
+                            value={item.title}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setStagedFiles(prev => prev.map((it, i) => i === idx ? { ...it, title: val } : it));
+                            }}
+                            className="h-10 w-full rounded-xl border bg-background px-3 text-xs font-semibold focus:border-foreground"
+                            placeholder="Note title"
+                          />
+
+                          {/* Semester & Subject Selectors */}
+                          <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] gap-2">
+                            <select
+                              value={item.semester}
+                              onChange={e => {
+                                const sem = Number(e.target.value);
+                                const subs = subjects.filter(s => s.semester === sem);
+                                setStagedFiles(prev => prev.map((it, i) => i === idx ? { ...it, semester: sem, subjectCode: subs[0]?.code || '' } : it));
+                              }}
+                              className="h-9 rounded-xl border bg-background px-2.5 text-xs font-semibold focus:border-foreground"
+                            >
+                              {allowedSemesters.map(s => (
+                                <option key={s} value={s}>Semester {s}</option>
+                              ))}
+                            </select>
+
+                            <select
+                              value={item.subjectCode}
+                              onChange={e => {
+                                const code = e.target.value;
+                                setStagedFiles(prev => prev.map((it, i) => i === idx ? { ...it, subjectCode: code } : it));
+                              }}
+                              className="h-9 rounded-xl border bg-background px-2.5 text-xs font-medium focus:border-foreground truncate"
+                            >
+                              {itemSemSubjects.length === 0 ? (
+                                <option value="">No subjects in Sem {item.semester}</option>
+                              ) : (
+                                itemSemSubjects.map(s => (
+                                  <option key={s.code} value={s.code}>{s.name} ({s.code})</option>
+                                ))
+                              )}
+                            </select>
+                          </div>
+
+                          {/* Optional Senior Advice per item */}
+                          <input
+                            type="text"
+                            value={item.seniorAdvice}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setStagedFiles(prev => prev.map((it, i) => i === idx ? { ...it, seniorAdvice: val } : it));
+                            }}
+                            className="h-9 w-full rounded-xl border bg-background/60 px-3 text-xs placeholder:text-muted-foreground/70"
+                            placeholder="Optional advice or exam tip for this note..."
+                          />
+
+                          {/* Item Upload Progress */}
+                          {item.status === 'uploading' && (
+                            <div className="space-y-1 pt-1">
+                              <div className="flex justify-between text-[11px] text-muted-foreground">
+                                <span>Uploading note…</span>
+                                <span>{item.progress}%</span>
+                              </div>
+                              <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+                                <div className="h-full bg-primary transition-all duration-200" style={{ width: `${item.progress}%` }} />
+                              </div>
+                            </div>
+                          )}
+                          {item.status === 'done' && (
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-primary pt-1">
+                              <Check size={15} weight="bold" /> Submitted for review
+                            </div>
+                          )}
+                          {item.status === 'error' && (
+                            <div className="text-xs font-semibold text-destructive pt-1">
+                              ✕ {item.error || 'Upload failed'}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Add more files / folders dropzone */}
+                  <div
+                    onDrop={handleDrop}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    className={`rounded-2xl border-2 border-dashed p-4 text-center transition-colors flex items-center justify-center gap-4 flex-wrap ${
+                      isDragOver ? 'border-primary bg-primary/10' : 'border-border/80 bg-secondary/20 hover:border-primary/40'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <UploadSimple size={18} className="text-primary" />
+                      <span>Drag more files or folders here, or</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="cursor-pointer px-3 py-1.5 rounded-xl bg-secondary text-foreground text-xs font-semibold hover:bg-secondary/80 transition-colors">
+                        <span>+ Add files</span>
+                        <input
+                          type="file"
+                          multiple
+                          accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.doc,.pptx,.ppt,.txt,.xlsx,.xls,application/pdf,image/*,application/vnd.openxmlformats-officedocument.*"
+                          className="sr-only"
+                          onChange={e => {
+                            if (e.target.files) {
+                              const arr: Array<{ file: File; fullPath: string }> = [];
+                              for (let i = 0; i < e.target.files.length; i++) {
+                                arr.push({ file: e.target.files[i], fullPath: e.target.files[i].name });
+                              }
+                              addExtractedFiles(arr);
+                            }
+                          }}
+                        />
+                      </label>
+                      <label className="cursor-pointer px-3 py-1.5 rounded-xl bg-secondary text-foreground text-xs font-semibold hover:bg-secondary/80 transition-colors inline-flex items-center gap-1">
+                        <FolderOpen size={14} />
+                        <span>+ Add folder</span>
+                        <input
+                          type="file"
+                          // @ts-ignore
+                          webkitdirectory=""
+                          directory=""
+                          multiple
+                          className="sr-only"
+                          onChange={e => {
+                            if (e.target.files) {
+                              const arr: Array<{ file: File; fullPath: string }> = [];
+                              for (let i = 0; i < e.target.files.length; i++) {
+                                const f = e.target.files[i];
+                                arr.push({ file: f, fullPath: (f as any).webkitRelativePath || f.name });
+                              }
+                              addExtractedFiles(arr);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Batch Global Progress */}
+                  {uploading && (
+                    <div className="space-y-2 rounded-2xl bg-secondary/50 p-4">
+                      <div className="flex items-center justify-between text-xs font-semibold text-foreground">
+                        <span>Uploading note {batchCurrentIndex} of {stagedFiles.length}…</span>
+                        <span>{batchProgress}%</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                        <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${batchProgress}%` }} />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Batch Submit Button */}
+                  {!uploading && (
+                    <button
+                      type="button"
+                      onClick={() => handleSubmit({ preventDefault: () => {} } as any)}
+                      disabled={stagedFiles.length === 0}
+                      className="w-full rounded-full bg-primary py-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity disabled:opacity-50"
+                    >
+                      Submit all {stagedFiles.length} notes for review
+                    </button>
+                  )}
                 </div>
               ) : (
+                /* SINGLE FILE MODE */
                 <div className="flex flex-col gap-4">
-                  <label className="field-label">Note title<input required name="title" className="field-input" placeholder="e.g. Week 1–6 Midterm Summary" /></label>
+                  <label className="field-label">
+                    Note title
+                    <input
+                      required
+                      name="title"
+                      value={singleTitle}
+                      onChange={e => setSingleTitle(e.target.value)}
+                      className="field-input"
+                      placeholder="e.g. Week 1–6 Midterm Summary"
+                    />
+                  </label>
+
                   {/* Target Semester Selector */}
                   <div className="flex flex-col gap-2">
                     <span className="text-sm font-semibold text-foreground">Target semester</span>
                     <div className="flex items-center gap-1.5 overflow-x-auto pb-2 modal-scroll touch-pan-x">
-                      {allowedSemesters.map(n=>(
-                        <button key={n} type="button" onClick={()=>handleSemesterChange(n)} className={`flex shrink-0 h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-all ${selectedSemester===n?'bg-primary text-primary-foreground shadow-sm':'bg-secondary text-muted-foreground hover:bg-secondary/80'}`}>{n}</button>
+                      {allowedSemesters.map(n => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => handleSemesterChange(n)}
+                          className={`flex shrink-0 h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-all ${
+                            selectedSemester === n ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                          }`}
+                        >
+                          {n}
+                        </button>
                       ))}
                     </div>
                   </div>
+
                   {/* Subject Dropdown or Empty Warning */}
                   {semesterSubjects.length > 0 ? (
                     <div className="flex flex-col gap-2">
                       <span className="text-sm font-semibold text-foreground">Subject</span>
                       <div className="relative">
-                        <button type="button" onClick={()=>setSubjectDropdownOpen(!subjectDropdownOpen)} className="flex h-12 w-full items-center justify-between rounded-2xl border bg-background px-4 text-sm font-medium focus:border-foreground transition-colors text-left">
-                          <span className="truncate">{subjectCode?semesterSubjects.find(s=>s.code===subjectCode)?.name||subjectCode:'Select a course'}</span>
-                          <CaretDown size={16} weight="bold" className={`text-muted-foreground transition-transform duration-200 shrink-0 ml-2 ${subjectDropdownOpen?'rotate-180':''}`}/>
+                        <button
+                          type="button"
+                          onClick={() => setSubjectDropdownOpen(!subjectDropdownOpen)}
+                          className="flex h-12 w-full items-center justify-between rounded-2xl border bg-background px-4 text-sm font-medium focus:border-foreground transition-colors text-left"
+                        >
+                          <span className="truncate">
+                            {subjectCode ? semesterSubjects.find(s => s.code === subjectCode)?.name || subjectCode : 'Select a course'}
+                          </span>
+                          <CaretDown size={16} weight="bold" className={`text-muted-foreground transition-transform duration-200 shrink-0 ml-2 ${subjectDropdownOpen ? 'rotate-180' : ''}`} />
                         </button>
                         {isTouch ? (
                           <>
-                            {subjectDropdownOpen&&<div className="fixed inset-0 z-20" onClick={()=>setSubjectDropdownOpen(false)}/>}
+                            {subjectDropdownOpen && <div className="fixed inset-0 z-20" onClick={() => setSubjectDropdownOpen(false)} />}
                             <MobilePresence show={subjectDropdownOpen} type="dropdown" className="absolute top-[calc(100%+8px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl">
                               <div className="max-h-48 overflow-y-auto modal-scroll flex flex-col gap-1 pr-1">
-                                {semesterSubjects.map(s=><button key={s.code} type="button" onClick={()=>{setSubjectCode(s.code);setSubjectDropdownOpen(false);}} className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${subjectCode===s.code?'bg-secondary font-semibold':'hover:bg-secondary/50'}`}>{s.name} ({s.code})</button>)}
+                                {semesterSubjects.map(s => (
+                                  <button key={s.code} type="button" onClick={() => { setSubjectCode(s.code); setSubjectDropdownOpen(false); }} className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${subjectCode === s.code ? 'bg-secondary font-semibold' : 'hover:bg-secondary/50'}`}>
+                                    {s.name} ({s.code})
+                                  </button>
+                                ))}
                               </div>
                             </MobilePresence>
                           </>
-                        ):(
+                        ) : (
                           <AnimatePresence>
-                            {subjectDropdownOpen&&(
-                              <motion.div initial={{opacity:0,y:-8,scale:0.98}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:-8,scale:0.98}} className="absolute top-[calc(100%+8px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl">
+                            {subjectDropdownOpen && (
+                              <motion.div initial={{ opacity: 0, y: -8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.98 }} className="absolute top-[calc(100%+8px)] left-0 right-0 z-30 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl">
                                 <div className="max-h-48 overflow-y-auto modal-scroll flex flex-col gap-1 pr-1">
-                                  {semesterSubjects.map(s=><button key={s.code} type="button" onClick={()=>{setSubjectCode(s.code);setSubjectDropdownOpen(false);}} className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${subjectCode===s.code?'bg-secondary font-semibold':'hover:bg-secondary/50'}`}>{s.name} ({s.code})</button>)}
+                                  {semesterSubjects.map(s => (
+                                    <button key={s.code} type="button" onClick={() => { setSubjectCode(s.code); setSubjectDropdownOpen(false); }} className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${subjectCode === s.code ? 'bg-secondary font-semibold' : 'hover:bg-secondary/50'}`}>
+                                      {s.name} ({s.code})
+                                    </button>
+                                  ))}
                                 </div>
                               </motion.div>
                             )}
@@ -2359,53 +2995,127 @@ function ContributorDesk({
                       </div>
                     </div>
                   )}
+
                   {/* Senior Advice */}
                   <label className="field-label flex flex-col gap-1.5">
-                    <span className="flex items-center gap-1.5 font-semibold text-foreground"><GraduationCap size={16} className="text-primary"/>Senior Advice &amp; Study Tips (Optional)</span>
+                    <span className="flex items-center gap-1.5 font-semibold text-foreground"><GraduationCap size={16} className="text-primary" />Senior Advice &amp; Study Tips (Optional)</span>
                     <div className="flex h-28 rounded-2xl border bg-background overflow-hidden focus-within:border-foreground transition-colors">
-                      <textarea value={seniorAdvice} onChange={e=>setSeniorAdvice(e.target.value)} className="h-full w-full bg-transparent px-4 py-3 text-sm outline-none resize-none placeholder:text-muted-foreground" placeholder="e.g. Focus on Chapter 3 formulas and past midterm questions."/>
+                      <textarea value={singleAdvice} onChange={e => setSeniorAdvice(e.target.value)} className="h-full w-full bg-transparent px-4 py-3 text-sm outline-none resize-none placeholder:text-muted-foreground" placeholder="e.g. Focus on Chapter 3 formulas and past midterm questions." />
                     </div>
                   </label>
-                  {/* File Upload (PDF, Word, Slides, Text, Image) */}
-                  <label className={`relative flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border transition-all p-4 ${selectedFile?'border-primary/40 bg-secondary/80 hover:bg-secondary':'border-dashed border-border/80 bg-secondary/40 hover:border-primary/40 hover:bg-secondary/70'}`}>
-                    {selectedFile?(
+
+                  {/* File Upload Dropzone (Supports File, Multi-file, or Folder) */}
+                  <div
+                    onDrop={handleDrop}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    className={`relative flex min-h-32 flex-col items-center justify-center rounded-2xl border transition-all p-4 ${
+                      isDragOver ? 'border-primary bg-primary/10' : selectedFile ? 'border-primary/40 bg-secondary/80' : 'border-dashed border-border/80 bg-secondary/40 hover:border-primary/40'
+                    }`}
+                  >
+                    {selectedFile ? (
                       <div className="flex w-full items-center gap-3.5">
                         <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
                           {selectedFile.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(selectedFile.name) ? (
-                            <ImageSquare size={22} weight="fill"/>
+                            <ImageSquare size={22} weight="fill" />
                           ) : (
-                            <FileText size={22} weight="fill"/>
+                            <FileText size={22} weight="fill" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="truncate text-sm font-semibold">{selectedFile.name}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{(selectedFile.size/(1024*1024)).toFixed(1)} MB</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{(selectedFile.size / (1024 * 1024)).toFixed(1)} MB</p>
                         </div>
-                        <button type="button" onClick={e=>{e.preventDefault();setSelectedFile(null);}} className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary hover:bg-destructive/10 hover:text-destructive transition-colors"><X size={15}/></button>
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.preventDefault();
+                            setSelectedFile(null);
+                            setStagedFiles([]);
+                          }}
+                          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary hover:bg-destructive/10 hover:text-destructive transition-colors"
+                        >
+                          <X size={15} />
+                        </button>
                       </div>
-                    ):(
-                      <div className="flex flex-col items-center gap-2 text-center">
-                        <div className="flex size-10 items-center justify-center rounded-xl bg-secondary"><UploadSimple size={20} className="text-muted-foreground"/></div>
-                        <div><p className="text-sm font-medium">Click to upload study material</p><p className="text-xs text-muted-foreground mt-0.5">PDF, DOCX, PPTX, XLSX, TXT, Images up to 100 MB</p></div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-3 text-center">
+                        <div className="flex size-11 items-center justify-center rounded-2xl bg-secondary shadow-xs">
+                          <UploadSimple size={22} className="text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">Drag &amp; drop files or full folders here</p>
+                          <p className="text-xs text-muted-foreground mt-1">PDF, DOCX, PPTX, XLSX, TXT, or images up to 100 MB</p>
+                        </div>
+                        <div className="flex items-center gap-2 pt-1">
+                          <label className="cursor-pointer px-3.5 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity">
+                            Browse files
+                            <input
+                              type="file"
+                              multiple
+                              accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.doc,.pptx,.ppt,.txt,.xlsx,.xls,application/pdf,image/*,application/vnd.openxmlformats-officedocument.*"
+                              className="sr-only"
+                              onChange={e => {
+                                if (e.target.files) {
+                                  const arr: Array<{ file: File; fullPath: string }> = [];
+                                  for (let i = 0; i < e.target.files.length; i++) {
+                                    arr.push({ file: e.target.files[i], fullPath: e.target.files[i].name });
+                                  }
+                                  addExtractedFiles(arr);
+                                }
+                              }}
+                            />
+                          </label>
+                          <label className="cursor-pointer px-3.5 py-1.5 rounded-full border border-border bg-card text-foreground text-xs font-semibold hover:bg-secondary transition-colors inline-flex items-center gap-1.5">
+                            <FolderOpen size={14} className="text-primary" />
+                            Browse folder
+                            <input
+                              type="file"
+                              // @ts-ignore
+                              webkitdirectory=""
+                              directory=""
+                              multiple
+                              className="sr-only"
+                              onChange={e => {
+                                if (e.target.files) {
+                                  const arr: Array<{ file: File; fullPath: string }> = [];
+                                  for (let i = 0; i < e.target.files.length; i++) {
+                                    const f = e.target.files[i];
+                                    arr.push({ file: f, fullPath: (f as any).webkitRelativePath || f.name });
+                                  }
+                                  addExtractedFiles(arr);
+                                }
+                              }}
+                            />
+                          </label>
+                        </div>
                       </div>
                     )}
-                    <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.doc,.pptx,.ppt,.txt,.xlsx,.xls,application/pdf,image/*,application/vnd.openxmlformats-officedocument.*" className="sr-only" onChange={e=>{if(e.target.files?.[0])setSelectedFile(e.target.files[0]);}}/>
-                  </label>
+                  </div>
+
                   {/* Upload progress */}
-                  {uploading&&(
+                  {uploading && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>Uploading note…</span><span>{uploadProgress}%</span>
+                        <span>Uploading note…</span>
+                        <span>{uploadProgress}%</span>
                       </div>
                       <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
-                        <div className="h-full rounded-full bg-primary transition-all duration-300" style={{width:`${uploadProgress}%`}}/>
+                        <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
                       </div>
                     </div>
                   )}
+
                   {/* Submit button */}
-                  {!uploading?(
+                  {!uploading && (
                     <div className="flex flex-col gap-2">
-                      <button type="submit" disabled={!selectedFile || semesterSubjects.length === 0} className="rounded-full bg-primary py-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed">Submit note for review</button>
+                      <button
+                        type="submit"
+                        disabled={!selectedFile || semesterSubjects.length === 0}
+                        className="rounded-full bg-primary py-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Submit note for review
+                      </button>
                       {selectedFile && semesterSubjects.length === 0 && (
                         <p className="text-center text-xs text-muted-foreground">
                           Upload disabled: Please select a semester with active courses or{' '}
@@ -2422,28 +3132,28 @@ function ContributorDesk({
                         </p>
                       )}
                     </div>
-                  ):(
-                    <button className="rounded-full bg-primary p-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity mt-1">Submit note for review</button>
                   )}
                 </div>
               )}
             </div>
+
             {/* Bottom cushion spacer */}
-            <div className="h-4 w-full bg-card shrink-0 pointer-events-none"/>
+            <div className="h-4 w-full bg-card shrink-0 pointer-events-none" />
           </>
-        )
+        );
+
         return createPortal(
           isTouch ? (
-            <MobilePresence show={open} type="backdrop" className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/45 overscroll-none touch-none" data-lenis-prevent role="dialog" aria-modal={true} aria-labelledby="submit-title" onClick={()=>setSubjectDropdownOpen(false)}>
-              <form onSubmit={handleUpload} onClick={e=>e.stopPropagation()} className="relative flex flex-col w-full max-w-lg rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden m-panel-enter" data-lenis-prevent>
+            <MobilePresence show={open} type="backdrop" className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/45 overscroll-none touch-none" data-lenis-prevent role="dialog" aria-modal={true} aria-labelledby="submit-title" onClick={() => setSubjectDropdownOpen(false)}>
+              <form onSubmit={handleSubmit} onClick={e => e.stopPropagation()} className={`relative flex flex-col w-full ${isBatchMode ? 'max-w-2xl' : 'max-w-lg'} rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden m-panel-enter transition-all duration-300`} data-lenis-prevent>
                 {formInner}
               </form>
             </MobilePresence>
           ) : (
             <AnimatePresence>
-              {open&&(
-                <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm overscroll-none touch-none" data-lenis-prevent role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={()=>setSubjectDropdownOpen(false)}>
-                  <motion.form initial={{scale:0.95,y:15,opacity:0}} animate={{scale:1,y:0,opacity:1}} exit={{scale:0.95,y:15,opacity:0}} transition={{type:'spring',bounce:0.15,duration:0.35}} onSubmit={handleUpload} onClick={e=>e.stopPropagation()} className="relative flex flex-col w-full max-w-lg rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden fm-gpu" data-lenis-prevent>
+              {open && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/40 backdrop-blur-sm overscroll-none touch-none" data-lenis-prevent role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={() => setSubjectDropdownOpen(false)}>
+                  <motion.form initial={{ scale: 0.95, y: 15, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.95, y: 15, opacity: 0 }} transition={{ type: 'spring', bounce: 0.15, duration: 0.35 }} onSubmit={handleSubmit} onClick={e => e.stopPropagation()} className={`relative flex flex-col w-full ${isBatchMode ? 'max-w-2xl' : 'max-w-lg'} rounded-[2rem] bg-card border border-border/80 shadow-2xl max-h-[88vh] overflow-hidden fm-gpu transition-all duration-300`} data-lenis-prevent>
                     {formInner}
                   </motion.form>
                 </motion.div>
@@ -2451,10 +3161,10 @@ function ContributorDesk({
             </AnimatePresence>
           ),
           document.body
-        )
+        );
       })()}
     </div>
-  )
+  );
 }
 
 function ReviewQueueCard({
