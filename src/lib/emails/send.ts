@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { executeWithResendPool } from '@/lib/resend';
+import { SEMSTACK_LOGO_BASE64 } from './logo-base64';
 
 function getSmtpTransporter() {
   const user = process.env.SMTP_USER?.trim();
@@ -45,7 +46,7 @@ function htmlToPlainText(html: string): string {
 
 /**
  * Send an email to one or multiple recipients with SMTP support and Resend failover pool.
- * Sends multipart/alternative (HTML + Plain Text) with high-reputation headers to prevent spam flags.
+ * Sends multipart/alternative (HTML + Plain Text) with embedded CID logo attachments to guarantee 100% rendering.
  */
 export async function sendEmail(
   to: string | string[],
@@ -65,6 +66,19 @@ export async function sendEmail(
     const smtpTransporter = getSmtpTransporter();
     const replyToAddress = process.env.SMTP_USER || 'umerkashhif@gmail.com';
 
+    const logoAttachmentNodemailer = {
+      filename: 'logo.png',
+      content: Buffer.from(SEMSTACK_LOGO_BASE64, 'base64'),
+      cid: 'semstack-logo',
+      contentType: 'image/png',
+      contentDisposition: 'inline' as const,
+    };
+
+    const logoAttachmentResend = {
+      filename: 'logo.png',
+      content: Buffer.from(SEMSTACK_LOGO_BASE64, 'base64'),
+    };
+
     // 1. Try sending via Gmail SMTP if configured (Direct delivery to any recipient)
     if (smtpTransporter) {
       try {
@@ -78,6 +92,7 @@ export async function sendEmail(
             subject,
             text: plainText,
             html,
+            attachments: [logoAttachmentNodemailer],
             headers: {
               'X-Entity-Ref-ID': `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
               'X-Auto-Response-Suppress': 'OOF, AutoReply',
@@ -104,6 +119,7 @@ export async function sendEmail(
             subject,
             text: plainText,
             html,
+            attachments: [logoAttachmentResend],
           });
         });
 
@@ -122,10 +138,11 @@ export async function sendEmail(
       const batchPayload = chunk.map(r => ({
         from: DEFAULT_FROM,
         to: r,
-        reply_to: replyToAddress,
+        replyTo: replyToAddress,
         subject,
         text: plainText,
         html,
+        attachments: [logoAttachmentResend],
       }));
 
       const { error } = await executeWithResendPool(async (resend) => {
