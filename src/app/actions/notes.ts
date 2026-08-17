@@ -19,12 +19,13 @@ export async function createNote(data: {
     return { error: 'Unauthorized. Only active note contributors and administrators can upload notes.' }
   }
 
-  // Strict file URL validation: Must point to our trusted Cloudflare R2 bucket and be a PDF
+  // Strict file URL validation: Must point to our trusted Cloudflare R2 bucket and be an allowed document/image format
   const publicBase = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || 'https://pub-4c28b39a02ca4952a6c31f0baf9d62e3.r2.dev'
   const isAllowedOrigin = data.fileUrl.startsWith(publicBase) || data.fileUrl.startsWith('https://pub-4c28b39a02ca4952a6c31f0baf9d62e3.r2.dev')
-  const isPdf = data.fileUrl.toLowerCase().endsWith('.pdf')
-  if (!isAllowedOrigin || !isPdf) {
-    return { error: 'Invalid document URL. Only verified PDF uploads from secure storage are accepted.' }
+  const lowerUrl = data.fileUrl.toLowerCase()
+  const isAllowedFile = /\.(pdf|png|jpe?g|webp|docx?|pptx?|xlsx?|txt)$/i.test(lowerUrl)
+  if (!isAllowedOrigin || !isAllowedFile) {
+    return { error: 'Invalid document URL. Only verified study materials (PDF, DOCX, PPTX, XLSX, TXT, Images) from secure storage are accepted.' }
   }
 
   const cleanTitle = data.title?.trim().slice(0, 150)

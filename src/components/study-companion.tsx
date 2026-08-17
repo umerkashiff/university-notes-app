@@ -5,7 +5,7 @@ import { useLenis } from 'lenis/react'
 
 import { useMemo, useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDown, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info, PencilSimple, Moon, Sun, Desktop, UserCircle, Lock, Calendar, CheckCircle, Warning, WarningCircle, UserPlus, Eye, Clock, UserCheck, ShieldWarning, EnvelopeSimple } from '@phosphor-icons/react'
+import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDown, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info, PencilSimple, Moon, Sun, Desktop, UserCircle, Lock, Calendar, CheckCircle, Warning, WarningCircle, UserPlus, Eye, Clock, UserCheck, ShieldWarning, EnvelopeSimple, ImageSquare } from '@phosphor-icons/react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { login, logout, register, requestPasswordReset, resetPasswordWithCode } from '@/app/actions/auth'
 import { getAdminUsersData, approveUser, rejectUser, updateUserSemester, toggleHeldBack, changeUserRole, submitHeldBackSelfReport, getContentRequests, updateContentRequestStatus, deleteContentRequest } from '@/app/actions/admin'
@@ -1746,12 +1746,15 @@ function NoteRow({
 }){
   const isTouch = useIsTouch();
   const [expanded, setExpanded] = useState(false);
-  const semNumber = subjects.find(s => s.code === note.code || s.name === note.subject)?.semester
+  const semNumber = subjects.find(s => s.code === note.code || s.name === note.subject)?.semester;
+  const isImage = note.fileUrl && (/\.(png|jpe?g|webp)$/i.test(note.fileUrl) || note.fileUrl.includes('/images/'));
 
   const content = (
     <>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <span className={`flex size-12 shrink-0 items-center justify-center rounded-2xl ${note.tone}`}><FileText size={20}/></span>
+        <span className={`flex size-12 shrink-0 items-center justify-center rounded-2xl ${note.tone}`}>
+          {isImage ? <ImageSquare size={20} /> : <FileText size={20} />}
+        </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-semibold text-foreground">{note.title}</h3>
@@ -1771,7 +1774,7 @@ function NoteRow({
             )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            {note.author} · {note.date} · {semNumber ? `Semester ${semNumber} · ` : ''}{note.pages} pages · {note.size}
+            {note.author} · {note.date} · {semNumber ? `Semester ${semNumber} · ` : ''}{isImage ? '1 image page' : `${note.pages} pages`} · {note.size}
           </p>
         </div>
         <div className="flex gap-2 shrink-0 items-center">
@@ -1800,7 +1803,7 @@ function NoteRow({
             href={note.fileUrl ? `/api/download?url=${encodeURIComponent(note.fileUrl)}&title=${encodeURIComponent(note.title)}` : '#'} 
             download 
             className="icon-button bg-primary text-primary-foreground hover:opacity-90 transition-opacity" 
-            title="Download PDF file"
+            title={isImage ? "Download note image" : "Download PDF file"}
           >
             <Download size={18}/>
           </a>
@@ -2137,15 +2140,24 @@ function ContributorDesk({
     const finalCode = matchedSubject.code;
     const finalSubjectName = matchedSubject.name;
 
-    if (!file || file.size === 0) { alert('Please select a PDF file'); setUploading(false); return; }
-    if (file.type !== 'application/pdf') { alert('Only PDF files are allowed'); setUploading(false); return; }
+    if (!file || file.size === 0) { alert('Please select a note file to upload (PDF, DOCX, PPTX, XLSX, TXT, or Image)'); setUploading(false); return; }
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const isImage = ['png', 'jpg', 'jpeg', 'webp'].includes(ext) || file.type.startsWith('image/');
+    const isAllowedExt = ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'docx', 'doc', 'pptx', 'ppt', 'txt', 'xlsx', 'xls'].includes(ext);
+    const isAllowedMime = file.type === 'application/pdf' || file.type.startsWith('image/') || file.type.includes('officedocument') || file.type.includes('word') || file.type.includes('presentation') || file.type.includes('text');
+    if (!isAllowedExt && !isAllowedMime) {
+      alert('Supported formats: PDF documents, Office files (DOCX, PPTX, XLSX), TXT files, and Images (PNG, JPG, WEBP).');
+      setUploading(false);
+      return;
+    }
     if (file.size > 100 * 1024 * 1024) { alert('File size must be less than 100 MB'); setUploading(false); return; }
     if (!finalCode) { alert('Please choose or enter a subject code'); setUploading(false); return; }
 
-    const ext = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+    const finalExt = ext || (file.type === 'application/pdf' ? 'pdf' : isImage ? 'png' : 'bin');
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${finalExt}`;
+    const contentType = file.type || 'application/octet-stream';
 
-    const { url, error: presignError } = await getPresignedUrl(fileName, file.type);
+    const { url, error: presignError } = await getPresignedUrl(fileName, contentType);
     if (presignError || !url) { alert(presignError || 'Failed to get secure upload link'); setUploading(false); return; }
 
     try {
@@ -2163,7 +2175,7 @@ function ContributorDesk({
         };
         xhr.onerror = () => reject(new Error('Network error during upload'));
         xhr.open('PUT', url);
-        xhr.setRequestHeader('Content-Type', file.type);
+        xhr.setRequestHeader('Content-Type', contentType);
         xhr.send(file);
       });
     } catch (err) {
@@ -2179,7 +2191,7 @@ function ContributorDesk({
       semester: selectedSemester,
       description: seniorAdvice.trim() || undefined,
       fileUrl,
-      pages: 12,
+      pages: isImage ? 1 : 12,
       size: (file.size / (1024*1024)).toFixed(1) + ' MB'
     });
 
@@ -2254,7 +2266,7 @@ function ContributorDesk({
           <li>Select your target semester & subject.</li>
           <li>Add helpful exam tips or study advice.</li>
           <li>Only upload material you can share.</li>
-          <li>PDF files, up to 100 MB.</li>
+          <li>PDF, DOCX, PPTX, TXT, or images up to 100 MB.</li>
         </ul>
       </aside>
 
@@ -2354,11 +2366,17 @@ function ContributorDesk({
                       <textarea value={seniorAdvice} onChange={e=>setSeniorAdvice(e.target.value)} className="h-full w-full bg-transparent px-4 py-3 text-sm outline-none resize-none placeholder:text-muted-foreground" placeholder="e.g. Focus on Chapter 3 formulas and past midterm questions."/>
                     </div>
                   </label>
-                  {/* PDF File Upload */}
+                  {/* File Upload (PDF, Word, Slides, Text, Image) */}
                   <label className={`relative flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border transition-all p-4 ${selectedFile?'border-primary/40 bg-secondary/80 hover:bg-secondary':'border-dashed border-border/80 bg-secondary/40 hover:border-primary/40 hover:bg-secondary/70'}`}>
                     {selectedFile?(
                       <div className="flex w-full items-center gap-3.5">
-                        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm"><FileText size={22} weight="fill"/></div>
+                        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+                          {selectedFile.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(selectedFile.name) ? (
+                            <ImageSquare size={22} weight="fill"/>
+                          ) : (
+                            <FileText size={22} weight="fill"/>
+                          )}
+                        </div>
                         <div className="flex-1 min-w-0">
                           <p className="truncate text-sm font-semibold">{selectedFile.name}</p>
                           <p className="text-xs text-muted-foreground mt-0.5">{(selectedFile.size/(1024*1024)).toFixed(1)} MB</p>
@@ -2368,16 +2386,16 @@ function ContributorDesk({
                     ):(
                       <div className="flex flex-col items-center gap-2 text-center">
                         <div className="flex size-10 items-center justify-center rounded-xl bg-secondary"><UploadSimple size={20} className="text-muted-foreground"/></div>
-                        <div><p className="text-sm font-medium">Click to upload PDF</p><p className="text-xs text-muted-foreground mt-0.5">PDF files up to 100 MB</p></div>
+                        <div><p className="text-sm font-medium">Click to upload study material</p><p className="text-xs text-muted-foreground mt-0.5">PDF, DOCX, PPTX, XLSX, TXT, Images up to 100 MB</p></div>
                       </div>
                     )}
-                    <input type="file" name="file" accept=".pdf" className="sr-only" onChange={e=>{if(e.target.files?.[0])setSelectedFile(e.target.files[0]);}}/>
+                    <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.doc,.pptx,.ppt,.txt,.xlsx,.xls,application/pdf,image/*,application/vnd.openxmlformats-officedocument.*" className="sr-only" onChange={e=>{if(e.target.files?.[0])setSelectedFile(e.target.files[0]);}}/>
                   </label>
                   {/* Upload progress */}
                   {uploading&&(
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>Uploading PDF…</span><span>{uploadProgress}%</span>
+                        <span>Uploading note…</span><span>{uploadProgress}%</span>
                       </div>
                       <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
                         <div className="h-full rounded-full bg-primary transition-all duration-300" style={{width:`${uploadProgress}%`}}/>
@@ -2444,13 +2462,19 @@ function ReviewQueueCard({
   subjects,
   onPublish,
   onDelete,
-  onUpdate
+  onUpdate,
+  isPublishing,
+  publishProgress = 0,
+  isDone
 }: {
   candidate: Note
   subjects: SubjectItem[]
   onPublish: (n: Note) => void
   onDelete: (n: Note) => void
   onUpdate: (updated: Note) => void
+  isPublishing?: boolean
+  publishProgress?: number
+  isDone?: boolean
 }) {
   const isTouch = useIsTouch();
   const [isEditing, setIsEditing] = useState(false);
@@ -2463,6 +2487,8 @@ function ReviewQueueCard({
   const [selectedCode, setSelectedCode] = useState<string>(candidate.code || (semSubjects[0]?.code || ''));
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const isImageFile = candidate.fileUrl && (/\.(png|jpe?g|webp)$/i.test(candidate.fileUrl) || candidate.fileUrl.includes('/images/'));
 
   const handleSave = async (publishAfter: boolean) => {
     if (!selectedCode || semSubjects.length === 0) {
@@ -2690,7 +2716,7 @@ function ReviewQueueCard({
                 </div>
                 <h2 className="mt-3 text-2xl font-semibold break-words">{candidate.title}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {candidate.subject} ({candidate.code}) · Semester {semNumber} · {candidate.pages} pages · {candidate.size}
+                  {candidate.subject} ({candidate.code}) · Semester {semNumber} · {isImageFile ? '1 image page' : `${candidate.pages} pages`} · {candidate.size}
                 </p>
                 
                 {candidate.description && (
@@ -2701,8 +2727,9 @@ function ReviewQueueCard({
                 )}
 
                 <p className="mt-5 leading-relaxed text-muted-foreground">
-                  <a href={candidate.fileUrl} target="_blank" className="inline-flex items-center gap-1 text-primary underline underline-offset-2 font-medium">
-                    Open uploaded PDF ↗
+                  <a href={candidate.fileUrl} target="_blank" className="inline-flex items-center gap-1.5 text-primary underline underline-offset-2 font-medium">
+                    {isImageFile ? <ImageSquare size={16} /> : <FileText size={16} />}
+                    Open uploaded {candidate.fileUrl ? (candidate.fileUrl.split('.').pop() || 'file').toUpperCase() : 'file'} ↗
                   </a>
                 </p>
               </div>
@@ -2729,11 +2756,34 @@ function ReviewQueueCard({
         </p>
         <div className="mt-8 flex flex-col gap-2">
           <button 
-            disabled={loading} 
+            disabled={loading || isPublishing || isDone} 
             onClick={() => onPublish(candidate)} 
-            className="rounded-full bg-primary px-5 py-3 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity"
+            className={`relative overflow-hidden rounded-full bg-primary px-5 py-3 font-semibold text-primary-foreground shadow-sm transition-all select-none ${
+              isPublishing ? 'cursor-wait opacity-95' : 'hover:opacity-95'
+            }`}
           >
-            Approve & publish
+            {/* Smooth animated progress fill */}
+            {isPublishing && (
+              <div 
+                className="absolute inset-0 bg-white/20 dark:bg-white/15 transition-all duration-300 pointer-events-none"
+                style={{ width: `${publishProgress}%` }}
+              />
+            )}
+            <span className="relative z-10 flex items-center justify-center gap-2">
+              {isDone ? (
+                <>
+                  <Check size={18} weight="bold" className="text-primary-foreground animate-scale-in" />
+                  <span>Published ✓</span>
+                </>
+              ) : isPublishing ? (
+                <>
+                  <div className="size-4 border-2 border-white/40 border-t-white animate-spin rounded-full" />
+                  <span>Publishing {publishProgress}%…</span>
+                </>
+              ) : (
+                <span>Approve & publish</span>
+              )}
+            </span>
           </button>
           <button 
             type="button" 
@@ -2743,7 +2793,7 @@ function ReviewQueueCard({
             {isEditing ? 'Close editor' : 'Edit details before publishing'}
           </button>
           <button 
-            disabled={loading} 
+            disabled={loading || isPublishing} 
             onClick={() => onDelete(candidate)} 
             className="px-5 py-2 text-sm text-destructive hover:underline text-center"
           >
@@ -2779,6 +2829,8 @@ function AdminCms({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [doneId,setDoneId]=useState<any>(null);
   const [loading,setLoading]=useState(false);
+  const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [publishProgress, setPublishProgress] = useState<number>(0);
   const [curriculumSem, setCurriculumSem] = useState(1);
   const [newSubName, setNewSubName] = useState('');
   const [newSubCode, setNewSubCode] = useState('');
@@ -2797,12 +2849,33 @@ function AdminCms({
   const published = notes.filter(n => n.status === 'PUBLISHED');
 
   const handlePublish = async (n: Note) => {
-    setLoading(true);
-    const res = await publishNote(n.id as string);
-    if(res.error) alert(res.error);
-    else { publish(n); setDoneId(n.id); setTimeout(() => setDoneId(null), 2000); }
-    setLoading(false);
-  }
+    const noteIdStr = String(n.id);
+    setPublishingId(noteIdStr);
+    setPublishProgress(18);
+    const t1 = setTimeout(() => setPublishProgress(45), 250);
+    const t2 = setTimeout(() => setPublishProgress(72), 600);
+    const t3 = setTimeout(() => setPublishProgress(90), 1000);
+
+    const res = await publishNote(noteIdStr);
+    clearTimeout(t1);
+    clearTimeout(t2);
+    clearTimeout(t3);
+
+    if (res.error) {
+      alert(res.error);
+      setPublishingId(null);
+      setPublishProgress(0);
+    } else {
+      setPublishProgress(100);
+      publish(n);
+      setDoneId(n.id);
+      setTimeout(() => {
+        setDoneId(null);
+        setPublishingId(null);
+        setPublishProgress(0);
+      }, 1200);
+    }
+  };
 
   const [rejectNoteTarget, setRejectNoteTarget] = useState<Note | null>(null);
   const [rejectNoteReason, setRejectNoteReason] = useState('');
@@ -3028,6 +3101,9 @@ function AdminCms({
             subjects={subjects}
             onPublish={handlePublish}
             onDelete={handleDeleteNote}
+            isPublishing={publishingId === String(candidate.id)}
+            publishProgress={publishingId === String(candidate.id) ? publishProgress : 0}
+            isDone={doneId === candidate.id}
             onUpdate={(updated) => {
               if (updated.status === 'PUBLISHED') {
                 publish(updated);
@@ -3324,6 +3400,9 @@ function AdminCms({
             subjects={subjects}
             onPublish={handlePublish}
             onDelete={handleDeleteNote}
+            isPublishing={publishingId === String(candidate.id)}
+            publishProgress={publishingId === String(candidate.id) ? publishProgress : 0}
+            isDone={doneId === candidate.id}
             onUpdate={(updated) => {
               if (updated.status === 'PUBLISHED') {
                 publish(updated);

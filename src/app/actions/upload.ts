@@ -19,7 +19,15 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/png',
   'image/jpeg',
   'image/jpg',
-  'image/webp'
+  'image/webp',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'text/plain',
+  'application/octet-stream'
 ])
 
 const ALLOWED_EXTENSIONS = new Set([
@@ -27,7 +35,14 @@ const ALLOWED_EXTENSIONS = new Set([
   'png',
   'jpg',
   'jpeg',
-  'webp'
+  'webp',
+  'docx',
+  'doc',
+  'pptx',
+  'ppt',
+  'txt',
+  'xlsx',
+  'xls'
 ])
 
 export async function getPresignedUrl(fileName: string, contentType: string) {
@@ -39,7 +54,7 @@ export async function getPresignedUrl(fileName: string, contentType: string) {
   // 1. Strict MIME Type Whitelisting
   const cleanMime = contentType?.trim().toLowerCase()
   if (!cleanMime || !ALLOWED_MIME_TYPES.has(cleanMime)) {
-    return { error: 'Invalid file format. Only PDF documents and standard images (PNG, JPG, WEBP) are allowed.' }
+    return { error: 'Invalid file format. Supported formats: PDF, DOCX, PPTX, XLSX, TXT, and Images (PNG, JPG, WEBP).' }
   }
 
   // 2. Path Traversal & Filename Sanitization

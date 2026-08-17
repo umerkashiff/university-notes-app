@@ -29,12 +29,27 @@ export async function GET(request: NextRequest) {
       .replace(/\s+/g, ' ')
       .trim()
 
-    const filename = sanitizedTitle.toLowerCase().endsWith('.pdf')
-      ? sanitizedTitle
-      : `${sanitizedTitle}.pdf`
+    const extMatch = fileUrl.match(/\.(pdf|png|jpe?g|webp|docx?|pptx?|xlsx?|txt)$/i)
+    const fileExt = extMatch ? extMatch[1].toLowerCase() : 'pdf'
+    
+    let contentType = 'application/octet-stream'
+    if (fileExt === 'pdf') contentType = 'application/pdf'
+    else if (fileExt === 'png') contentType = 'image/png'
+    else if (fileExt === 'jpg' || fileExt === 'jpeg') contentType = 'image/jpeg'
+    else if (fileExt === 'webp') contentType = 'image/webp'
+    else if (fileExt === 'docx') contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    else if (fileExt === 'doc') contentType = 'application/msword'
+    else if (fileExt === 'pptx') contentType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    else if (fileExt === 'ppt') contentType = 'application/vnd.ms-powerpoint'
+    else if (fileExt === 'xlsx') contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    else if (fileExt === 'xls') contentType = 'application/vnd.ms-excel'
+    else if (fileExt === 'txt') contentType = 'text/plain; charset=utf-8'
+
+    const cleanBaseTitle = sanitizedTitle.replace(/\.(pdf|png|jpe?g|webp|docx?|pptx?|xlsx?|txt)$/i, '')
+    const filename = `${cleanBaseTitle}.${fileExt}`
 
     const headers = new Headers()
-    headers.set('Content-Type', 'application/pdf')
+    headers.set('Content-Type', contentType)
     // Set attachment disposition to force download prompt
     headers.set('Content-Disposition', `attachment; filename="${filename.replace(/"/g, '')}"; filename*=UTF-8''${encodeURIComponent(filename)}`)
     

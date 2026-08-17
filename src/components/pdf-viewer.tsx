@@ -20,6 +20,9 @@ interface PDFViewerProps {
 
 export function PDFViewer({ url, title, author, code, onBack }: PDFViewerProps) {
   const isTouch = useIsTouch()
+  const isImage = /\.(png|jpe?g|webp)$/i.test(url) || url.includes('/images/')
+  const isOfficeOrText = /\.(docx?|pptx?|xlsx?|txt)$/i.test(url)
+  const isPdf = !isImage && !isOfficeOrText
   const [numPages, setNumPages] = useState<number | null>(null)
   const [pageNumber, setPageNumber] = useState(1)
   const [scale, setScale] = useState(1.0)
@@ -73,6 +76,8 @@ export function PDFViewer({ url, title, author, code, onBack }: PDFViewerProps) 
     return () => window.removeEventListener('resize', updateWidth)
   }, [isFullscreen])
 
+  const fileExtUpper = (url.split('.').pop() || 'FILE').toUpperCase()
+
   return (
     <div className="flex flex-col w-full min-h-screen bg-background text-foreground select-none">
       
@@ -97,46 +102,53 @@ export function PDFViewer({ url, title, author, code, onBack }: PDFViewerProps) 
         </div>
 
         <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-          {/* Google Viewer Button (Visible on phone and desktop) */}
-          <a
-            href={`https://docs.google.com/viewer?url=${encodeURIComponent(url)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary/80 hover:bg-secondary rounded-xl transition-colors shrink-0"
-            title="Open in Google Docs Viewer"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Google Viewer</span>
-            <span className="sm:hidden">Google</span>
-          </a>
+          {/* Google Viewer Button (Visible for PDFs and Office docs on phone and desktop) */}
+          {!isImage && (
+            <a
+              href={`https://docs.google.com/viewer?url=${encodeURIComponent(url)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary/80 hover:bg-secondary rounded-xl transition-colors shrink-0"
+              title="Open in Google Docs Viewer"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Google Viewer</span>
+              <span className="sm:hidden">Google</span>
+            </a>
+          )}
 
-          <button 
-            onClick={() => setScale(prev => Math.max(prev - 0.2, 0.6))} 
-            className="p-1.5 sm:p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-            title="Zoom Out"
-          >
-            <ZoomOut className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setScale(1.0)}
-            className="text-xs font-semibold text-foreground px-2 py-1 rounded-lg hover:bg-secondary transition-colors min-w-10 text-center"
-            title="Click to Reset (Fit Width)"
-          >
-            {Math.round(scale * 100)}%
-          </button>
-          <button 
-            onClick={() => setScale(prev => Math.min(prev + 0.2, 2.5))} 
-            className="p-1.5 sm:p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-            title="Zoom In"
-          >
-            <ZoomIn className="h-4 w-4" />
-          </button>
-          <div className="w-px h-4 bg-border/80 mx-0.5 sm:mx-1" />
+          {!isOfficeOrText && (
+            <>
+              <button 
+                onClick={() => setScale(prev => Math.max(prev - 0.2, 0.6))} 
+                className="p-1.5 sm:p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                title="Zoom Out"
+              >
+                <ZoomOut className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setScale(1.0)}
+                className="text-xs font-semibold text-foreground px-2 py-1 rounded-lg hover:bg-secondary transition-colors min-w-10 text-center"
+                title="Click to Reset (Fit Width)"
+              >
+                {Math.round(scale * 100)}%
+              </button>
+              <button 
+                onClick={() => setScale(prev => Math.min(prev + 0.2, 2.5))} 
+                className="p-1.5 sm:p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                title="Zoom In"
+              >
+                <ZoomIn className="h-4 w-4" />
+              </button>
+              <div className="w-px h-4 bg-border/80 mx-0.5 sm:mx-1" />
+            </>
+          )}
+
           <a 
             href={`/api/download?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title || 'study-material')}`} 
             download 
             className="p-1.5 sm:p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-            title="Download PDF"
+            title={`Download ${fileExtUpper} file`}
           >
             <Download className="h-4 w-4" />
           </a>
@@ -150,82 +162,103 @@ export function PDFViewer({ url, title, author, code, onBack }: PDFViewerProps) 
         </div>
       </header>
 
-      {/* PDF Viewer Canvas Body - Zero Horizontal Scrollbar + Swipe Support */}
+      {/* Viewer Canvas Body - Zero Horizontal Scrollbar + Swipe/Zoom Support */}
       <div 
         ref={containerRef}
         className="flex-1 overflow-y-auto overflow-x-hidden bg-[#F7F5F0] dark:bg-[#121214] flex flex-col items-center justify-center py-4 sm:py-8 px-2 sm:px-6 overscroll-contain touch-pan-y [scrollbar-width:none] [&::-webkit-scrollbar]:hidden min-h-[calc(100vh-120px)]"
       >
-        <Document
-          file={url}
-          onLoadSuccess={onDocumentLoadSuccess}
-          loading={
-            <div className="flex flex-col items-center justify-center gap-3 py-28 text-muted-foreground">
-              <div className="h-8 w-8 border-2 border-primary/30 border-t-primary animate-spin rounded-full" />
-              <span className="text-sm font-medium">Loading document...</span>
-            </div>
-          }
-          error={
-            <div className="flex flex-col items-center justify-center gap-2 py-28 text-destructive text-sm text-center px-4">
-              <span>Failed to load PDF document.</span>
-              <a
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 text-xs font-semibold underline text-primary"
-              >
-                Open directly in browser
-              </a>
-            </div>
-          }
-        >
-          {isTouch ? (
-            <div
-              key={pageNumber}
-              onTouchStart={e => {
-                const touch = e.touches[0]
-                const startX = touch.clientX
-                const handleTouchEnd = (evt: TouchEvent) => {
-                  const endX = evt.changedTouches[0].clientX
-                  const diff = endX - startX
-                  if (diff < -50 && pageNumber < (numPages || 1)) {
-                    changePage(1)
-                  } else if (diff > 50 && pageNumber > 1) {
-                    changePage(-1)
-                  }
-                  document.removeEventListener('touchend', handleTouchEnd)
-                }
-                document.addEventListener('touchend', handleTouchEnd, { once: true })
-              }}
-              className="shadow-xl sm:shadow-2xl rounded-xl sm:rounded-2xl overflow-hidden bg-white border border-black/5 touch-pan-y m-screen-enter"
+        {isImage ? (
+          <div className="flex flex-col items-center justify-center py-4 sm:py-8 w-full max-w-4xl">
+            <div 
+              className="shadow-xl sm:shadow-2xl rounded-xl sm:rounded-2xl overflow-hidden bg-card border border-border/50 max-w-full transition-transform duration-200"
+              style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}
             >
-              <Page
-                pageNumber={pageNumber}
-                width={pageWidth * scale}
-                renderTextLayer={true}
-                renderAnnotationLayer={true}
-                className="max-w-none pointer-events-none sm:pointer-events-auto"
+              <img 
+                src={url} 
+                alt={title} 
+                className="max-w-full h-auto object-contain select-none block"
+                style={{ maxHeight: isFullscreen ? '90vh' : '78vh' }}
               />
             </div>
-          ) : (
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
+          </div>
+        ) : isOfficeOrText ? (
+          <div className="flex flex-col items-center justify-center py-12 px-4 max-w-md w-full text-center">
+            <div className="size-20 rounded-3xl bg-primary/10 text-primary flex items-center justify-center mb-5 shadow-xs">
+              <Download className="size-9 text-primary" />
+            </div>
+            <span className="text-xs uppercase tracking-wider font-bold px-3 py-1 rounded-full bg-secondary text-muted-foreground mb-3">
+              {fileExtUpper} Document
+            </span>
+            <h2 className="text-2xl font-bold text-foreground mb-2 break-words">{title}</h2>
+            {(code || author) && (
+              <p className="text-sm text-muted-foreground mb-7">
+                {[code, author].filter(Boolean).join(' · ')}
+              </p>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
+              <a
+                href={`/api/download?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title || 'study-material')}`}
+                download
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity"
+              >
+                <Download className="size-4" />
+                <span>Download {fileExtUpper}</span>
+              </a>
+              <a
+                href={`https://docs.google.com/viewer?url=${encodeURIComponent(url)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-card px-6 py-3.5 text-sm font-semibold text-foreground hover:bg-secondary transition-colors"
+              >
+                <ExternalLink className="size-4" />
+                <span>Google Viewer ↗</span>
+              </a>
+            </div>
+          </div>
+        ) : (
+          <Document
+            file={url}
+            onLoadSuccess={onDocumentLoadSuccess}
+            loading={
+              <div className="flex flex-col items-center justify-center gap-3 py-28 text-muted-foreground">
+                <div className="h-8 w-8 border-2 border-primary/30 border-t-primary animate-spin rounded-full" />
+                <span className="text-sm font-medium">Loading document...</span>
+              </div>
+            }
+            error={
+              <div className="flex flex-col items-center justify-center gap-2 py-28 text-destructive text-sm text-center px-4">
+                <span>Failed to load document.</span>
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 text-xs font-semibold underline text-primary"
+                >
+                  Open directly in browser
+                </a>
+              </div>
+            }
+          >
+            {isTouch ? (
+              <div
                 key={pageNumber}
-                drag="x"
-                dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={0.15}
-                onDragEnd={(e, { offset }) => {
-                  const swipe = offset.x
-                  if (swipe < -50 && pageNumber < (numPages || 1)) {
-                    changePage(1)
-                  } else if (swipe > 50 && pageNumber > 1) {
-                    changePage(-1)
+                onTouchStart={e => {
+                  const touch = e.touches[0]
+                  const startX = touch.clientX
+                  const handleTouchEnd = (evt: TouchEvent) => {
+                    const endX = evt.changedTouches[0].clientX
+                    const diff = endX - startX
+                    if (diff < -50 && pageNumber < (numPages || 1)) {
+                      changePage(1)
+                    } else if (diff > 50 && pageNumber > 1) {
+                      changePage(-1)
+                    }
+                    document.removeEventListener('touchend', handleTouchEnd)
                   }
+                  document.addEventListener('touchend', handleTouchEnd, { once: true })
                 }}
-                initial={{ opacity: 0, scale: 0.99 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.99 }}
-                transition={{ duration: 0.15 }}
-                className="shadow-xl sm:shadow-2xl rounded-xl sm:rounded-2xl overflow-hidden bg-white border border-black/5 cursor-grab active:cursor-grabbing touch-pan-y fm-gpu"
+                className="shadow-xl sm:shadow-2xl rounded-xl sm:rounded-2xl overflow-hidden bg-white border border-black/5 touch-pan-y m-screen-enter"
               >
                 <Page
                   pageNumber={pageNumber}
@@ -234,38 +267,82 @@ export function PDFViewer({ url, title, author, code, onBack }: PDFViewerProps) 
                   renderAnnotationLayer={true}
                   className="max-w-none pointer-events-none sm:pointer-events-auto"
                 />
-              </motion.div>
-            </AnimatePresence>
-          )}
-        </Document>
+              </div>
+            ) : (
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={pageNumber}
+                  drag="x"
+                  dragConstraints={{ left: 0, right: 0 }}
+                  dragElastic={0.15}
+                  onDragEnd={(e, { offset }) => {
+                    const swipe = offset.x
+                    if (swipe < -50 && pageNumber < (numPages || 1)) {
+                      changePage(1)
+                    } else if (swipe > 50 && pageNumber > 1) {
+                      changePage(-1)
+                    }
+                  }}
+                  initial={{ opacity: 0, scale: 0.99 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.99 }}
+                  transition={{ duration: 0.15 }}
+                  className="shadow-xl sm:shadow-2xl rounded-xl sm:rounded-2xl overflow-hidden bg-white border border-black/5 cursor-grab active:cursor-grabbing touch-pan-y fm-gpu"
+                >
+                  <Page
+                    pageNumber={pageNumber}
+                    width={pageWidth * scale}
+                    renderTextLayer={true}
+                    renderAnnotationLayer={true}
+                    className="max-w-none pointer-events-none sm:pointer-events-auto"
+                  />
+                </motion.div>
+              </AnimatePresence>
+            )}
+          </Document>
+        )}
 
         {/* Mobile Swipe Hint */}
-        <p className="text-[11px] text-muted-foreground/60 mt-3 sm:hidden">
-          Swipe left or right to flip pages
-        </p>
+        {isPdf && (
+          <p className="text-[11px] text-muted-foreground/60 mt-3 sm:hidden">
+            Swipe left or right to flip pages
+          </p>
+        )}
       </div>
 
       {/* Bottom Page Navigation (Apple Books Style) */}
       <div className="sticky bottom-0 z-30 flex items-center justify-center gap-3 sm:gap-4 px-4 sm:px-6 py-3 bg-background/90 backdrop-blur-xl border-t border-border/50">
-        <button
-          onClick={() => changePage(-1)}
-          disabled={pageNumber <= 1}
-          className="flex size-8 sm:size-9 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-          aria-label="Previous Page"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <span className="text-xs sm:text-sm font-semibold text-foreground min-w-[80px] sm:min-w-[90px] text-center select-none">
-          {pageNumber} <span className="text-muted-foreground font-normal">of</span> {numPages || '—'}
-        </span>
-        <button
-          onClick={() => changePage(1)}
-          disabled={pageNumber >= (numPages || 1)}
-          className="flex size-8 sm:size-9 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-          aria-label="Next Page"
-        >
-          <ChevronRight className="h-5 w-5" />
-        </button>
+        {isImage ? (
+          <span className="text-xs sm:text-sm font-semibold text-muted-foreground select-none">
+            High-Resolution Study Image · 1 Page
+          </span>
+        ) : isOfficeOrText ? (
+          <span className="text-xs sm:text-sm font-semibold text-muted-foreground select-none">
+            {fileExtUpper} Document · Direct download & Google Docs Viewer supported
+          </span>
+        ) : (
+          <>
+            <button
+              onClick={() => changePage(-1)}
+              disabled={pageNumber <= 1}
+              className="flex size-8 sm:size-9 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+              aria-label="Previous Page"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <span className="text-xs sm:text-sm font-semibold text-foreground min-w-[80px] sm:min-w-[90px] text-center select-none">
+              {pageNumber} <span className="text-muted-foreground font-normal">of</span> {numPages || '—'}
+            </span>
+            <button
+              onClick={() => changePage(1)}
+              disabled={pageNumber >= (numPages || 1)}
+              className="flex size-8 sm:size-9 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+              aria-label="Next Page"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </>
+        )}
       </div>
     </div>
   )
