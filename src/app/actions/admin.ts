@@ -60,15 +60,6 @@ export async function approveUser(
     data: { status: role === 'SENIOR' ? 'APPROVED' : 'REJECTED' }
   })
 
-  // Create welcome announcement
-  await prisma.announcement.create({
-    data: {
-      title: 'Account Activated',
-      body: `Welcome ${updatedUser.name}! Your account has been approved as ${role === 'SENIOR' ? 'Note Contributor' : 'Student'} for Semester ${updatedUser.semester}.`,
-      audience: `SEM_${updatedUser.semester}`
-    }
-  })
-
   // Dispatch Welcome / Approved Email
   try {
     const { accountApprovedEmail } = await import('@/lib/emails/templates')

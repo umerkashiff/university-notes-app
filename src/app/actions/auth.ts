@@ -201,15 +201,6 @@ export async function register(formData: FormData) {
       })
     }
 
-    // Create admin notification
-    await prisma.announcement.create({
-      data: {
-        title: 'New Account Application',
-        body: `${name} (${regNumber}, Semester ${finalSemester}) registered for ${isContributor ? 'Note Contributor' : 'Student'} access.`,
-        audience: 'ADMIN'
-      }
-    })
-
     // Email notifications (To student & to administrators)
     try {
       const { newRegistrationAlertEmail, registrationReceivedStudentEmail } = await import('@/lib/emails/templates')
