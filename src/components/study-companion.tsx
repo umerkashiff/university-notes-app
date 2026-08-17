@@ -15,7 +15,7 @@ import { PendingScreen } from '@/components/pending-screen'
 import { SemstackLogo } from '@/components/logo'
 import type { User as PrismaUser } from '@prisma/client'
 import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage, createAnnouncement, deleteAnnouncement, broadcastAnnouncementEmail, deleteNote, updateNote, toggleBookmark, submitContentRequest } from '@/app/actions/notes'
-import { getPresignedUrl } from '@/app/actions/upload'
+import { getPresignedUrl, uploadViaGoogleDrive } from '@/app/actions/upload'
 import React from 'react'
 import { useIsTouch } from '@/lib/use-touch'
 import { MobilePresence } from '@/components/mobile-anim'
@@ -2395,32 +2395,52 @@ function ContributorDesk({
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${finalExt}`;
       const contentType = file.type || 'application/octet-stream';
 
-      const { url, error: presignError } = await getPresignedUrl(fileName, contentType);
-      if (presignError || !url) { alert(presignError || 'Failed to get secure upload link'); setUploading(false); return; }
+      const presignRes = await getPresignedUrl(fileName, contentType);
+      let fileUrl = '';
 
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.upload.onprogress = (event) => {
-            if (event.lengthComputable) {
-              const percent = Math.round((event.loaded / event.total) * 100);
-              setUploadProgress(percent);
-            }
-          };
-          xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) resolve();
-            else reject(new Error('Failed to upload file to storage'));
-          };
-          xhr.onerror = () => reject(new Error('Network error during upload'));
-          xhr.open('PUT', url);
-          xhr.setRequestHeader('Content-Type', contentType);
-          xhr.send(file);
-        });
-      } catch (err) {
-        alert((err as Error).message); setUploading(false); setUploadProgress(0); return;
+      if (presignRes.useDriveFallback) {
+        // Fallback directly to Google Drive
+        const fd = new FormData();
+        fd.append('file', file);
+        const driveRes = await uploadViaGoogleDrive(fd);
+        if ('error' in driveRes && driveRes.error) {
+          alert(driveRes.error);
+          setUploading(false);
+          return;
+        }
+        fileUrl = (driveRes as any).fileUrl;
+        setUploadProgress(100);
+      } else {
+        if (presignRes.error || !presignRes.url) { 
+          alert(presignRes.error || 'Failed to get secure upload link'); 
+          setUploading(false); 
+          return; 
+        }
+
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.upload.onprogress = (event) => {
+              if (event.lengthComputable) {
+                const percent = Math.round((event.loaded / event.total) * 100);
+                setUploadProgress(percent);
+              }
+            };
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) resolve();
+              else reject(new Error('Failed to upload file to storage'));
+            };
+            xhr.onerror = () => reject(new Error('Network error during upload'));
+            xhr.open('PUT', presignRes.url);
+            xhr.setRequestHeader('Content-Type', contentType);
+            xhr.send(file);
+          });
+        } catch (err) {
+          alert((err as Error).message); setUploading(false); setUploadProgress(0); return;
+        }
+
+        fileUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${fileName}`;
       }
-
-      const fileUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${fileName}`;
 
       const res = await createNote({
         title: title || formatCleanTitle(file.name),
@@ -2488,31 +2508,46 @@ function ContributorDesk({
       const contentType = file.type || 'application/octet-stream';
 
       try {
-        const { url, error: presignError } = await getPresignedUrl(fileName, contentType);
-        if (presignError || !url) throw new Error(presignError || 'Failed to obtain upload ticket');
+        const presignRes = await getPresignedUrl(fileName, contentType);
+        let fileUrl = '';
 
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.upload.onprogress = (event) => {
-            if (event.lengthComputable) {
-              const percent = Math.round((event.loaded / event.total) * 100);
-              setStagedFiles(prev => prev.map((it, idx) => idx === i ? { ...it, progress: percent } : it));
-              const overallPercent = Math.round(((completedCount * 100) + percent) / totalCount);
-              setBatchProgress(overallPercent);
-              setUploadProgress(overallPercent);
-            }
-          };
-          xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) resolve();
-            else reject(new Error('Failed to upload file to storage'));
-          };
-          xhr.onerror = () => reject(new Error('Network error'));
-          xhr.open('PUT', url);
-          xhr.setRequestHeader('Content-Type', contentType);
-          xhr.send(file);
-        });
+        if (presignRes.useDriveFallback) {
+          const fd = new FormData();
+          fd.append('file', file);
+          const driveRes = await uploadViaGoogleDrive(fd);
+          if ('error' in driveRes && driveRes.error) throw new Error(driveRes.error);
+          fileUrl = (driveRes as any).fileUrl;
+          setStagedFiles(prev => prev.map((it, idx) => idx === i ? { ...it, progress: 100 } : it));
+          const overallPercent = Math.round(((completedCount + 1) * 100) / totalCount);
+          setBatchProgress(overallPercent);
+          setUploadProgress(overallPercent);
+        } else {
+          if (presignRes.error || !presignRes.url) throw new Error(presignRes.error || 'Failed to obtain upload ticket');
 
-        const fileUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${fileName}`;
+          await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.upload.onprogress = (event) => {
+              if (event.lengthComputable) {
+                const percent = Math.round((event.loaded / event.total) * 100);
+                setStagedFiles(prev => prev.map((it, idx) => idx === i ? { ...it, progress: percent } : it));
+                const overallPercent = Math.round(((completedCount * 100) + percent) / totalCount);
+                setBatchProgress(overallPercent);
+                setUploadProgress(overallPercent);
+              }
+            };
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) resolve();
+              else reject(new Error('Failed to upload file to storage'));
+            };
+            xhr.onerror = () => reject(new Error('Network error'));
+            xhr.open('PUT', presignRes.url);
+            xhr.setRequestHeader('Content-Type', contentType);
+            xhr.send(file);
+          });
+
+          fileUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${fileName}`;
+        }
+
         const matchedSubject = subjects.find(s => s.code === item.subjectCode);
 
         const res = await createNote({

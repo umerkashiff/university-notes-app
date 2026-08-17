@@ -9,9 +9,12 @@ export async function GET(request: NextRequest) {
     return new NextResponse('Missing file url parameter', { status: 400 })
   }
 
-  // Security check: Only allow downloads from our trusted R2 storage domain
+  // Security check: Only allow downloads from our trusted R2 storage domain or Google Drive
   const publicBase = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || 'https://pub-4c28b39a02ca4952a6c31f0baf9d62e3.r2.dev'
-  const isAllowedDomain = fileUrl.startsWith(publicBase) || fileUrl.startsWith('https://pub-4c28b39a02ca4952a6c31f0baf9d62e3.r2.dev')
+  const isAllowedDomain = fileUrl.startsWith(publicBase) ||
+    fileUrl.startsWith('https://pub-4c28b39a02ca4952a6c31f0baf9d62e3.r2.dev') ||
+    fileUrl.includes('drive.google.com') ||
+    fileUrl.includes('googleusercontent.com')
 
   if (!isAllowedDomain) {
     return new NextResponse('Forbidden: Download URL is not from a trusted source', { status: 403 })
