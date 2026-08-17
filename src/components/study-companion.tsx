@@ -5,7 +5,7 @@ import { useLenis } from 'lenis/react'
 
 import { useMemo, useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDown, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info, PencilSimple, Moon, Sun, Desktop, UserCircle, Lock, Calendar, CheckCircle, Warning, WarningCircle, UserPlus, Eye, Clock, UserCheck, ShieldWarning, EnvelopeSimple, ImageSquare } from '@phosphor-icons/react'
+import { ArrowLeft, ArrowRight, Bell, BookOpen, Check, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDown, CaretUp, DotsSixVertical, DownloadSimple as Download, FileText, FolderOpen, House as Home, Tray as Inbox, SquaresFour as LayoutDashboard, SignOut as LogOut, Megaphone, Minus, Plus, MagnifyingGlass as Search, PaperPlaneRight as Send, Gear as Settings, ShieldCheck, UploadSimple, UploadSimple as Upload, User, Users, X, GridFour as LayoutGrid, List, BookmarkSimple as Bookmark, Sparkle, ChatText, GraduationCap, Trash, PlusCircle, Info, PencilSimple, Moon, Sun, Desktop, UserCircle, Lock, Calendar, CheckCircle, Warning, WarningCircle, UserPlus, Eye, Clock, UserCheck, ShieldWarning, EnvelopeSimple, ImageSquare } from '@phosphor-icons/react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { login, logout, register, requestPasswordReset, resetPasswordWithCode } from '@/app/actions/auth'
 import { getAdminUsersData, approveUser, rejectUser, updateUserSemester, toggleHeldBack, changeUserRole, submitHeldBackSelfReport, getContentRequests, updateContentRequestStatus, deleteContentRequest } from '@/app/actions/admin'
@@ -14,7 +14,7 @@ import { SignUp } from '@/components/signup'
 import { PendingScreen } from '@/components/pending-screen'
 import { SemstackLogo } from '@/components/logo'
 import type { User as PrismaUser } from '@prisma/client'
-import { createNote, publishNote, createSubject, deleteSubject, getTotalStorage, createAnnouncement, deleteAnnouncement, broadcastAnnouncementEmail, deleteNote, updateNote, toggleBookmark, submitContentRequest } from '@/app/actions/notes'
+import { createNote, publishNote, bulkPublishNotes, reorderNotes, createSubject, deleteSubject, getTotalStorage, createAnnouncement, deleteAnnouncement, broadcastAnnouncementEmail, deleteNote, updateNote, toggleBookmark, submitContentRequest } from '@/app/actions/notes'
 import { getPresignedUrl, uploadViaGoogleDrive } from '@/app/actions/upload'
 import React from 'react'
 import { useIsTouch } from '@/lib/use-touch'
@@ -3210,7 +3210,9 @@ function ReviewQueueCard({
   onUpdate,
   isPublishing,
   publishProgress = 0,
-  isDone
+  isDone,
+  isSelected = false,
+  onToggleSelect
 }: {
   candidate: Note
   subjects: SubjectItem[]
@@ -3220,6 +3222,8 @@ function ReviewQueueCard({
   isPublishing?: boolean
   publishProgress?: number
   isDone?: boolean
+  isSelected?: boolean
+  onToggleSelect?: () => void
 }) {
   const isTouch = useIsTouch();
   const [isEditing, setIsEditing] = useState(false);
@@ -3274,7 +3278,9 @@ function ReviewQueueCard({
 
   return (
     <div className="grid min-w-0 max-w-full w-full gap-5 lg:grid-cols-[1fr_340px]">
-      <section className="min-w-0 max-w-full w-full rounded-3xl border bg-card p-5 sm:p-6 shadow-sm overflow-hidden">
+      <section className={`min-w-0 max-w-full w-full rounded-3xl border bg-card p-5 sm:p-6 shadow-sm overflow-hidden transition-all relative ${
+        isSelected ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : ''
+      }`}>
         {isEditing ? (
           <div className="flex flex-col gap-4 min-w-0 max-w-full w-full">
             <div className="flex items-center justify-between border-b pb-3">
@@ -3446,7 +3452,23 @@ function ReviewQueueCard({
         ) : (
           <div className="min-w-0 max-w-full w-full">
             <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-              <span className="flex size-12 items-center justify-center rounded-2xl bg-blush shrink-0"><Inbox/></span>
+              <div className="flex items-center gap-3 shrink-0">
+                {onToggleSelect && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
+                    className={`size-6 rounded-xl border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+                      isSelected 
+                        ? 'bg-primary border-primary text-primary-foreground shadow-2xs' 
+                        : 'border-border bg-background hover:border-primary/60 text-transparent'
+                    }`}
+                    title={isSelected ? "Deselect note" : "Select note for bulk publish"}
+                  >
+                    <Check size={14} weight="bold" className={isSelected ? 'block' : 'opacity-0'} />
+                  </button>
+                )}
+                <span className="flex size-12 items-center justify-center rounded-2xl bg-blush shrink-0"><Inbox/></span>
+              </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <span className="rounded-full bg-sand px-3 py-1 text-xs font-semibold text-foreground">Awaiting review</span>
@@ -3550,6 +3572,252 @@ function ReviewQueueCard({
   );
 }
 
+function PublishedNotesManager({
+  notes,
+  subjects,
+  setNotes,
+  onDeleteNote
+}: {
+  notes: Note[]
+  subjects: SubjectItem[]
+  setNotes: React.Dispatch<React.SetStateAction<Note[]>>
+  onDeleteNote: (n: Note) => void
+}) {
+  const [selectedSemFilter, setSelectedSemFilter] = useState<number | 'all'>('all');
+  const [selectedCourseFilter, setSelectedCourseFilter] = useState<string | 'all'>('all');
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const [orderSavedToast, setOrderSavedToast] = useState(false);
+
+  // Filter notes
+  const filteredNotes = useMemo(() => {
+    return notes.filter(n => {
+      if (selectedSemFilter !== 'all') {
+        const sub = subjects.find(s => s.code === n.code || s.name === n.subject);
+        if (sub && sub.semester !== selectedSemFilter) return false;
+      }
+      if (selectedCourseFilter !== 'all') {
+        if (n.code !== selectedCourseFilter && n.subject !== selectedCourseFilter) return false;
+      }
+      return true;
+    });
+  }, [notes, subjects, selectedSemFilter, selectedCourseFilter]);
+
+  const handleReorder = async (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= filteredNotes.length || toIndex >= filteredNotes.length) return;
+
+    const newFiltered = [...filteredNotes];
+    const [moved] = newFiltered.splice(fromIndex, 1);
+    newFiltered.splice(toIndex, 0, moved);
+
+    // Build map of new order indices
+    const updates = newFiltered.map((n, idx) => ({ id: String(n.id), orderIndex: idx }));
+
+    // Optimistically update setNotes
+    setNotes(prev => {
+      const copy = [...prev];
+      updates.forEach(u => {
+        const item = copy.find(x => String(x.id) === u.id);
+        if (item) (item as any).orderIndex = u.orderIndex;
+      });
+      return copy.sort((a, b) => ((a as any).orderIndex ?? 0) - ((b as any).orderIndex ?? 0));
+    });
+
+    setIsSavingOrder(true);
+    const res = await reorderNotes(updates);
+    setIsSavingOrder(false);
+    if (!res.error) {
+      setOrderSavedToast(true);
+      setTimeout(() => setOrderSavedToast(false), 2000);
+    }
+  };
+
+  const availableCourses = useMemo(() => {
+    if (selectedSemFilter === 'all') return subjects;
+    return subjects.filter(s => s.semester === selectedSemFilter);
+  }, [subjects, selectedSemFilter]);
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Filter and Reorder Guidance Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-3xl bg-secondary/50 border border-border/80">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Filter:</span>
+          <select
+            value={selectedSemFilter}
+            onChange={e => {
+              const val = e.target.value === 'all' ? 'all' : Number(e.target.value);
+              setSelectedSemFilter(val);
+              setSelectedCourseFilter('all');
+            }}
+            className="h-8 rounded-xl border bg-background px-2.5 text-xs font-semibold"
+          >
+            <option value="all">All Semesters</option>
+            {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+              <option key={s} value={s}>Semester {s}</option>
+            ))}
+          </select>
+
+          <select
+            value={selectedCourseFilter}
+            onChange={e => setSelectedCourseFilter(e.target.value)}
+            className="h-8 rounded-xl border bg-background px-2.5 text-xs font-medium max-w-48 truncate"
+          >
+            <option value="all">All Courses</option>
+            {availableCourses.map(c => (
+              <option key={c.code} value={c.code}>{c.name} ({c.code})</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {orderSavedToast && (
+            <span className="text-xs font-semibold text-primary bg-primary/10 px-3 py-1 rounded-full flex items-center gap-1 animate-scale-in">
+              <Check size={14} weight="bold" /> Order saved
+            </span>
+          )}
+          {isSavingOrder && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <div className="size-3 border-2 border-primary border-t-transparent animate-spin rounded-full" /> Saving...
+            </span>
+          )}
+          <span className="text-xs text-muted-foreground">
+            💡 Drag cards or use <b>▲ ▼</b> to set note order.
+          </span>
+        </div>
+      </div>
+
+      {/* Published Note List */}
+      {filteredNotes.length === 0 ? (
+        <div className="p-12 text-center border border-dashed rounded-3xl bg-card/40 text-muted-foreground">
+          <FileText size={32} className="mx-auto mb-2 opacity-30" />
+          <p className="font-semibold text-foreground text-sm">No published notes found for this filter</p>
+          <p className="text-xs mt-1">Approved notes from the Review Queue will appear here.</p>
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {filteredNotes.map((note, idx) => {
+            const semNumber = subjects.find(s => s.code === note.code || s.name === note.subject)?.semester;
+            const isImage = note.fileUrl && (/\.(png|jpe?g|webp)$/i.test(note.fileUrl) || note.fileUrl.includes('/images/'));
+            const isDragging = draggedIndex === idx;
+            const isDragOver = dragOverIndex === idx && draggedIndex !== idx;
+
+            return (
+              <div
+                key={note.id}
+                draggable
+                onDragStart={(e) => {
+                  setDraggedIndex(idx);
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', String(idx));
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (dragOverIndex !== idx) setDragOverIndex(idx);
+                }}
+                onDragLeave={() => {
+                  if (dragOverIndex === idx) setDragOverIndex(null);
+                }}
+                onDragEnd={() => {
+                  setDraggedIndex(null);
+                  setDragOverIndex(null);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (draggedIndex !== null && draggedIndex !== idx) {
+                    handleReorder(draggedIndex, idx);
+                  }
+                  setDraggedIndex(null);
+                  setDragOverIndex(null);
+                }}
+                className={`group flex items-center justify-between gap-3 p-3.5 rounded-2xl border bg-card transition-all select-none ${
+                  isDragging ? 'opacity-40 scale-[0.99] border-dashed border-primary' : ''
+                } ${
+                  isDragOver ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'hover:border-border/90 shadow-2xs'
+                }`}
+              >
+                {/* Drag Handle & Order Badge */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <span 
+                    className="p-1 text-muted-foreground/60 group-hover:text-foreground cursor-grab active:cursor-grabbing hover:bg-secondary rounded-lg transition-colors"
+                    title="Drag to reorder"
+                  >
+                    <DotsSixVertical size={20} weight="bold" />
+                  </span>
+                  <span className="size-6 flex items-center justify-center rounded-lg bg-secondary text-[11px] font-bold text-muted-foreground">
+                    #{idx + 1}
+                  </span>
+                  {/* Up / Down Arrow Controls for 1-click zero-glitch ordering */}
+                  <div className="flex flex-col gap-0.5">
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={() => handleReorder(idx, idx - 1)}
+                      className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:hover:bg-transparent transition-colors cursor-pointer"
+                      title="Move up"
+                    >
+                      <CaretUp size={12} weight="bold" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === filteredNotes.length - 1}
+                      onClick={() => handleReorder(idx, idx + 1)}
+                      className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:hover:bg-transparent transition-colors cursor-pointer"
+                      title="Move down"
+                    >
+                      <CaretDown size={12} weight="bold" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Note Info */}
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${note.tone}`}>
+                    {isImage ? <ImageSquare size={18} /> : <FileText size={18} />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <b className="text-sm font-semibold text-foreground truncate">{note.title}</b>
+                      <span className="text-[10px] font-bold uppercase tracking-wider bg-secondary px-2 py-0.5 rounded-md text-foreground">
+                        {note.code || note.subject}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">
+                      {note.author} · {semNumber ? `Sem ${semNumber} · ` : ''}{note.size} · Published
+                    </p>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <a
+                    href={note.fileUrl ? `/api/download?url=${encodeURIComponent(note.fileUrl)}&title=${encodeURIComponent(note.title)}` : '#'}
+                    download
+                    className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                    title="Download file"
+                  >
+                    <Download size={16} />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteNote(note)}
+                    className="p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    title="Delete note"
+                  >
+                    <Trash size={16} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminCms({
   notes,
   setNotes,
@@ -3576,6 +3844,10 @@ function AdminCms({
   const [loading,setLoading]=useState(false);
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [publishProgress, setPublishProgress] = useState<number>(0);
+  const [selectedQueueIds, setSelectedQueueIds] = useState<string[]>([]);
+  const [isBulkPublishing, setIsBulkPublishing] = useState(false);
+  const [bulkPublishProgress, setBulkPublishProgress] = useState<number>(0);
+  const [bulkPublishStatusText, setBulkPublishStatusText] = useState('');
   const [curriculumSem, setCurriculumSem] = useState(1);
   const [newSubName, setNewSubName] = useState('');
   const [newSubCode, setNewSubCode] = useState('');
@@ -3592,6 +3864,130 @@ function AdminCms({
 
   const pending = notes.filter(n => n.status === 'PENDING');
   const published = notes.filter(n => n.status === 'PUBLISHED');
+
+  const handleBulkPublish = async () => {
+    if (selectedQueueIds.length === 0) return;
+    setIsBulkPublishing(true);
+    setBulkPublishProgress(15);
+    setBulkPublishStatusText(`Publishing ${selectedQueueIds.length} notes...`);
+
+    const t1 = setTimeout(() => setBulkPublishProgress(45), 300);
+    const t2 = setTimeout(() => setBulkPublishProgress(75), 800);
+
+    const res = await bulkPublishNotes(selectedQueueIds);
+    clearTimeout(t1);
+    clearTimeout(t2);
+
+    if (res.error) {
+      alert(res.error);
+      setIsBulkPublishing(false);
+      setBulkPublishProgress(0);
+      setBulkPublishStatusText('');
+    } else {
+      setBulkPublishProgress(100);
+      setBulkPublishStatusText(`Published ${res.count || selectedQueueIds.length} notes! ✓`);
+
+      setNotes(prev => prev.map(n => selectedQueueIds.includes(String(n.id)) ? { ...n, status: 'PUBLISHED' } : n));
+
+      const publishedList = pending.filter(p => selectedQueueIds.includes(String(p.id)));
+      const newAlerts = publishedList.map(p => ({
+        id: Date.now() + Math.random(),
+        audience: p.subject || 'ALL',
+        kind: 'New note',
+        title: `${p.subject} notes published`,
+        body: `${p.title} is now available.`,
+        time: 'Just now',
+        unread: true
+      }));
+      setAlerts([...newAlerts, ...alerts]);
+
+      setTimeout(() => {
+        setSelectedQueueIds([]);
+        setIsBulkPublishing(false);
+        setBulkPublishProgress(0);
+        setBulkPublishStatusText('');
+      }, 1200);
+    }
+  };
+
+  const queueToolbar = pending.length > 0 && (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-3xl bg-secondary/60 border border-border/80">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            if (selectedQueueIds.length === pending.length) {
+              setSelectedQueueIds([]);
+            } else {
+              setSelectedQueueIds(pending.map(p => String(p.id)));
+            }
+          }}
+          className="flex items-center gap-2 text-xs font-semibold text-foreground hover:text-primary transition-colors cursor-pointer"
+        >
+          <span className={`size-5 rounded-lg border flex items-center justify-center transition-colors ${
+            selectedQueueIds.length === pending.length && pending.length > 0
+              ? 'bg-primary border-primary text-primary-foreground'
+              : selectedQueueIds.length > 0
+              ? 'bg-primary/20 border-primary text-primary'
+              : 'border-border bg-background'
+          }`}>
+            {selectedQueueIds.length === pending.length && pending.length > 0 ? (
+              <Check size={12} weight="bold" />
+            ) : selectedQueueIds.length > 0 ? (
+              <Minus size={12} weight="bold" />
+            ) : null}
+          </span>
+          <span>{selectedQueueIds.length === pending.length ? 'Deselect All' : `Select All (${pending.length})`}</span>
+        </button>
+
+        {selectedQueueIds.length > 0 && (
+          <span className="text-xs text-muted-foreground">
+            • <b className="text-foreground">{selectedQueueIds.length}</b> note{selectedQueueIds.length === 1 ? '' : 's'} selected
+          </span>
+        )}
+      </div>
+
+      {selectedQueueIds.length > 0 && (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={isBulkPublishing}
+            onClick={handleBulkPublish}
+            className="relative overflow-hidden rounded-full bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground shadow-sm hover:opacity-95 disabled:opacity-50 transition-all flex items-center gap-2 cursor-pointer"
+          >
+            {isBulkPublishing && (
+              <div
+                className="absolute inset-0 bg-white/20 dark:bg-white/15 transition-all duration-300 pointer-events-none"
+                style={{ width: `${bulkPublishProgress}%` }}
+              />
+            )}
+            <span className="relative z-10 flex items-center gap-1.5">
+              {isBulkPublishing ? (
+                <>
+                  <div className="size-3.5 border-2 border-primary-foreground/40 border-t-primary-foreground animate-spin rounded-full" />
+                  <span>{bulkPublishStatusText || `Publishing (${bulkPublishProgress}%)...`}</span>
+                </>
+              ) : (
+                <>
+                  <Check size={14} weight="bold" />
+                  <span>Publish Selected ({selectedQueueIds.length})</span>
+                </>
+              )}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            disabled={isBulkPublishing}
+            onClick={() => setSelectedQueueIds([])}
+            className="px-3.5 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground rounded-full hover:bg-secondary transition-colors cursor-pointer"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+    </div>
+  );
 
   const handlePublish = async (n: Note) => {
     const noteIdStr = String(n.id);
@@ -3749,15 +4145,11 @@ function AdminCms({
       onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
       className="flex w-full h-12 items-center justify-between rounded-2xl bg-secondary px-4 text-sm font-semibold"
     >
-      <span>{activeTabLabel}</span>
-      <ChevronRight size={16} className={`transition-transform duration-200 ${mobileMenuOpen ? '-rotate-90' : 'rotate-90'}`} />
+      <span>{activeTabLabel || 'Navigation'}</span>
+      <CaretDown size={16} weight="bold" className={`transition-transform ${mobileMenuOpen ? 'rotate-180' : ''}`} />
     </button>
     {isTouch ? (
-      <MobilePresence
-        show={mobileMenuOpen}
-        type="dropdown"
-        className="absolute left-0 right-0 top-14 z-50 rounded-2xl border bg-popover p-2 shadow-lg"
-      >
+      <MobilePresence show={mobileMenuOpen} type="dropdown" className="absolute top-[calc(100%+8px)] left-0 right-0 z-30 rounded-2xl border bg-card p-2 shadow-xl">
         {tabs.map(t => (
           <button 
             key={t.id}
@@ -3772,12 +4164,12 @@ function AdminCms({
     ) : (
       <AnimatePresence>
         {mobileMenuOpen && (
-          <motion.div 
-            initial={{ opacity: 0, y: -10, scale: 0.95 }} 
-            animate={{ opacity: 1, y: 0, scale: 1 }} 
-            exit={{ opacity: 0, y: -10, scale: 0.95 }} 
-            transition={{ duration: 0.15 }}
-            className="absolute left-0 right-0 top-14 z-50 rounded-2xl border bg-popover p-2 shadow-lg"
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            transition={{ duration: 0.12 }}
+            className="absolute top-[calc(100%+8px)] left-0 right-0 z-30 rounded-2xl border bg-card p-2 shadow-xl fm-gpu"
           >
             {tabs.map(t => (
               <button 
@@ -3838,6 +4230,7 @@ function AdminCms({
 
       {/* Review queue */}
       {tab==='queue'&&<div className="flex flex-col gap-5">
+        {queueToolbar}
         {pending.length === 0 && <p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed bg-card/50">No notes currently pending review. Submissions from contributors will appear here.</p>}
         {pending.map(candidate => (
           <ReviewQueueCard
@@ -3846,6 +4239,13 @@ function AdminCms({
             subjects={subjects}
             onPublish={handlePublish}
             onDelete={handleDeleteNote}
+            isSelected={selectedQueueIds.includes(String(candidate.id))}
+            onToggleSelect={() => {
+              const idStr = String(candidate.id);
+              setSelectedQueueIds(prev => 
+                prev.includes(idStr) ? prev.filter(x => x !== idStr) : [...prev, idStr]
+              );
+            }}
             isPublishing={publishingId === String(candidate.id)}
             publishProgress={publishingId === String(candidate.id) ? publishProgress : 0}
             isDone={doneId === candidate.id}
@@ -4005,7 +4405,7 @@ function AdminCms({
       )}
 
       {/* Published content */}
-      {tab==='content'&&<div className="flex flex-col gap-3">{published.length===0?<p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed bg-card/40">No published notes yet.</p>:published.map((n,i)=><NoteRow key={n.id} note={n} subjects={subjects} index={i} open={()=>{}} onDelete={()=>handleDeleteNote(n)}/>)}</div>}
+      {tab==='content'&&<PublishedNotesManager notes={published} subjects={subjects} setNotes={setNotes} onDeleteNote={handleDeleteNote} />}
 
       {/* Curriculum & Subjects Management */}
       {tab==='curriculum'&&<div className="flex flex-col gap-7">
@@ -4137,6 +4537,7 @@ function AdminCms({
 
       {/* Review queue */}
       {tab==='queue'&&<div className="flex flex-col gap-5">
+        {queueToolbar}
         {pending.length === 0 && <p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed bg-card/50">No notes currently pending review. Submissions from contributors will appear here.</p>}
         {pending.map(candidate => (
           <ReviewQueueCard
@@ -4145,6 +4546,13 @@ function AdminCms({
             subjects={subjects}
             onPublish={handlePublish}
             onDelete={handleDeleteNote}
+            isSelected={selectedQueueIds.includes(String(candidate.id))}
+            onToggleSelect={() => {
+              const idStr = String(candidate.id);
+              setSelectedQueueIds(prev => 
+                prev.includes(idStr) ? prev.filter(x => x !== idStr) : [...prev, idStr]
+              );
+            }}
             isPublishing={publishingId === String(candidate.id)}
             publishProgress={publishingId === String(candidate.id) ? publishProgress : 0}
             isDone={doneId === candidate.id}
@@ -4304,7 +4712,7 @@ function AdminCms({
       )}
 
       {/* Published content */}
-      {tab==='content'&&<div className="flex flex-col gap-3">{published.length===0?<p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed bg-card/40">No published notes yet.</p>:published.map((n,i)=><NoteRow key={n.id} note={n} subjects={subjects} index={i} open={()=>{}} onDelete={()=>handleDeleteNote(n)}/>)}</div>}
+      {tab==='content'&&<PublishedNotesManager notes={published} subjects={subjects} setNotes={setNotes} onDeleteNote={handleDeleteNote} />}
 
       {/* Curriculum & Subjects Management */}
       {tab==='curriculum'&&<div className="flex flex-col gap-7">

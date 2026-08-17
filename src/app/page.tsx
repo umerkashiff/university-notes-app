@@ -27,7 +27,10 @@ export default async function Page() {
   try {
     notes = await prisma.note.findMany({ 
       include: { author: true, subject: true }, 
-      orderBy: { createdAt: 'desc' } 
+      orderBy: [
+        { orderIndex: 'asc' },
+        { createdAt: 'desc' }
+      ] 
     })
   } catch (err) {
     console.warn('Prisma database unreachable, fallback will be used:', (err as Error).message)

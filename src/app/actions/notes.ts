@@ -176,6 +176,69 @@ export async function publishNote(noteId: string) {
   }
 }
 
+export async function bulkPublishNotes(noteIds: string[]) {
+  const user = await getCurrentUser()
+  if (!user || user.role !== 'ADMIN') {
+    return { error: 'Unauthorized. Only administrators can publish notes.' }
+  }
+
+  if (!noteIds || noteIds.length === 0) {
+    return { error: 'No notes selected to publish.' }
+  }
+
+  try {
+    const validNotes = await prisma.note.findMany({
+      where: { id: { in: noteIds } },
+      include: { subject: true, author: true }
+    })
+
+    await prisma.note.updateMany({
+      where: { id: { in: noteIds } },
+      data: { status: 'PUBLISHED' }
+    })
+
+    // Batch create announcements for the published notes
+    for (const note of validNotes) {
+      try {
+        await prisma.announcement.create({
+          data: {
+            title: `${note.subject.name} notes published`,
+            body: `${note.title} is now available.`,
+            audience: `SEM_${note.subject.semester}`
+          }
+        })
+      } catch (e) {}
+    }
+
+    return { success: true, count: validNotes.length }
+  } catch (err: any) {
+    console.error('Bulk publish error:', err)
+    return { error: 'Failed to publish selected notes.' }
+  }
+}
+
+export async function reorderNotes(updates: Array<{ id: string; orderIndex: number }>) {
+  const user = await getCurrentUser()
+  if (!user || user.role !== 'ADMIN') {
+    return { error: 'Unauthorized. Only administrators can reorder notes.' }
+  }
+
+  try {
+    await prisma.$transaction(
+      updates.map(u => 
+        prisma.note.update({
+          where: { id: u.id },
+          data: { orderIndex: u.orderIndex }
+        })
+      )
+    )
+    return { success: true }
+  } catch (err: any) {
+    console.error('Reorder notes error:', err)
+    return { error: 'Failed to update note ordering.' }
+  }
+}
+
 export async function updateNote(data: {
   id: string
   title?: string

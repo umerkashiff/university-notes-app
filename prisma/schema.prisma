@@ -81,6 +81,7 @@ model Note {
   status      String   @default("PENDING") // PENDING, PUBLISHED, REJECTED
   tone        String   @default("bg-sage")
   downloads   Int      @default(0)
+  orderIndex  Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
