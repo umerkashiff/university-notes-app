@@ -306,8 +306,8 @@
   @keyframes m-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
 
   /* ── CSS utility classes used by MobilePresence and inline keyed-div usage ─ */
-  .m-screen-enter   { animation: m-screen-in    180ms ease-out both; }
-  .m-screen-exit    { animation: m-screen-out   120ms ease-in  both; }
+  .m-screen-enter   { animation: m-screen-in    140ms ease-out both; }
+  .m-screen-exit    { animation: m-screen-out   100ms ease-in  both; }
   .m-dropdown-enter { animation: m-dropdown-in  150ms ease-out both; }
   .m-dropdown-exit  { animation: m-dropdown-out 100ms ease-in  both; }
   .m-popover-enter  { animation: m-popover-in   150ms ease-out both; }

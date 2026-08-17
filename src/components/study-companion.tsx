@@ -1539,6 +1539,7 @@ function SubjectLibrary({
   open: (n: Note) => void
   onBack: () => void
 }) {
+  const isTouch = useIsTouch()
   const semSubjects = useMemo(() => subjects.filter(s => s.semester === semester), [subjects, semester])
   const [selectedSubject, setSelectedSubject] = useState<SubjectItem | null>(null)
 
@@ -1663,14 +1664,10 @@ function SubjectLibrary({
             />
           </label>
 
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div 
+          {isTouch ? (
+            <div 
               key={activeSubject?.code || 'all'}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.14, ease: "easeOut" }}
-              className="mt-4 flex flex-col gap-3 flex-1 transform-gpu"
+              className="mt-4 flex flex-col gap-3 flex-1 m-screen-enter"
             >
               {list.length === 0 ? (
                 <div className="py-16 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40 my-auto">
@@ -1691,8 +1688,39 @@ function SubjectLibrary({
                   />
                 ))
               )}
-            </motion.div>
-          </AnimatePresence>
+            </div>
+          ) : (
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div 
+                key={activeSubject?.code || 'all'}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.14, ease: "easeOut" }}
+                className="mt-4 flex flex-col gap-3 flex-1 transform-gpu"
+              >
+                {list.length === 0 ? (
+                  <div className="py-16 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40 my-auto">
+                    <FileText size={32} className="mx-auto mb-2 opacity-30"/>
+                    <p className="font-semibold text-foreground text-sm">No notes available</p>
+                    <p className="text-xs mt-1">Be the first to contribute notes for {activeSubject?.name || 'this subject'}!</p>
+                  </div>
+                ) : (
+                  list.map((n,i)=>(
+                    <NoteRow 
+                      key={n.id} 
+                      note={n} 
+                      subjects={subjects} 
+                      isSaved={savedNoteIds.includes(String(n.id))}
+                      toggleSave={toggleSave}
+                      index={i} 
+                      open={()=>open(n)}
+                    />
+                  ))
+                )}
+              </motion.div>
+            </AnimatePresence>
+          )}
         </section>
       </div>
     </div>
@@ -1716,11 +1744,12 @@ function NoteRow({
   onDelete?: () => void
   index?: number
 }){
+  const isTouch = useIsTouch();
   const [expanded, setExpanded] = useState(false);
   const semNumber = subjects.find(s => s.code === note.code || s.name === note.subject)?.semester
 
-  return (
-    <motion.article initial={{opacity:0}} animate={{opacity:1}} transition={{duration:0.2}} className="flex flex-col rounded-2xl border bg-card p-4 hover:border-primary/30 transition-colors shadow-sm">
+  const content = (
+    <>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <span className={`flex size-12 shrink-0 items-center justify-center rounded-2xl ${note.tone}`}><FileText size={20}/></span>
         <div className="min-w-0 flex-1">
@@ -1788,35 +1817,65 @@ function NoteRow({
           )}
         </div>
       </div>
-      <AnimatePresence>
-        {expanded && note.description && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="pt-3">
-              <div className="rounded-xl bg-sage/40 border border-primary/20 p-3.5 text-sm">
-                <div className="flex items-center gap-2 font-semibold text-foreground mb-1">
-                  <GraduationCap size={16} className="text-primary shrink-0" />
-                  <span>Contributor Advice & Tips</span>
-                  <span className="text-xs text-muted-foreground font-normal ml-auto">by {note.author}</span>
-                </div>
-                <p className="text-muted-foreground leading-relaxed pl-6 whitespace-pre-wrap">{note.description}</p>
+      {isTouch ? (
+        expanded && note.description && (
+          <div className="pt-3 m-screen-enter">
+            <div className="rounded-xl bg-sage/40 border border-primary/20 p-3.5 text-sm">
+              <div className="flex items-center gap-2 font-semibold text-foreground mb-1">
+                <GraduationCap size={16} className="text-primary shrink-0" />
+                <span>Contributor Advice & Tips</span>
+                <span className="text-xs text-muted-foreground font-normal ml-auto">by {note.author}</span>
               </div>
+              <p className="text-muted-foreground leading-relaxed pl-6 whitespace-pre-wrap">{note.description}</p>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+        )
+      ) : (
+        <AnimatePresence>
+          {expanded && note.description && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="pt-3">
+                <div className="rounded-xl bg-sage/40 border border-primary/20 p-3.5 text-sm">
+                  <div className="flex items-center gap-2 font-semibold text-foreground mb-1">
+                    <GraduationCap size={16} className="text-primary shrink-0" />
+                    <span>Contributor Advice & Tips</span>
+                    <span className="text-xs text-muted-foreground font-normal ml-auto">by {note.author}</span>
+                  </div>
+                  <p className="text-muted-foreground leading-relaxed pl-6 whitespace-pre-wrap">{note.description}</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
+    </>
+  );
+
+  if (isTouch) {
+    return (
+      <article className="flex flex-col rounded-2xl border bg-card p-4 hover:border-primary/30 transition-colors shadow-sm">
+        {content}
+      </article>
+    );
+  }
+
+  return (
+    <motion.article initial={{opacity:0}} animate={{opacity:1}} transition={{duration:0.2}} className="flex flex-col rounded-2xl border bg-card p-4 hover:border-primary/30 transition-colors shadow-sm">
+      {content}
     </motion.article>
-  )
+  );
 }
 
 function downloadNote(note:Note){const blob=new Blob([`${note.title}\n${note.subject}\nShared on Semstack by ${note.author}`],{type:'text/plain'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${note.title}.txt`;a.click();URL.revokeObjectURL(url)}
 
 function Notifications({alerts,setAlerts,user}:{alerts:any[],setAlerts:(a:any[])=>void,user:PrismaUser|null}){
+  const isTouch = useIsTouch()
   const [filter, setFilter] = useState<'dept' | 'app' | 'all' | 'unread'>('dept')
 
   const baseFiltered = useMemo(() => {
@@ -1876,8 +1935,8 @@ function Notifications({alerts,setAlerts,user}:{alerts:any[],setAlerts:(a:any[])
       </div>
 
       <div className="flex flex-col gap-3">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div key={filter} initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-6}} transition={{duration:0.14, ease: "easeOut"}} className="flex flex-col gap-3 transform-gpu">
+        {isTouch ? (
+          <div key={filter} className="flex flex-col gap-3 m-screen-enter">
             {shown.length === 0 ? (
               <div className="py-16 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40">
                 <Bell size={32} className="mx-auto mb-2 opacity-30"/>
@@ -1928,8 +1987,63 @@ function Notifications({alerts,setAlerts,user}:{alerts:any[],setAlerts:(a:any[])
                 </button>
               ))
             )}
-          </motion.div>
-        </AnimatePresence>
+          </div>
+        ) : (
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div key={filter} initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-6}} transition={{duration:0.14, ease: "easeOut"}} className="flex flex-col gap-3 transform-gpu">
+              {shown.length === 0 ? (
+                <div className="py-16 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40">
+                  <Bell size={32} className="mx-auto mb-2 opacity-30"/>
+                  <p className="font-semibold text-foreground text-sm">
+                    {filter === 'dept' ? 'No department notices yet' : filter === 'app' ? 'No app activity yet' : filter === 'unread' ? 'No unread notifications' : 'No announcements found'}
+                  </p>
+                  <p className="text-xs mt-1">
+                    {filter === 'dept' ? 'Official announcements broadcast by faculty/admin will appear here.' : 'Updates on published notes and study materials will appear here.'}
+                  </p>
+                </div>
+              ) : (
+                shown.map(a => (
+                  <button 
+                    key={a.id} 
+                    onClick={()=>setAlerts(alerts.map(x=>x.id===a.id?{...x,unread:false}:x))} 
+                    className="flex gap-4 rounded-3xl border bg-card p-5 text-left transition hover:shadow-sm hover:border-primary/30 cursor-pointer"
+                  >
+                    <span className="mt-1 flex size-10 shrink-0 items-center justify-center rounded-2xl bg-secondary text-foreground">
+                      {a.kind==='New note' ? <FileText size={18}/> : <Megaphone size={18}/>}
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+                        <span className="text-xs text-muted-foreground">{a.time}</span>
+                      </div>
+                      <span className="flex items-center gap-2">
+                        <b className="text-base font-semibold text-foreground">{a.title}</b>
+                        {a.unread && <i className="size-2 rounded-full bg-primary shrink-0"/>}
+                      </span>
+                      <span className="mt-1 block text-sm text-muted-foreground leading-relaxed">{a.body}</span>
+                      {a.imageUrl && (
+                        <div className="mt-3 overflow-hidden rounded-2xl border bg-background/50 max-h-72">
+                          <a 
+                            href={a.imageUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            onClick={e => e.stopPropagation()} 
+                            className="block group"
+                          >
+                            <img 
+                              src={a.imageUrl} 
+                              alt="Attached notice document" 
+                              className="w-full h-auto max-h-72 object-contain bg-black/5 group-hover:opacity-90 transition-opacity" 
+                            />
+                          </a>
+                        </div>
+                      )}
+                    </span>
+                  </button>
+                ))
+              )}
+            </motion.div>
+          </AnimatePresence>
+        )}
       </div>
     </section>
   )
@@ -2884,9 +2998,8 @@ function AdminCms({
     </div>
   </div>
 
-  <AnimatePresence mode="wait" initial={false}>
-    <motion.div key={tab} initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-6}} transition={{duration:0.14, ease: "easeOut"}} className="transform-gpu">
-      
+  {isTouch ? (
+    <div key={tab} className="m-screen-enter">
       {/* Student Requests & Reports tab */}
       {tab==='requests'&&<RequestsManager onRefreshCount={fetchPendingUserCount} />}
 
@@ -3179,8 +3292,307 @@ function AdminCms({
 
       {/* Announcements Studio */}
       {tab==='notices'&&<Announcement alerts={alerts} setAlerts={setAlerts} onPublish={addAnnouncement}/>}
-    </motion.div>
-  </AnimatePresence></div>}
+    </div>
+  ) : (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div key={tab} initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-6}} transition={{duration:0.14, ease: "easeOut"}} className="transform-gpu">
+        {/* Student Requests & Reports tab */}
+      {tab==='requests'&&<RequestsManager onRefreshCount={fetchPendingUserCount} />}
+
+      {/* Review queue */}
+      {tab==='queue'&&<div className="flex flex-col gap-5">
+        {pending.length === 0 && <p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed bg-card/50">No notes currently pending review. Submissions from contributors will appear here.</p>}
+        {pending.map(candidate => (
+          <ReviewQueueCard
+            key={candidate.id}
+            candidate={candidate}
+            subjects={subjects}
+            onPublish={handlePublish}
+            onDelete={handleDeleteNote}
+            onUpdate={(updated) => {
+              if (updated.status === 'PUBLISHED') {
+                publish(updated);
+              } else {
+                setNotes(prev => prev.map(n => n.id === updated.id ? updated : n));
+              }
+            }}
+          />
+        ))}
+      </div>}
+
+      {/* Note Rejection Modal with Feedback */}
+      {isTouch ? (
+        <MobilePresence show={!!rejectNoteTarget} type="backdrop" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/45">
+          {rejectNoteTarget && (
+            <div className="w-full max-w-md rounded-3xl bg-card border p-6 shadow-2xl space-y-4 m-panel-enter">
+              <h3 className="text-lg font-bold text-foreground">Reject Note Submission</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Rejecting <b className="text-foreground">{rejectNoteTarget.title}</b> submitted by <b className="text-foreground">{rejectNoteTarget.author}</b>.
+                An email with your feedback will be sent to the contributor.
+              </p>
+
+              {/* Quick Preset Reasons */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground">Select common reason:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Blurry scan / unreadable text',
+                    'Incomplete lecture notes',
+                    'Duplicate of existing upload',
+                    'Incorrect course or semester syllabus'
+                  ].map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setRejectNoteReason(preset)}
+                      className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
+                        rejectNoteReason === preset
+                          ? 'bg-primary text-primary-foreground border-primary font-semibold'
+                          : 'bg-secondary text-muted-foreground hover:text-foreground border-border/60'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="field-label">
+                Feedback for Contributor
+                <textarea
+                  value={rejectNoteReason}
+                  onChange={e => setRejectNoteReason(e.target.value)}
+                  placeholder="Explain why this note cannot be published or what needs improvement..."
+                  className="field-input text-xs min-h-24 resize-none py-2"
+                />
+              </label>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={rejectNoteLoading}
+                  onClick={() => setRejectNoteTarget(null)}
+                  className="px-4 py-2 rounded-full text-xs font-semibold bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={rejectNoteLoading}
+                  onClick={handleConfirmNoteRejection}
+                  className="px-4 py-2 rounded-full text-xs font-semibold bg-destructive text-destructive-foreground hover:opacity-95 shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {rejectNoteLoading ? 'Rejecting...' : 'Confirm Rejection & Notify'}
+                </button>
+              </div>
+            </div>
+          )}
+        </MobilePresence>
+      ) : (
+        <AnimatePresence>
+          {rejectNoteTarget && (
+            <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-sm">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="w-full max-w-md rounded-3xl bg-card border p-6 shadow-2xl space-y-4 fm-gpu"
+              >
+                <h3 className="text-lg font-bold text-foreground">Reject Note Submission</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Rejecting <b className="text-foreground">{rejectNoteTarget.title}</b> submitted by <b className="text-foreground">{rejectNoteTarget.author}</b>.
+                  An email with your feedback will be sent to the contributor.
+                </p>
+
+                {/* Quick Preset Reasons */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-semibold text-muted-foreground">Select common reason:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      'Blurry scan / unreadable text',
+                      'Incomplete lecture notes',
+                      'Duplicate of existing upload',
+                      'Incorrect course or semester syllabus'
+                    ].map(preset => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setRejectNoteReason(preset)}
+                        className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
+                          rejectNoteReason === preset
+                            ? 'bg-primary text-primary-foreground border-primary font-semibold'
+                            : 'bg-secondary text-muted-foreground hover:text-foreground border-border/60'
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <label className="field-label">
+                  Feedback for Contributor
+                  <textarea
+                    value={rejectNoteReason}
+                    onChange={e => setRejectNoteReason(e.target.value)}
+                    placeholder="Explain why this note cannot be published or what needs improvement..."
+                    className="field-input text-xs min-h-24 resize-none py-2"
+                  />
+                </label>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    disabled={rejectNoteLoading}
+                    onClick={() => setRejectNoteTarget(null)}
+                    className="px-4 py-2 rounded-full text-xs font-semibold bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={rejectNoteLoading}
+                    onClick={handleConfirmNoteRejection}
+                    className="px-4 py-2 rounded-full text-xs font-semibold bg-destructive text-destructive-foreground hover:opacity-95 shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    {rejectNoteLoading ? 'Rejecting...' : 'Confirm Rejection & Notify'}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      )}
+
+      {/* Published content */}
+      {tab==='content'&&<div className="flex flex-col gap-3">{published.length===0?<p className="text-muted-foreground p-8 text-center border rounded-3xl border-dashed bg-card/40">No published notes yet.</p>:published.map((n,i)=><NoteRow key={n.id} note={n} subjects={subjects} index={i} open={()=>{}} onDelete={()=>handleDeleteNote(n)}/>)}</div>}
+
+      {/* Curriculum & Subjects Management */}
+      {tab==='curriculum'&&<div className="flex flex-col gap-7">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-5">
+          <div>
+            <h2 className="text-2xl font-bold">Curriculum & Subjects</h2>
+            <p className="text-sm text-muted-foreground">Manage courses and subjects available for students and contributors per semester.</p>
+          </div>
+          {subMsg && <span className="text-xs font-semibold text-primary bg-primary/10 px-3 py-1.5 rounded-full">{subMsg}</span>}
+        </div>
+
+        {/* Semester Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 modal-scroll touch-pan-x">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
+            <button
+              key={sem}
+              onClick={() => setCurriculumSem(sem)}
+              className={`relative px-4 py-2 text-sm font-semibold rounded-full whitespace-nowrap transition-colors ${
+                curriculumSem === sem
+                  ? 'text-primary-foreground'
+                  : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+              }`}
+            >
+              {curriculumSem === sem && <motion.div layoutId="curriculum-sem-pill" className="absolute inset-0 bg-primary rounded-full z-0 shadow-sm" transition={{ type: "spring", stiffness: 500, damping: 35 }} />}
+              <span className="relative z-10">Semester {sem}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+          {/* Subjects List for Selected Semester */}
+          <div className="flex flex-col gap-3">
+            <h3 className="text-lg font-semibold flex items-center justify-between">
+              <span>Semester {curriculumSem} Courses</span>
+              <span className="text-xs text-muted-foreground font-normal">{semSubjects.length} subject(s)</span>
+            </h3>
+
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div key={curriculumSem} initial={{opacity:0, x:-6}} animate={{opacity:1, x:0}} exit={{opacity:0, x:6}} transition={{duration:0.14, ease: "easeOut"}} className="transform-gpu">
+                {semSubjects.length === 0 ? (
+                  <div className="rounded-3xl border border-dashed p-8 text-center text-muted-foreground bg-card/40">
+                    <GraduationCap size={28} className="mx-auto mb-2 opacity-50" />
+                    <p className="font-semibold text-foreground">No subjects added for Semester {curriculumSem}</p>
+                    <p className="text-xs mt-1">Use the form on the right to add a new course.</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {semSubjects.map(sub => (
+                      <div key={sub.id || sub.code} className="rounded-2xl border bg-card p-4 flex items-start justify-between gap-3 hover:border-primary/30 transition-colors shadow-sm">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider bg-secondary px-2 py-0.5 rounded-full text-foreground">
+                            {sub.code}
+                          </span>
+                          <h4 className="font-semibold text-base mt-2 text-foreground">{sub.name}</h4>
+                          <p className="text-xs text-muted-foreground mt-1">Semester {sub.semester}</p>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteSubject(sub.id, sub.code)}
+                          className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                          title="Delete subject"
+                        >
+                          <Trash size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Add Subject Form */}
+          <aside className="rounded-3xl border bg-card p-6 h-fit">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <PlusCircle size={20} className="text-primary" />
+              Add Subject
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1 mb-5">Add a new course to Semester {curriculumSem}.</p>
+
+            <form onSubmit={handleAddSubject} className="flex flex-col gap-4">
+              <label className="field-label">
+                Course Name
+                <input
+                  required
+                  value={newSubName}
+                  onChange={e => setNewSubName(e.target.value)}
+                  className="field-input"
+                  placeholder="e.g. Operating Systems"
+                />
+              </label>
+
+              <label className="field-label">
+                Course Code
+                <input
+                  required
+                  value={newSubCode}
+                  onChange={e => setNewSubCode(e.target.value)}
+                  className="field-input uppercase"
+                  placeholder="e.g. CE 301"
+                />
+              </label>
+
+              <button
+                type="submit"
+                disabled={creatingSub}
+                className="rounded-full bg-primary p-3 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity mt-1"
+              >
+                {creatingSub ? 'Adding...' : `Add to Semester ${curriculumSem}`}
+              </button>
+            </form>
+          </aside>
+        </div>
+      </div>}
+
+      {/* Users & Roles Studio */}
+      {tab==='users'&&<AdminUsersManager />}
+
+      {/* Academic Calendar Studio */}
+      {tab==='calendar'&&<AdminCalendarManager />}
+
+      {/* Announcements Studio */}
+      {tab==='notices'&&<Announcement alerts={alerts} setAlerts={setAlerts} onPublish={addAnnouncement}/>}
+      </motion.div>
+    </AnimatePresence>
+  )}
+</div>
+}
 
 function AdminCapSelect({
   value,
@@ -3390,76 +3802,9 @@ function AdminUsersManager() {
     });
   }, [data.activeUsers, search, roleFilter]);
 
-  return (
-    <div className="flex flex-col gap-6">
-      {/* Sub-tab switcher */}
-      <div className="flex items-center justify-between flex-wrap gap-4 border-b border-border/80 pb-4">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setSubTab('pending')}
-            className={`px-4 py-2 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
-              subTab === 'pending'
-                ? 'bg-primary text-primary-foreground shadow-xs'
-                : 'bg-secondary text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Clock size={15} />
-            <span>Pending Applications</span>
-            <span className={`size-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
-              subTab === 'pending' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background text-foreground'
-            }`}>
-              {data.pendingUsers.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setSubTab('directory')}
-            className={`px-4 py-2 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
-              subTab === 'directory'
-                ? 'bg-primary text-primary-foreground shadow-xs'
-                : 'bg-secondary text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Users size={15} />
-            <span>Active Directory</span>
-            <span className={`size-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
-              subTab === 'directory' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background text-foreground'
-            }`}>
-              {data.activeUsers.length}
-            </span>
-          </button>
-        </div>
-
-        <button
-          type="button"
-          onClick={loadData}
-          disabled={loading}
-          className="text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1.5 cursor-pointer bg-secondary px-3 py-1.5 rounded-full"
-        >
-          <Clock size={13} className={loading ? 'animate-spin' : ''} /> Refresh
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="py-20 text-center text-muted-foreground">
-          <div className="size-6 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto mb-3" />
-          <p className="text-xs">Loading user data...</p>
-        </div>
-      ) : (
-        <AnimatePresence mode="wait" initial={false}>
-          {subTab === 'pending' ? (
-            /* PENDING APPLICATIONS VIEW */
-            <motion.div 
-              key="pending"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.14, ease: "easeOut" }}
-              className="flex flex-col gap-4 transform-gpu"
-            >
-              {data.pendingUsers.length === 0 ? (
+  const pendingView = (
+    <div className="flex flex-col gap-4">
+      {data.pendingUsers.length === 0 ? (
             <div className="py-20 text-center text-muted-foreground rounded-3xl border border-dashed bg-card/40 p-8">
               <UserCheck size={36} className="mx-auto mb-3 opacity-30" />
               <h3 className="font-semibold text-base text-foreground">No pending applications</h3>
@@ -3604,17 +3949,11 @@ function AdminUsersManager() {
               );
             })
           )}
-            </motion.div>
-          ) : (
-            /* ACTIVE USER DIRECTORY VIEW */
-            <motion.div 
-              key="directory"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.14, ease: "easeOut" }}
-              className="flex flex-col gap-4 transform-gpu"
-            >
+    </div>
+  );
+
+  const directoryView = (
+    <div className="flex flex-col gap-4">
           <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
             <div className="relative w-full sm:w-80">
               <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -3789,8 +4128,82 @@ function AdminUsersManager() {
               })}
             </div>
           )}
-            </motion.div>
-          )}
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Sub-tab switcher */}
+      <div className="flex items-center justify-between flex-wrap gap-4 border-b border-border/80 pb-4">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSubTab('pending')}
+            className={`px-4 py-2 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+              subTab === 'pending'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'bg-secondary text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Clock size={15} />
+            <span>Pending Applications</span>
+            <span className={`size-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
+              subTab === 'pending' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background text-foreground'
+            }`}>
+              {data.pendingUsers.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSubTab('directory')}
+            className={`px-4 py-2 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+              subTab === 'directory'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'bg-secondary text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Users size={15} />
+            <span>Active Directory</span>
+            <span className={`size-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
+              subTab === 'directory' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background text-foreground'
+            }`}>
+              {data.activeUsers.length}
+            </span>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={loadData}
+          disabled={loading}
+          className="text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1.5 cursor-pointer bg-secondary px-3 py-1.5 rounded-full"
+        >
+          <Clock size={13} className={loading ? 'animate-spin' : ''} /> Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="py-20 text-center text-muted-foreground">
+          <div className="size-6 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto mb-3" />
+          <p className="text-xs">Loading user data...</p>
+        </div>
+      ) : isTouch ? (
+        <div key={subTab} className="m-screen-enter">
+          {subTab === 'pending' ? pendingView : directoryView}
+        </div>
+      ) : (
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={subTab}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.14, ease: "easeOut" }}
+            className="transform-gpu"
+          >
+            {subTab === 'pending' ? pendingView : directoryView}
+          </motion.div>
         </AnimatePresence>
       )}
 
@@ -4736,6 +5149,7 @@ function AdminCalendarManager() {
 }
 
 function RequestsManager({ onRefreshCount }: { onRefreshCount?: () => void }) {
+  const isTouch = useIsTouch();
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'RESOLVED' | 'DISMISSED'>('ALL');
@@ -4778,58 +5192,14 @@ function RequestsManager({ onRefreshCount }: { onRefreshCount?: () => void }) {
 
   const pendingCount = requests.filter(r => r.status === 'PENDING').length;
 
-  return (
-    <div className="flex flex-col gap-6">
-      {/* Header & Filter Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border bg-card p-5 rounded-3xl shadow-xs">
-        <div>
-          <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-            <ChatText size={18} className="text-primary" />
-            Student Requests & Reports
-          </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Private inquiries, syllabus requests, and issue reports submitted by verified students.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-1.5 rounded-full bg-secondary p-1">
-          {(['ALL', 'PENDING', 'RESOLVED', 'DISMISSED'] as const).map(st => (
-            <button
-              key={st}
-              onClick={() => setStatusFilter(st)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                statusFilter === st
-                  ? 'bg-primary text-primary-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {st === 'ALL' ? 'All' : st === 'PENDING' ? `Pending (${pendingCount})` : st === 'RESOLVED' ? 'Resolved' : 'Dismissed'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Requests List */}
-      {loading ? (
-        <div className="flex justify-center py-16 text-xs text-muted-foreground">Loading requests...</div>
-      ) : (
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={statusFilter}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.14, ease: "easeOut" }}
-            className="transform-gpu flex flex-col gap-4"
-          >
-            {requests.length === 0 ? (
-              <div className="text-center py-16 border rounded-3xl border-dashed bg-card/40 p-8">
-                <ChatText size={32} className="mx-auto mb-2 opacity-30 text-muted-foreground" />
-                <p className="text-sm font-semibold text-foreground">No requests found</p>
-                <p className="text-xs text-muted-foreground mt-1">Student submissions and issue reports will appear here in real-time.</p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
+  const requestsList = requests.length === 0 ? (
+    <div className="text-center py-16 border rounded-3xl border-dashed bg-card/40 p-8">
+      <ChatText size={32} className="mx-auto mb-2 opacity-30 text-muted-foreground" />
+      <p className="text-sm font-semibold text-foreground">No requests found</p>
+      <p className="text-xs text-muted-foreground mt-1">Student submissions and issue reports will appear here in real-time.</p>
+    </div>
+  ) : (
+    <div className="grid gap-4">
                 {requests.map(req => {
                   const isResolved = req.status === 'RESOLVED';
                   const isDismissed = req.status === 'DISMISSED';
@@ -4939,7 +5309,57 @@ function RequestsManager({ onRefreshCount }: { onRefreshCount?: () => void }) {
             );
           })}
         </div>
-      )}
+      );
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Header & Filter Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border bg-card p-5 rounded-3xl shadow-xs">
+        <div>
+          <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+            <ChatText size={18} className="text-primary" />
+            Student Requests & Reports
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Private inquiries, syllabus requests, and issue reports submitted by verified students.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-1.5 rounded-full bg-secondary p-1">
+          {(['ALL', 'PENDING', 'RESOLVED', 'DISMISSED'] as const).map(st => (
+            <button
+              key={st}
+              onClick={() => setStatusFilter(st)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                statusFilter === st
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {st === 'ALL' ? 'All' : st === 'PENDING' ? `Pending (${pendingCount})` : st === 'RESOLVED' ? 'Resolved' : 'Dismissed'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Requests List */}
+      {loading ? (
+        <div className="flex justify-center py-16 text-xs text-muted-foreground">Loading requests...</div>
+      ) : isTouch ? (
+        <div key={statusFilter} className="m-screen-enter">
+          {requestsList}
+        </div>
+      ) : (
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={statusFilter}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.14, ease: "easeOut" }}
+            className="transform-gpu"
+          >
+            {requestsList}
           </motion.div>
         </AnimatePresence>
       )}
