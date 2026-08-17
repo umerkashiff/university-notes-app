@@ -1663,27 +1663,36 @@ function SubjectLibrary({
             />
           </label>
 
-          <div className="mt-4 flex flex-col gap-3 flex-1">
-            {list.length === 0 ? (
-              <div className="py-16 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40 my-auto">
-                <FileText size={32} className="mx-auto mb-2 opacity-30"/>
-                <p className="font-semibold text-foreground text-sm">No notes available</p>
-                <p className="text-xs mt-1">Be the first to contribute notes for {activeSubject?.name || 'this subject'}!</p>
-              </div>
-            ) : (
-              list.map((n,i)=>(
-                <NoteRow 
-                  key={n.id} 
-                  note={n} 
-                  subjects={subjects} 
-                  isSaved={savedNoteIds.includes(String(n.id))}
-                  toggleSave={toggleSave}
-                  index={i} 
-                  open={()=>open(n)}
-                />
-              ))
-            )}
-          </div>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div 
+              key={activeSubject?.code || 'all'}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.14, ease: "easeOut" }}
+              className="mt-4 flex flex-col gap-3 flex-1 transform-gpu"
+            >
+              {list.length === 0 ? (
+                <div className="py-16 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40 my-auto">
+                  <FileText size={32} className="mx-auto mb-2 opacity-30"/>
+                  <p className="font-semibold text-foreground text-sm">No notes available</p>
+                  <p className="text-xs mt-1">Be the first to contribute notes for {activeSubject?.name || 'this subject'}!</p>
+                </div>
+              ) : (
+                list.map((n,i)=>(
+                  <NoteRow 
+                    key={n.id} 
+                    note={n} 
+                    subjects={subjects} 
+                    isSaved={savedNoteIds.includes(String(n.id))}
+                    toggleSave={toggleSave}
+                    index={i} 
+                    open={()=>open(n)}
+                  />
+                ))
+              )}
+            </motion.div>
+          </AnimatePresence>
         </section>
       </div>
     </div>
@@ -3438,10 +3447,19 @@ function AdminUsersManager() {
           <div className="size-6 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto mb-3" />
           <p className="text-xs">Loading user data...</p>
         </div>
-      ) : subTab === 'pending' ? (
-        /* PENDING APPLICATIONS VIEW */
-        <div className="flex flex-col gap-4">
-          {data.pendingUsers.length === 0 ? (
+      ) : (
+        <AnimatePresence mode="wait" initial={false}>
+          {subTab === 'pending' ? (
+            /* PENDING APPLICATIONS VIEW */
+            <motion.div 
+              key="pending"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.14, ease: "easeOut" }}
+              className="flex flex-col gap-4 transform-gpu"
+            >
+              {data.pendingUsers.length === 0 ? (
             <div className="py-20 text-center text-muted-foreground rounded-3xl border border-dashed bg-card/40 p-8">
               <UserCheck size={36} className="mx-auto mb-3 opacity-30" />
               <h3 className="font-semibold text-base text-foreground">No pending applications</h3>
@@ -3586,10 +3604,17 @@ function AdminUsersManager() {
               );
             })
           )}
-        </div>
-      ) : (
-        /* ACTIVE USER DIRECTORY VIEW */
-        <div className="flex flex-col gap-4">
+            </motion.div>
+          ) : (
+            /* ACTIVE USER DIRECTORY VIEW */
+            <motion.div 
+              key="directory"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.14, ease: "easeOut" }}
+              className="flex flex-col gap-4 transform-gpu"
+            >
           <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
             <div className="relative w-full sm:w-80">
               <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -3764,7 +3789,9 @@ function AdminUsersManager() {
               })}
             </div>
           )}
-        </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       )}
 
       {/* Reject Modal */}
@@ -4785,17 +4812,27 @@ function RequestsManager({ onRefreshCount }: { onRefreshCount?: () => void }) {
       {/* Requests List */}
       {loading ? (
         <div className="flex justify-center py-16 text-xs text-muted-foreground">Loading requests...</div>
-      ) : requests.length === 0 ? (
-        <div className="text-center py-16 border rounded-3xl border-dashed bg-card/40 p-8">
-          <ChatText size={32} className="mx-auto mb-2 opacity-30 text-muted-foreground" />
-          <p className="text-sm font-semibold text-foreground">No requests found</p>
-          <p className="text-xs text-muted-foreground mt-1">Student submissions and issue reports will appear here in real-time.</p>
-        </div>
       ) : (
-        <div className="grid gap-4">
-          {requests.map(req => {
-            const isResolved = req.status === 'RESOLVED';
-            const isDismissed = req.status === 'DISMISSED';
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={statusFilter}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.14, ease: "easeOut" }}
+            className="transform-gpu flex flex-col gap-4"
+          >
+            {requests.length === 0 ? (
+              <div className="text-center py-16 border rounded-3xl border-dashed bg-card/40 p-8">
+                <ChatText size={32} className="mx-auto mb-2 opacity-30 text-muted-foreground" />
+                <p className="text-sm font-semibold text-foreground">No requests found</p>
+                <p className="text-xs text-muted-foreground mt-1">Student submissions and issue reports will appear here in real-time.</p>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {requests.map(req => {
+                  const isResolved = req.status === 'RESOLVED';
+                  const isDismissed = req.status === 'DISMISSED';
             const isPending = req.status === 'PENDING';
 
             const typeColor = 
@@ -4902,6 +4939,9 @@ function RequestsManager({ onRefreshCount }: { onRefreshCount?: () => void }) {
             );
           })}
         </div>
+      )}
+          </motion.div>
+        </AnimatePresence>
       )}
     </div>
   );
