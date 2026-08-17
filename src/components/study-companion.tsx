@@ -2199,6 +2199,57 @@ function autoDetectSubjectAndSemester(
   };
 }
 
+export function formatFileSize(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 KB';
+  if (bytes < 1024 * 1024) {
+    return Math.max(1, Math.round(bytes / 1024)) + ' KB';
+  }
+  const mb = bytes / (1024 * 1024);
+  return mb.toFixed(1) + ' MB';
+}
+
+export async function estimateFilePages(file: File): Promise<number> {
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp'].includes(ext) || file.type.startsWith('image/')) {
+    return 1;
+  }
+  if (['txt', 'md', 'csv', 'json', 'py', 'cpp', 'c', 'java', 'js', 'ts'].includes(ext) || file.type.startsWith('text/')) {
+    return 1;
+  }
+
+  if (ext === 'pdf' || file.type === 'application/pdf') {
+    try {
+      const buffer = await file.arrayBuffer();
+      const text = new TextDecoder('latin1').decode(new Uint8Array(buffer));
+
+      // Match /Type /Page
+      const pageMatches = text.match(/\/Type\s*\/Page\b/g);
+      if (pageMatches && pageMatches.length > 0) {
+        return Math.max(1, pageMatches.length);
+      }
+
+      // Fallback to /Count in Pages catalog
+      const countMatches = text.match(/\/Count\s+(\d+)/gi);
+      if (countMatches && countMatches.length > 0) {
+        let maxCount = 1;
+        for (const m of countMatches) {
+          const num = parseInt(m.replace(/[^0-9]/g, ''), 10);
+          if (!isNaN(num) && num > maxCount && num < 5000) {
+            maxCount = num;
+          }
+        }
+        if (maxCount > 1) return maxCount;
+      }
+
+      return 1;
+    } catch (e) {
+      return 1;
+    }
+  }
+
+  return 1;
+}
+
 interface StagedUploadItem {
   id: string
   file: File
@@ -2442,6 +2493,9 @@ function ContributorDesk({
         fileUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${fileName}`;
       }
 
+      const detectedPages = await estimateFilePages(file);
+      const formattedSize = formatFileSize(file.size);
+
       const res = await createNote({
         title: title || formatCleanTitle(file.name),
         subjectCode: finalCode,
@@ -2449,8 +2503,8 @@ function ContributorDesk({
         semester: selectedSemester,
         description: singleAdvice.trim() || undefined,
         fileUrl,
-        pages: isImage ? 1 : 12,
-        size: (file.size / (1024*1024)).toFixed(1) + ' MB'
+        pages: detectedPages,
+        size: formattedSize
       });
 
       if (res.error) {
@@ -2549,6 +2603,8 @@ function ContributorDesk({
         }
 
         const matchedSubject = subjects.find(s => s.code === item.subjectCode);
+        const detectedPages = await estimateFilePages(file);
+        const formattedSize = formatFileSize(file.size);
 
         const res = await createNote({
           title: item.title.trim() || formatCleanTitle(file.name),
@@ -2557,8 +2613,8 @@ function ContributorDesk({
           semester: item.semester,
           description: item.seniorAdvice.trim() || undefined,
           fileUrl,
-          pages: isImage ? 1 : 12,
-          size: (file.size / (1024 * 1024)).toFixed(1) + ' MB'
+          pages: detectedPages,
+          size: formattedSize
         });
 
         if (res.error) throw new Error(res.error);
