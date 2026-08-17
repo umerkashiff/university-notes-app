@@ -103,11 +103,15 @@
     -webkit-text-size-adjust: 100%;
     scrollbar-gutter: stable;
     overflow-y: scroll;
+    overflow-x: hidden;
+    max-width: 100vw;
   }
   body { 
     @apply bg-background text-foreground font-sans; 
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+    max-width: 100vw;
   }
   button, a, input, select { @apply focus-visible:outline-2 focus-visible:outline-offset-2; }
 

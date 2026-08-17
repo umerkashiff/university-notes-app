@@ -273,8 +273,8 @@ export function StudyCompanion({
         ) : reader ? (
           <PdfReader note={reader} onBack={() => setReader(null)} />
         ) : (
-          <main className="min-h-screen bg-background text-foreground">
-            <header className="sticky top-0 z-40 border-b border-border/40 bg-background dark:bg-card shadow-xs">
+          <main className="min-h-screen bg-background text-foreground w-full overflow-x-hidden">
+            <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-background dark:bg-card shadow-xs">
               <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
                 <button onClick={() => setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} className="flex items-center gap-2.5" aria-label="Semstack home">
                   <SemstackLogo size={34} className="size-[34px] -rotate-2" />
@@ -395,9 +395,9 @@ export function StudyCompanion({
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.99 }}
           transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-          className="min-h-screen bg-background text-foreground"
+          className="min-h-screen bg-background text-foreground w-full overflow-x-hidden"
         >
-          <header className="sticky top-0 z-40 border-b border-border/40 bg-background/80 dark:bg-card/80 backdrop-blur-md shadow-xs">
+          <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-background/80 dark:bg-card/80 backdrop-blur-md shadow-xs">
             <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
               <button onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} className="flex items-center gap-2.5" aria-label="Semstack home">
                 <SemstackLogo size={34} className="size-[34px] -rotate-2" />
@@ -2660,8 +2660,8 @@ function ContributorDesk({
   const myNotes = notes.filter(n => (user && n.authorId === user.id) || n.author === user?.name || n.author === 'You');
 
   return (
-    <div className="grid gap-7 lg:grid-cols-[1fr_340px]">
-      <section>
+    <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_340px] w-full min-w-0">
+      <section className="min-w-0 w-full">
         <div className="rounded-3xl bg-mist p-7">
           <Upload size={25}/>
           <h2 className="mt-10 text-3xl font-semibold">Share what helped you learn.</h2>
@@ -2672,7 +2672,7 @@ function ContributorDesk({
             </button>
           </div>
         </div>
-        <div className="mt-8">
+        <div className="mt-8 min-w-0">
           <Header kicker="Your contributions" title="Submission history"/>
           {myNotes.length === 0 ? (
             <div className="rounded-2xl border border-dashed p-8 text-center text-muted-foreground bg-card/40">
@@ -2682,7 +2682,7 @@ function ContributorDesk({
             </div>
           ) : (
             myNotes.map(x=>(
-              <div key={x.id} className="mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border bg-card p-4">
+              <div key={x.id} className="mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border bg-card p-4 min-w-0">
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                   <FileText className="shrink-0 text-muted-foreground"/>
                   <div className="flex-1 min-w-0">
@@ -2690,7 +2690,7 @@ function ContributorDesk({
                     <p className="text-sm text-muted-foreground truncate">Submitted {x.date} · {x.subject || x.code}</p>
                   </div>
                 </div>
-                <span className={`bg-secondary rounded-full px-3 py-1 text-xs font-semibold whitespace-nowrap w-fit`}>{x.status}</span>
+                <span className="bg-secondary rounded-full px-3 py-1 text-xs font-semibold whitespace-nowrap w-fit shrink-0">{x.status}</span>
               </div>
             ))
           )}
@@ -2698,7 +2698,7 @@ function ContributorDesk({
       </section>
 
       {/* Before you submit sidebar */}
-      <aside className="rounded-3xl bg-secondary p-6 lg:self-start border border-border/60">
+      <aside className="rounded-3xl bg-secondary p-6 lg:self-start border border-border/60 w-full min-w-0">
         <h3 className="font-semibold text-foreground">Before you submit</h3>
         <ul className="mt-4 flex flex-col gap-3 text-sm leading-relaxed text-muted-foreground">
           <li>Drop individual files, multiple files, or full folders.</li>
