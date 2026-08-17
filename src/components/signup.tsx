@@ -471,7 +471,7 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
                   value={regNumber} 
                   onChange={handleRegNumberChange} 
                   type="text" 
-                  className="field-input uppercase tracking-wider font-mono text-sm" 
+                  className="field-input text-sm uppercase font-medium tracking-wide" 
                   placeholder="2024-CE-15"
                   disabled={loading}
                   maxLength={12}
@@ -498,9 +498,9 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
                     animate={{ opacity: 1, height: 'auto', y: 0 }}
                     exit={{ opacity: 0, height: 0, y: -4 }}
                     transition={{ duration: 0.2 }}
-                    className="text-[11px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5 mt-1"
+                    className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5 mt-1.5"
                   >
-                    <AlertCircle size={13} className="shrink-0" />
+                    <AlertCircle size={13} className="shrink-0 text-muted-foreground" />
                     <span>
                       {isFutureBatch
                         ? `Batch ${parsedBatchYear} has not commenced yet. Current freshman session is Batch 2026.`
