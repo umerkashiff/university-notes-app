@@ -410,7 +410,7 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
                   onChange={e => setName(e.target.value)} 
                   type="text" 
                   className="field-input text-sm" 
-                  placeholder="e.g. Umer Kashif"
+                  placeholder="e.g. John Doe"
                   disabled={loading}
                 />
               </label>
