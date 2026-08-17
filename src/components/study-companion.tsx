@@ -757,7 +757,7 @@ function SettingsPage({
 
           <div className="text-sm leading-relaxed text-muted-foreground space-y-2.5 font-normal">
             <p>
-              Hi, I'm <strong className="text-foreground font-semibold">Umer (2025-CE-94)</strong>.
+              Hi, I'm <strong className="text-foreground font-semibold">Umer (Batch 2025)</strong>.
             </p>
             <p>
               I have started Semstack as an independent crowdsourcing platform where seniors can easily share quality notes, past papers, and study resources to guide and help their juniors succeed.
