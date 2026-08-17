@@ -1143,7 +1143,7 @@ function Login({
                 onChange={e => setIdentity(e.target.value)} 
                 type="email" 
                 className="field-input" 
-                placeholder="student@uet.edu"
+                placeholder="johndoe@example.com"
                 disabled={loading}
               />
             </label>
@@ -1248,7 +1248,7 @@ function Login({
                     type="email"
                     value={forgotEmail}
                     onChange={e => setForgotEmail(e.target.value)}
-                    placeholder="student@uet.edu"
+                    placeholder="johndoe@example.com"
                     className="field-input"
                     disabled={forgotLoading}
                   />

@@ -441,7 +441,7 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
                   onChange={e => setEmail(e.target.value)} 
                   type="email" 
                   className="field-input text-sm" 
-                  placeholder="name@gmail.com"
+                  placeholder="johndoe@example.com"
                   disabled={loading}
                 />
               </label>
