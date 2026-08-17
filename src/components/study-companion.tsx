@@ -478,8 +478,8 @@ export function StudyCompanion({
                 <h1 className="text-balance text-4xl font-semibold tracking-[-.04em] md:text-5xl">{title}</h1>
               </div>
             </div>
-            <AnimatePresence initial={false}>
-              <motion.div key={screen} initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-6}} transition={{duration:0.18, ease: "easeOut"}} className="w-full transform-gpu fm-gpu">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div key={screen} initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-6}} transition={{duration:0.15, ease: "easeOut"}} className="w-full transform-gpu fm-gpu">
                 {screen==='saved'&&<SavedNotes notes={notes} subjects={subjectsList} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader}/>} 
                 {screen==='semesters'&&<SemesterLibrary user={user} role={role} subjects={subjectsList} notes={notes} select={(n)=>{setSelectedSemester(n);setScreen('subject')}}/>} 
                 {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')}/>} 
@@ -509,12 +509,12 @@ export function StudyCompanion({
 }
 
 function Nav({active,onClick,children,layoutId="nav-pill"}:{active:boolean,onClick:()=>void,children:React.ReactNode,layoutId?:string}){return <button onClick={onClick} className={`relative px-5 py-2 text-sm transition-colors rounded-full ${active?'text-foreground font-semibold':'text-muted-foreground hover:text-foreground'}`}>
-  {active && <motion.div layoutId={layoutId} className="absolute inset-0 bg-background shadow-sm rounded-full z-0" transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />}
+  {active && <motion.div layoutId={layoutId} className="absolute inset-0 bg-background shadow-sm rounded-full z-0" transition={{ type: "spring", stiffness: 500, damping: 35 }} />}
   <span className="relative z-10">{children}</span>
 </button>}
 
 function Mobile({active,onClick,icon,children}:{active:boolean,onClick:()=>void,icon:React.ReactNode,children:React.ReactNode}){return <button onClick={onClick} className={`relative flex min-w-14 flex-col items-center gap-1 rounded-full px-3 py-2 text-[10px] transition-colors ${active?'text-foreground':'text-muted-foreground hover:text-foreground'}`}>
-  {active && <motion.div layoutId="mobile-nav-pill" className="absolute inset-0 bg-secondary rounded-full z-0" transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />}
+  {active && <motion.div layoutId="mobile-nav-pill" className="absolute inset-0 bg-secondary rounded-full z-0" transition={{ type: "spring", stiffness: 500, damping: 35 }} />}
   <span className="relative z-10 flex flex-col items-center gap-1">{icon}<span>{children}</span></span>
 </button>}
 
@@ -1867,8 +1867,8 @@ function Notifications({alerts,setAlerts,user}:{alerts:any[],setAlerts:(a:any[])
       </div>
 
       <div className="flex flex-col gap-3">
-        <AnimatePresence initial={false}>
-          <motion.div key={filter} initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-6}} transition={{duration:0.15, ease: "easeOut"}} className="flex flex-col gap-3 transform-gpu">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div key={filter} initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-6}} transition={{duration:0.14, ease: "easeOut"}} className="flex flex-col gap-3 transform-gpu">
             {shown.length === 0 ? (
               <div className="py-16 text-center text-muted-foreground border rounded-3xl border-dashed bg-card/40">
                 <Bell size={32} className="mx-auto mb-2 opacity-30"/>
@@ -2875,8 +2875,8 @@ function AdminCms({
     </div>
   </div>
 
-  <AnimatePresence initial={false}>
-    <motion.div key={tab} initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-6}} transition={{duration:0.15, ease: "easeOut"}} className="transform-gpu">
+  <AnimatePresence mode="wait" initial={false}>
+    <motion.div key={tab} initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-6}} transition={{duration:0.14, ease: "easeOut"}} className="transform-gpu">
       
       {/* Student Requests & Reports tab */}
       {tab==='requests'&&<RequestsManager onRefreshCount={fetchPendingUserCount} />}
@@ -3071,7 +3071,7 @@ function AdminCms({
                   : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
               }`}
             >
-              {curriculumSem === sem && <motion.div layoutId="curriculum-sem-pill" className="absolute inset-0 bg-primary rounded-full z-0 shadow-sm" transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />}
+              {curriculumSem === sem && <motion.div layoutId="curriculum-sem-pill" className="absolute inset-0 bg-primary rounded-full z-0 shadow-sm" transition={{ type: "spring", stiffness: 500, damping: 35 }} />}
               <span className="relative z-10">Semester {sem}</span>
             </button>
           ))}
@@ -3085,8 +3085,8 @@ function AdminCms({
               <span className="text-xs text-muted-foreground font-normal">{semSubjects.length} subject(s)</span>
             </h3>
 
-            <AnimatePresence initial={false}>
-              <motion.div key={curriculumSem} initial={{opacity:0, x:-6}} animate={{opacity:1, x:0}} exit={{opacity:0, x:6}} transition={{duration:0.15, ease: "easeOut"}} className="transform-gpu">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div key={curriculumSem} initial={{opacity:0, x:-6}} animate={{opacity:1, x:0}} exit={{opacity:0, x:6}} transition={{duration:0.14, ease: "easeOut"}} className="transform-gpu">
                 {semSubjects.length === 0 ? (
                   <div className="rounded-3xl border border-dashed p-8 text-center text-muted-foreground bg-card/40">
                     <GraduationCap size={28} className="mx-auto mb-2 opacity-50" />

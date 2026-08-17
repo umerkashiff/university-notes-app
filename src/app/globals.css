@@ -101,6 +101,8 @@
   html { 
     @apply bg-background; 
     -webkit-text-size-adjust: 100%;
+    scrollbar-gutter: stable;
+    overflow-y: scroll;
   }
   body { 
     @apply bg-background text-foreground font-sans; 
