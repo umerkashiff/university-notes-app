@@ -351,11 +351,10 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
             </div>
 
             <div className="rounded-2xl bg-background/70 backdrop-blur-sm p-4 border border-white/40 shadow-xs">
-              <div className="flex items-center gap-2.5 font-semibold text-sm text-foreground">
-                <Sparkles size={16} className="text-primary shrink-0" />
+              <div className="font-semibold text-sm text-foreground">
                 <span>Senior Contributor Pathway</span>
               </div>
-              <p className="text-xs text-muted-foreground mt-1 pl-6">
+              <p className="text-xs text-muted-foreground mt-1">
                 Experienced students can upload notes for semesters they've passed to support juniors.
               </p>
             </div>
