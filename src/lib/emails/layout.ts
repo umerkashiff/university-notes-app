@@ -18,7 +18,7 @@ export function wrapEmailLayout(options: {
     || 'https://semstack.vercel.app';
   
   const appUrl = rawAppUrl.replace(/\/+$/, '');
-  const logoUrl = appUrl.startsWith('http') ? `${appUrl}/final.svg?v=3` : '/final.svg?v=3';
+  const logoUrl = 'https://pub-4c28b39a02ca4952a6c31f0baf9d62e3.r2.dev/logo.png';
   const ctaUrl = ctaButton?.url?.startsWith('http') ? ctaButton.url : `${appUrl}${ctaButton?.url?.startsWith('/') ? ctaButton.url : `/${ctaButton?.url || ''}`}`;
 
   return `<!DOCTYPE html>

@@ -19,8 +19,33 @@ const DEFAULT_FROM =
   'Semstack <onboarding@resend.dev>';
 
 /**
+ * Converts rich HTML email content into clean plain text for multipart/alternative MIME emails.
+ * High-reputation transactional emails require both text and HTML versions to avoid spam classification.
+ */
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<a\s+(?:[^>]*?\s+)?href=["']([^"']*)["'][^>]*>(.*?)<\/a>/gi, '$2 ($1)')
+    .replace(/<\/(p|div|h1|h2|h3|h4|h5|h6|tr|table|li)>/gi, '\n')
+    .replace(/<br\s*[\/]?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&middot;/g, '·')
+    .replace(/&rarr;/g, '->')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#847;|&zwnj;|&shy;/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n\s*\n/g, '\n\n')
+    .trim();
+}
+
+/**
  * Send an email to one or multiple recipients with SMTP support and Resend failover pool.
- * Never throws an unhandled error so email operations never disrupt critical DB mutations.
+ * Sends multipart/alternative (HTML + Plain Text) with high-reputation headers to prevent spam flags.
  */
 export async function sendEmail(
   to: string | string[],
@@ -36,9 +61,11 @@ export async function sendEmail(
       return { success: false, error: 'No recipient email specified' };
     }
 
+    const plainText = htmlToPlainText(html);
     const smtpTransporter = getSmtpTransporter();
+    const replyToAddress = process.env.SMTP_USER || 'umerkashhif@gmail.com';
 
-    // 1. Try sending via Gmail SMTP if configured (Works with ANY recipient worldwide)
+    // 1. Try sending via Gmail SMTP if configured (Direct delivery to any recipient)
     if (smtpTransporter) {
       try {
         const fromAddress = DEFAULT_FROM;
@@ -47,8 +74,16 @@ export async function sendEmail(
           await smtpTransporter.sendMail({
             from: fromAddress,
             to: recipient,
+            replyTo: replyToAddress,
             subject,
+            text: plainText,
             html,
+            headers: {
+              'X-Entity-Ref-ID': `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              'X-Auto-Response-Suppress': 'OOF, AutoReply',
+              'Feedback-ID': 'semstack:academic:uet',
+              'List-Unsubscribe': `<mailto:${replyToAddress}?subject=unsubscribe>`,
+            }
           });
         }
 
@@ -65,7 +100,9 @@ export async function sendEmail(
           return await resend.emails.send({
             from: DEFAULT_FROM,
             to: recipient,
+            replyTo: replyToAddress,
             subject,
+            text: plainText,
             html,
           });
         });
@@ -85,7 +122,9 @@ export async function sendEmail(
       const batchPayload = chunk.map(r => ({
         from: DEFAULT_FROM,
         to: r,
+        reply_to: replyToAddress,
         subject,
+        text: plainText,
         html,
       }));
 
