@@ -4051,7 +4051,7 @@ function AdminUsersManager() {
                               </span>
                             )}
                             {u.heldBack && (
-                              <span className="text-xs bg-destructive/10 text-destructive font-medium px-2.5 py-1 rounded-full border border-destructive/20 flex items-center gap-1">
+                              <span className="text-xs bg-amber-500/10 text-amber-700 dark:text-amber-300 font-medium px-2.5 py-1 rounded-full border border-amber-500/20 flex items-center gap-1">
                                 <Warning size={13} /> Re-take
                               </span>
                             )}
@@ -4120,14 +4120,15 @@ function AdminUsersManager() {
                             type="button"
                             disabled={isRunning}
                             onClick={() => handleToggleHoldBack(u.id)}
-                            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer border ${
+                            className={`h-9 px-3.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border flex items-center gap-1.5 ${
                               u.heldBack 
-                                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30' 
-                                : 'bg-secondary text-muted-foreground hover:text-foreground border-transparent'
+                                ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/15' 
+                                : 'bg-background hover:bg-secondary text-muted-foreground hover:text-foreground border-border/60'
                             }`}
                             title="Toggle re-take hold-back state to prevent auto-advancing when terms change"
                           >
-                            {u.heldBack ? 'Held Back (Re-take)' : 'Hold Back'}
+                            <Clock size={13} className={u.heldBack ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'} />
+                            <span>{u.heldBack ? 'Held Back' : 'Hold Back'}</span>
                           </button>
                         </>
                       ) : (
