@@ -88,7 +88,7 @@ export async function createNote(data: {
           pages: data.pages,
           fileSize: data.size
         })
-        sendEmail(admins.map(a => a.email), emailSubj, html).catch(() => {})
+        await sendEmail(admins.map(a => a.email), emailSubj, html)
       }
     } catch (e) {
       console.warn('Failed to send admin email alert for new note submission:', e)
@@ -160,7 +160,7 @@ export async function publishNote(noteId: string) {
           subjectName: note.subject.name,
           subjectCode: note.subject.code
         })
-        sendEmail(existing.author.email, emailSubj, html).catch(() => {})
+        await sendEmail(existing.author.email, emailSubj, html)
       } catch (e) {
         console.warn('Failed to send note published email to author:', e)
       }
@@ -235,7 +235,7 @@ export async function updateNote(data: {
             subjectName: updated.subject.name,
             subjectCode: updated.subject.code
           })
-          sendEmail(existing.author.email, emailSubj, html).catch(() => {})
+          await sendEmail(existing.author.email, emailSubj, html)
         } catch (e) {
           console.warn('Failed to send note published email to author:', e)
         }
@@ -285,7 +285,7 @@ export async function createSubject(data: {
 export async function deleteNote(noteId: string, rejectionReason?: string) {
   const user = await getCurrentUser()
   if (!user || user.role !== 'ADMIN') {
-    return { error: 'Unauthorized. Only admins can delete notes.' }
+    return { error: 'Unauthorized. Only administrators can reject or delete notes.' }
   }
 
   try {
@@ -306,7 +306,7 @@ export async function deleteNote(noteId: string, rejectionReason?: string) {
           subjectCode: note.subject?.code,
           reason: rejectionReason
         })
-        sendEmail(note.author.email, emailSubj, html).catch(() => {})
+        await sendEmail(note.author.email, emailSubj, html)
       } catch (e) {
         console.warn('Failed to send note rejection email to author:', e)
       }

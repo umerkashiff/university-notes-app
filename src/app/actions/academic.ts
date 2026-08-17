@@ -257,7 +257,7 @@ export async function advanceSemestersForPeriod(
                 name: grad.name,
                 batchYear: bm.batchYear
               })
-              sendEmail(grad.email, subject, html).catch(() => {})
+              await sendEmail(grad.email, subject, html)
             }
           }
         } catch (e) {
@@ -306,7 +306,7 @@ export async function advanceSemestersForPeriod(
                 toSem: nextSem,
                 periodName: period.name
               })
-              sendEmail(st.email, subject, html).catch(() => {})
+              await sendEmail(st.email, subject, html)
             }
           }
         } catch (e) {

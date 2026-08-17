@@ -210,16 +210,27 @@ export async function register(formData: FormData) {
       }
     })
 
-    // Email notification to all active administrators
+    // Email notifications (To student & to administrators)
     try {
+      const { newRegistrationAlertEmail, registrationReceivedStudentEmail } = await import('@/lib/emails/templates')
+      const { sendEmail } = await import('@/lib/emails/send')
+
+      // 1. Send receipt confirmation to student
+      const studentEmail = registrationReceivedStudentEmail({
+        name,
+        regNumber,
+        semester: finalSemester,
+        section
+      })
+      await sendEmail(email, studentEmail.subject, studentEmail.html)
+
+      // 2. Send notification to active administrators
       const admins = await prisma.user.findMany({
         where: { role: 'ADMIN', status: 'ACTIVE' },
         select: { email: true }
       })
       if (admins.length > 0) {
-        const { newRegistrationAlertEmail } = await import('@/lib/emails/templates')
-        const { sendEmail } = await import('@/lib/emails/send')
-        const { subject, html } = newRegistrationAlertEmail({
+        const adminEmail = newRegistrationAlertEmail({
           name,
           regNumber,
           semester: finalSemester,
@@ -227,10 +238,10 @@ export async function register(formData: FormData) {
           email,
           section
         })
-        sendEmail(admins.map(a => a.email), subject, html).catch(() => {})
+        await sendEmail(admins.map(a => a.email), adminEmail.subject, adminEmail.html)
       }
     } catch (e) {
-      console.warn('Failed to send admin email alert for new registration:', e)
+      console.warn('Failed to send registration email alerts:', e)
     }
 
     return { success: true, user: newUser }

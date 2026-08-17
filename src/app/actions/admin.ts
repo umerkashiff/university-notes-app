@@ -78,7 +78,7 @@ export async function approveUser(
       role: updatedUser.role,
       semester: updatedUser.semester
     })
-    sendEmail(updatedUser.email, subject, html).catch(() => {})
+    await sendEmail(updatedUser.email, subject, html)
   } catch (e) {
     console.warn('Failed to send account approval email:', e)
   }
@@ -110,7 +110,7 @@ export async function rejectUser(userId: string, reason?: string) {
       name: updatedUser.name,
       reason: updatedUser.rejectionReason
     })
-    sendEmail(updatedUser.email, subject, html).catch(() => {})
+    await sendEmail(updatedUser.email, subject, html)
   } catch (e) {
     console.warn('Failed to send account rejection email:', e)
   }
@@ -161,7 +161,7 @@ export async function changeUserRole(userId: string, role: 'STUDENT' | 'SENIOR' 
         name: updatedUser.name,
         newRole: 'Note Contributor'
       })
-      sendEmail(updatedUser.email, subject, html).catch(() => {})
+      await sendEmail(updatedUser.email, subject, html)
     } catch (e) {
       console.warn('Failed to send promotion email:', e)
     }

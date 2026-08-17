@@ -466,3 +466,54 @@ export function passwordResetEmail(options: {
   };
 }
 
+// 12. Registration Received (To Student)
+export function registrationReceivedStudentEmail(options: {
+  name: string;
+  regNumber: string;
+  semester: number;
+  section?: string | null;
+}) {
+  const firstName = options.name ? options.name.split(' ')[0] : 'Student';
+
+  const contentHtml = `
+    <p style="margin: 0 0 14px 0;">
+      Hello <strong>${firstName}</strong>,
+    </p>
+    <p style="margin: 0 0 14px 0;">
+      Thank you for registering on <strong>Semstack</strong>. Your account application has been received and is currently in the verification queue for department administrators.
+    </p>
+    <p style="margin: 0;">
+      Once an administrator verifies your registration number against the departmental roster, you will receive an activation email granting full access to course materials, lecture notes, and announcements.
+    </p>
+  `;
+
+  const secondaryInfoHtml = `
+    <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
+      <tr>
+        <td style="padding: 4px 0; color: #787a80;">Registration No:</td>
+        <td align="right" style="font-weight: 700; color: #252629; font-family: monospace;">${options.regNumber}</td>
+      </tr>
+      <tr>
+        <td style="padding: 4px 0; color: #787a80;">Assigned Cohort:</td>
+        <td align="right" style="font-weight: 700; color: #252629;">Semester ${options.semester} (${options.section || 'A'})</td>
+      </tr>
+      <tr>
+        <td style="padding: 4px 0; color: #787a80;">Status:</td>
+        <td align="right" style="font-weight: 700; color: #d97706;">Pending Verification</td>
+      </tr>
+    </table>
+  `;
+
+  return {
+    subject: `Application Received — Semstack (${options.regNumber})`,
+    html: wrapEmailLayout({
+      previewText: `Your registration for Semester ${options.semester} is pending review by administrators.`,
+      title: `Registration Received`,
+      badge: { text: `Pending Verification`, bg: '#fef3c7', color: '#78350f' },
+      contentHtml,
+      secondaryInfoHtml
+    })
+  };
+}
+
+
