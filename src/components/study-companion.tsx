@@ -2431,6 +2431,97 @@ interface StagedUploadItem {
   error?: string
 }
 
+function CustomSelectDropdown<T extends string | number>({
+  value,
+  onChange,
+  options,
+  placeholder = 'Select',
+  className = '',
+  buttonClassName = '',
+  menuClassName = '',
+  align = 'left'
+}: {
+  value: T;
+  onChange: (val: T) => void;
+  options: Array<{ value: T; label: string }>;
+  placeholder?: string;
+  className?: string;
+  buttonClassName?: string;
+  menuClassName?: string;
+  align?: 'left' | 'right';
+}) {
+  const [open, setOpen] = useState(false);
+  const isTouch = useIsTouch();
+  const selected = options.find(o => o.value === value);
+
+  return (
+    <div className={`relative min-w-0 ${className}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`flex h-10 w-full items-center justify-between rounded-xl border border-border bg-background px-3 text-xs font-medium focus:border-foreground transition-colors text-left cursor-pointer hover:border-foreground/40 select-none ${buttonClassName}`}
+      >
+        <span className="truncate mr-1.5">{selected ? selected.label : placeholder}</span>
+        <CaretDown size={14} weight="bold" className={`text-muted-foreground transition-transform shrink-0 ml-1 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isTouch ? (
+        <>
+          {open && <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />}
+          <MobilePresence show={open} type="dropdown" className={`absolute top-[calc(100%+6px)] ${align === 'right' ? 'right-0' : 'left-0'} min-w-full w-max max-w-[280px] z-50 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl ${menuClassName}`}>
+            <div data-lenis-prevent="true" className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1" style={{ overscrollBehavior: 'contain' }}>
+              {options.map(opt => (
+                <button
+                  key={String(opt.value)}
+                  type="button"
+                  onClick={() => { onChange(opt.value); setOpen(false); }}
+                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition-colors cursor-pointer ${
+                    opt.value === value ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                  }`}
+                >
+                  <span className="truncate mr-2">{opt.label}</span>
+                  {opt.value === value && <Check size={14} weight="bold" className="text-primary shrink-0" />}
+                </button>
+              ))}
+            </div>
+          </MobilePresence>
+        </>
+      ) : (
+        <AnimatePresence>
+          {open && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+              <motion.div
+                initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                transition={{ duration: 0.12 }}
+                className={`absolute top-[calc(100%+6px)] ${align === 'right' ? 'right-0' : 'left-0'} min-w-full w-max max-w-[280px] z-50 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl fm-gpu ${menuClassName}`}
+              >
+                <div data-lenis-prevent="true" className="max-h-48 overflow-y-auto overscroll-contain dropdown-scroll flex flex-col gap-1 pr-1" style={{ overscrollBehavior: 'contain' }}>
+                  {options.map(opt => (
+                    <button
+                      key={String(opt.value)}
+                      type="button"
+                      onClick={() => { onChange(opt.value); setOpen(false); }}
+                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition-colors cursor-pointer ${
+                        opt.value === value ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                      }`}
+                    >
+                      <span className="truncate mr-2">{opt.label}</span>
+                      {opt.value === value && <Check size={14} weight="bold" className="text-primary shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+      )}
+    </div>
+  );
+}
+
 function ContributorDesk({
   user,
   add,
@@ -2926,53 +3017,42 @@ function ContributorDesk({
                       <span className="text-xs font-bold uppercase tracking-wider text-primary">Quick Apply to All Files</span>
                       <span className="text-xs text-muted-foreground">{stagedFiles.length} files staged</span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-[110px_1fr_130px_auto] gap-2.5 items-center">
-                      <select
-                        value={selectedSemester}
-                        onChange={e => {
-                          const sem = Number(e.target.value);
-                          setSelectedSemester(sem);
-                          const subs = subjects.filter(s => s.semester === sem);
-                          setSubjectCode(subs[0]?.code || '');
-                        }}
-                        className="h-10 rounded-xl border bg-background px-3 text-xs font-semibold focus:border-foreground"
-                      >
-                        {allowedSemesters.map(s => (
-                          <option key={s} value={s}>Sem {s}</option>
-                        ))}
-                      </select>
+                    <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
+                      <div className="grid grid-cols-1 sm:grid-cols-[100px_1fr_135px] gap-2 flex-1 min-w-0">
+                        <CustomSelectDropdown
+                          value={selectedSemester}
+                          onChange={sem => {
+                            const targetSem = Number(sem);
+                            setSelectedSemester(targetSem);
+                            const subs = subjects.filter(s => s.semester === targetSem);
+                            setSubjectCode(subs[0]?.code || '');
+                          }}
+                          options={allowedSemesters.map(s => ({ value: s, label: `Sem ${s}` }))}
+                        />
 
-                      <select
-                        value={subjectCode}
-                        onChange={e => setSubjectCode(e.target.value)}
-                        className="h-10 rounded-xl border bg-background px-3 text-xs font-medium focus:border-foreground truncate"
-                      >
-                        {semesterSubjects.length === 0 ? (
-                          <option value="">No subjects in Sem {selectedSemester}</option>
-                        ) : (
-                          semesterSubjects.map(s => (
-                            <option key={s.code} value={s.code}>{s.name} ({s.code})</option>
-                          ))
-                        )}
-                      </select>
+                        <CustomSelectDropdown
+                          value={subjectCode}
+                          onChange={code => setSubjectCode(String(code))}
+                          options={semesterSubjects.length === 0 ? [{ value: '', label: `No subjects in Sem ${selectedSemester}` }] : semesterSubjects.map(s => ({ value: s.code, label: `${s.name} (${s.code})` }))}
+                          placeholder="Select subject"
+                        />
 
-                      <select
-                        value={bulkCategory}
-                        onChange={e => setBulkCategory(e.target.value)}
-                        className="h-10 rounded-xl border bg-background px-3 text-xs font-semibold focus:border-foreground"
-                      >
-                        {NOTE_CATEGORIES.map(cat => (
-                          <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                      </select>
+                        <CustomSelectDropdown
+                          value={bulkCategory}
+                          onChange={cat => setBulkCategory(String(cat))}
+                          options={NOTE_CATEGORIES.map(cat => ({ value: cat, label: cat }))}
+                          align="right"
+                        />
+                      </div>
 
                       <button
                         type="button"
                         onClick={() => applyBatchSettingsToAll(selectedSemester, subjectCode, bulkCategory)}
                         disabled={!subjectCode || semesterSubjects.length === 0}
-                        className="h-10 px-4 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap"
+                        className="h-10 px-4 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap shrink-0 cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                       >
-                        Apply to All
+                        <Check size={14} weight="bold" />
+                        <span>Apply to All</span>
                       </button>
                     </div>
                   </div>
@@ -3021,50 +3101,34 @@ function ContributorDesk({
                           />
 
                           {/* Semester, Subject & Category Selectors */}
-                          <div className="grid grid-cols-1 sm:grid-cols-[100px_1fr_130px] gap-2">
-                            <select
+                          <div className="grid grid-cols-1 sm:grid-cols-[100px_1fr_135px] gap-2">
+                            <CustomSelectDropdown
                               value={item.semester}
-                              onChange={e => {
-                                const sem = Number(e.target.value);
-                                const subs = subjects.filter(s => s.semester === sem);
-                                setStagedFiles(prev => prev.map((it, i) => i === idx ? { ...it, semester: sem, subjectCode: subs[0]?.code || '' } : it));
+                              onChange={sem => {
+                                const targetSem = Number(sem);
+                                const subs = subjects.filter(s => s.semester === targetSem);
+                                setStagedFiles(prev => prev.map((it, i) => i === idx ? { ...it, semester: targetSem, subjectCode: subs[0]?.code || '' } : it));
                               }}
-                              className="h-9 rounded-xl border bg-background px-2.5 text-xs font-semibold focus:border-foreground"
-                            >
-                              {allowedSemesters.map(s => (
-                                <option key={s} value={s}>Sem {s}</option>
-                              ))}
-                            </select>
+                              options={allowedSemesters.map(s => ({ value: s, label: `Sem ${s}` }))}
+                            />
 
-                            <select
+                            <CustomSelectDropdown
                               value={item.subjectCode}
-                              onChange={e => {
-                                const code = e.target.value;
-                                setStagedFiles(prev => prev.map((it, i) => i === idx ? { ...it, subjectCode: code } : it));
+                              onChange={code => {
+                                setStagedFiles(prev => prev.map((it, i) => i === idx ? { ...it, subjectCode: String(code) } : it));
                               }}
-                              className="h-9 rounded-xl border bg-background px-2.5 text-xs font-medium focus:border-foreground truncate"
-                            >
-                              {itemSemSubjects.length === 0 ? (
-                                <option value="">No subjects in Sem {item.semester}</option>
-                              ) : (
-                                itemSemSubjects.map(s => (
-                                  <option key={s.code} value={s.code}>{s.name} ({s.code})</option>
-                                ))
-                              )}
-                            </select>
+                              options={itemSemSubjects.length === 0 ? [{ value: '', label: `No subjects in Sem ${item.semester}` }] : itemSemSubjects.map(s => ({ value: s.code, label: `${s.name} (${s.code})` }))}
+                              placeholder="Select subject"
+                            />
 
-                            <select
+                            <CustomSelectDropdown
                               value={item.category || 'Notes'}
-                              onChange={e => {
-                                const cat = e.target.value;
-                                setStagedFiles(prev => prev.map((it, i) => i === idx ? { ...it, category: cat } : it));
+                              onChange={cat => {
+                                setStagedFiles(prev => prev.map((it, i) => i === idx ? { ...it, category: String(cat) } : it));
                               }}
-                              className="h-9 rounded-xl border bg-background px-2.5 text-xs font-medium focus:border-foreground"
-                            >
-                              {NOTE_CATEGORIES.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
-                              ))}
-                            </select>
+                              options={NOTE_CATEGORIES.map(cat => ({ value: cat, label: cat }))}
+                              align="right"
+                            />
                           </div>
 
                           {/* Optional Senior Advice per item */}
