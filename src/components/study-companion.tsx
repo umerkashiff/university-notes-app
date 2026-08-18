@@ -52,6 +52,30 @@ export function autoDetectCategory(titleOrPath: string): NoteCategory {
   return 'Notes';
 }
 
+const NOTIF_STORAGE_KEY_PREFIX = 'semstack_read_notifs_';
+
+export function getReadNotifIds(userId?: string): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const key = `${NOTIF_STORAGE_KEY_PREFIX}${userId || 'guest'}`;
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return new Set(arr.map(String));
+    }
+  } catch (e) {}
+  return new Set();
+}
+
+export function saveReadNotifIds(ids: Set<string> | string[], userId?: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const key = `${NOTIF_STORAGE_KEY_PREFIX}${userId || 'guest'}`;
+    const arr = Array.from(ids).map(String);
+    localStorage.setItem(key, JSON.stringify(arr));
+  } catch (e) {}
+}
+
 type Role = 'student' | 'senior' | 'admin'
 type Screen = 'semesters' | 'subject' | 'notifications' | 'submissions' | 'cms' | 'saved' | 'settings'
 type SubjectItem = { id:string; name:string; code:string; semester:number }
@@ -227,8 +251,41 @@ export function StudyCompanion({
   }
 
   const [notes, setNotes] = useState<Note[]>(() => (initialNotes && initialNotes.length > 0) ? initialNotes.map(mapNote) : [])
-  const [alerts, setAlerts] = useState<any[]>(() => (initialAnnouncements && initialAnnouncements.length > 0) ? initialAnnouncements.map(mapAlert) : [])
+  const [alerts, setAlerts] = useState<any[]>(() => {
+    if (!initialAnnouncements || initialAnnouncements.length === 0) return [];
+    return initialAnnouncements.map(mapAlert);
+  });
   const [subjectsList, setSubjectsList] = useState<SubjectItem[]>(() => (initialSubjects && initialSubjects.length > 0) ? initialSubjects : [])
+
+  // Hydrate persistent read state from localStorage on mount & when user changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const readIds = getReadNotifIds(user?.id);
+    if (readIds.size > 0) {
+      setAlerts(prev => prev.map(a => readIds.has(String(a.id)) ? { ...a, unread: false } : a));
+    }
+  }, [user?.id]);
+
+  const markNotifRead = (notifId: string | number) => {
+    const idStr = String(notifId);
+    setAlerts(prev => {
+      const updated = prev.map(x => String(x.id) === idStr ? { ...x, unread: false } : x);
+      const readIds = getReadNotifIds(user?.id);
+      readIds.add(idStr);
+      saveReadNotifIds(readIds, user?.id);
+      return updated;
+    });
+  };
+
+  const markAllNotifsRead = () => {
+    setAlerts(prev => {
+      const updated = prev.map(a => ({ ...a, unread: false }));
+      const readIds = getReadNotifIds(user?.id);
+      prev.forEach(a => readIds.add(String(a.id)));
+      saveReadNotifIds(readIds, user?.id);
+      return updated;
+    });
+  };
 
   const [selectedSemester,setSelectedSemester]=useState(1)
   const [query,setQuery]=useState('')
@@ -361,7 +418,7 @@ export function StudyCompanion({
                 {screen==='saved'&&<SavedNotes notes={notes} subjects={subjectsList} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader}/>}
                 {screen==='semesters'&&<SemesterLibrary user={user} role={role} subjects={subjectsList} notes={notes} select={(n)=>{setSelectedSemester(n);setScreen('subject')}}/>}
                 {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')}/>}
-                {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts} user={user}/>}
+                {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts} user={user} onMarkRead={markNotifRead} onMarkAllRead={markAllNotifsRead}/>}
                 {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])} onNavigateToSettings={()=>setScreen('settings')}/>}
                 {screen==='cms'&&role==='admin'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} alerts={alerts} setAlerts={setAlerts} publish={(note)=>{setNotes(notes.map(n=>n.id===note.id?{...n,status:'PUBLISHED'}:n));setAlerts([{id:Date.now(),audience:note.subject||'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a),...alerts])}/>}
                 {screen==='settings'&&<SettingsPage user={user} theme={theme} onChangeTheme={changeTheme} onLogout={handleLogout} onNavigate={setScreen} isLoggingOut={isLoggingOut}/>}
@@ -523,7 +580,7 @@ export function StudyCompanion({
                 {screen==='saved'&&<SavedNotes notes={notes} subjects={subjectsList} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader}/>} 
                 {screen==='semesters'&&<SemesterLibrary user={user} role={role} subjects={subjectsList} notes={notes} select={(n)=>{setSelectedSemester(n);setScreen('subject')}}/>} 
                 {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')}/>} 
-                {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts} user={user}/>} 
+                {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts} user={user} onMarkRead={markNotifRead} onMarkAllRead={markAllNotifsRead}/>} 
                 {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])} onNavigateToSettings={()=>setScreen('settings')}/>} 
                 {screen==='cms'&&role==='admin'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} alerts={alerts} setAlerts={setAlerts} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),audience: note.subject || 'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
                 {screen==='settings'&&<SettingsPage user={user} theme={theme} onChangeTheme={changeTheme} onLogout={handleLogout} onNavigate={setScreen} isLoggingOut={isLoggingOut}/>}
@@ -1971,7 +2028,19 @@ function NoteRow({
 
 function downloadNote(note:Note){const blob=new Blob([`${note.title}\n${note.subject}\nShared on Semstack by ${note.author}`],{type:'text/plain'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${note.title}.txt`;a.click();URL.revokeObjectURL(url)}
 
-function Notifications({alerts,setAlerts,user}:{alerts:any[],setAlerts:(a:any[])=>void,user:PrismaUser|null}){
+function Notifications({
+  alerts,
+  setAlerts,
+  user,
+  onMarkRead,
+  onMarkAllRead
+}:{
+  alerts: any[],
+  setAlerts: (a: any[]) => void,
+  user: PrismaUser | null,
+  onMarkRead?: (id: string | number) => void,
+  onMarkAllRead?: () => void
+}){
   const isTouch = useIsTouch()
   const [filter, setFilter] = useState<'dept' | 'app' | 'all' | 'unread'>('dept')
 
@@ -2025,7 +2094,10 @@ function Notifications({alerts,setAlerts,user}:{alerts:any[],setAlerts:(a:any[])
           </Nav>
         </div>
         {baseFiltered.some(a => a.unread) && (
-          <button onClick={()=>setAlerts(alerts.map(a=>({...a,unread:false})))} className="text-sm underline underline-offset-4 text-muted-foreground hover:text-foreground cursor-pointer shrink-0">
+          <button 
+            onClick={() => onMarkAllRead ? onMarkAllRead() : setAlerts(alerts.map(a => ({ ...a, unread: false })))} 
+            className="text-sm underline underline-offset-4 text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
+          >
             Mark all read
           </button>
         )}
@@ -2048,7 +2120,7 @@ function Notifications({alerts,setAlerts,user}:{alerts:any[],setAlerts:(a:any[])
               shown.map(a => (
                 <button 
                   key={a.id} 
-                  onClick={()=>setAlerts(alerts.map(x=>x.id===a.id?{...x,unread:false}:x))} 
+                  onClick={() => onMarkRead ? onMarkRead(a.id) : setAlerts(alerts.map(x => x.id === a.id ? { ...x, unread: false } : x))} 
                   className="flex gap-4 rounded-3xl border bg-card p-5 text-left transition hover:shadow-sm hover:border-primary/30 cursor-pointer"
                 >
                   <span className="mt-1 flex size-10 shrink-0 items-center justify-center rounded-2xl bg-secondary text-foreground">
@@ -2102,7 +2174,7 @@ function Notifications({alerts,setAlerts,user}:{alerts:any[],setAlerts:(a:any[])
                 shown.map(a => (
                   <button 
                     key={a.id} 
-                    onClick={()=>setAlerts(alerts.map(x=>x.id===a.id?{...x,unread:false}:x))} 
+                    onClick={() => onMarkRead ? onMarkRead(a.id) : setAlerts(alerts.map(x => x.id === a.id ? { ...x, unread: false } : x))} 
                     className="flex gap-4 rounded-3xl border bg-card p-5 text-left transition hover:shadow-sm hover:border-primary/30 cursor-pointer"
                   >
                     <span className="mt-1 flex size-10 shrink-0 items-center justify-center rounded-2xl bg-secondary text-foreground">
