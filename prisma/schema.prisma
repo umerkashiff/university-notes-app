@@ -82,6 +82,7 @@ model Note {
   tone        String   @default("bg-sage")
   downloads   Int      @default(0)
   orderIndex  Int      @default(0)
+  category    String   @default("Notes") // Notes, Past Papers, Slides & Books, Solutions & Assignments
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

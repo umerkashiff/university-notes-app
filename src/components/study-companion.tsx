@@ -30,10 +30,48 @@ const LightTunnel = dynamic(() => import('@/components/light-tunnel'), {
   ssr: false
 })
 
+export const NOTE_CATEGORIES = [
+  'Notes',
+  'Past Papers',
+  'Slides & Books',
+  'Solutions & Assignments'
+] as const;
+export type NoteCategory = typeof NOTE_CATEGORIES[number];
+
+export function autoDetectCategory(titleOrPath: string): NoteCategory {
+  const lower = titleOrPath.toLowerCase();
+  if (/(?:past\s*paper|midterm|mid\b|final\b|quiz|exam\s*paper|exam\s*sol)/i.test(lower)) {
+    return 'Past Papers';
+  }
+  if (/(?:solution|assignment|homework|hw\b|task|lab\s*task)/i.test(lower)) {
+    return 'Solutions & Assignments';
+  }
+  if (/(?:slide|slides|presentation|ppt|pptx|textbook|book\b|reference)/i.test(lower)) {
+    return 'Slides & Books';
+  }
+  return 'Notes';
+}
+
 type Role = 'student' | 'senior' | 'admin'
 type Screen = 'semesters' | 'subject' | 'notifications' | 'submissions' | 'cms' | 'saved' | 'settings'
 type SubjectItem = { id:string; name:string; code:string; semester:number }
-type Note = { id:string|number; authorId?:string; fileUrl?:string; status?:string; title:string; subject:string; code:string; author:string; date:string; pages:number; size:string; tone:string; description?:string }
+type Note = { 
+  id: string | number; 
+  authorId?: string; 
+  fileUrl?: string; 
+  status?: string; 
+  title: string; 
+  subject: string; 
+  code: string; 
+  author: string; 
+  date: string; 
+  pages: number; 
+  size: string; 
+  tone: string; 
+  description?: string;
+  category?: string;
+  orderIndex?: number;
+}
 
 const SEMESTER_COLORS = [
   'bg-sage',      // Sem 1 (Soft green)
@@ -158,7 +196,9 @@ export function StudyCompanion({
     tone: n.tone || 'bg-sage',
     status: n.status || 'PUBLISHED',
     fileUrl: n.fileUrl,
-    description: n.description || undefined
+    description: n.description || undefined,
+    category: n.category || 'Notes',
+    orderIndex: n.orderIndex ?? 0
   })
   
   const mapAlert = (a: any) => {
@@ -1542,25 +1582,29 @@ function SubjectLibrary({
   const isTouch = useIsTouch()
   const semSubjects = useMemo(() => subjects.filter(s => s.semester === semester), [subjects, semester])
   const [selectedSubject, setSelectedSubject] = useState<SubjectItem | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
 
   const activeSubject = selectedSubject || semSubjects[0] || null
 
-  const list = useMemo(() => {
+  const subjectPublishedNotes = useMemo(() => {
     if (semSubjects.length === 0) return []
-
     return notes.filter(n => {
       if (n.status && n.status !== 'PUBLISHED') return false
       if (activeSubject) {
-        const matches = n.code === activeSubject.code || n.subject === activeSubject.name
-        if (!matches) return false
-      } else {
-        const isThisSem = semSubjects.some(s => s.code === n.code || s.name === n.subject)
-        if (!isThisSem) return false
+        return n.code === activeSubject.code || n.subject === activeSubject.name
       }
-      const q = query.toLowerCase()
-      return !q || `${n.title} ${n.author} ${n.subject} ${n.code}`.toLowerCase().includes(q)
+      return semSubjects.some(s => s.code === n.code || s.name === n.subject)
     })
-  }, [notes, activeSubject, semSubjects, query])
+  }, [notes, activeSubject, semSubjects])
+
+  const list = useMemo(() => {
+    return subjectPublishedNotes.filter(n => {
+      const matchesCategory = selectedCategory === 'all' || (n.category || 'Notes') === selectedCategory
+      if (!matchesCategory) return false
+      const q = query.toLowerCase()
+      return !q || `${n.title} ${n.author} ${n.subject} ${n.code} ${n.category || ''}`.toLowerCase().includes(q)
+    })
+  }, [subjectPublishedNotes, selectedCategory, query])
 
   const tone = SEMESTER_COLORS[(semester - 1) % SEMESTER_COLORS.length]
 
@@ -1587,7 +1631,10 @@ function SubjectLibrary({
               return (
                 <button
                   key={s.code}
-                  onClick={() => setSelectedSubject(s)}
+                  onClick={() => {
+                    setSelectedSubject(s)
+                    setSelectedCategory('all')
+                  }}
                   className={`relative px-4 py-2 text-xs font-semibold rounded-full whitespace-nowrap transition-colors select-none shrink-0 ${
                     isActive
                       ? 'bg-primary text-primary-foreground shadow-xs'
@@ -1618,7 +1665,10 @@ function SubjectLibrary({
                 return (
                   <button
                     key={s.code}
-                    onClick={() => setSelectedSubject(s)}
+                    onClick={() => {
+                      setSelectedSubject(s)
+                      setSelectedCategory('all')
+                    }}
                     className={`rounded-2xl p-4 text-left text-sm transition-colors flex items-center justify-between gap-2 ${
                       isActive ? 'bg-primary text-primary-foreground font-semibold shadow-xs' : 'hover:bg-secondary text-foreground'
                     }`}
@@ -1663,6 +1713,39 @@ function SubjectLibrary({
               placeholder={activeSubject ? `Search ${activeSubject.name} notes...` : "Search notes..."}
             />
           </label>
+
+          {/* Category Filter Chips */}
+          <div className="mt-4 flex items-center gap-1.5 overflow-x-auto pb-1 modal-scroll touch-pan-x min-w-0 max-w-full">
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('all')}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
+                selectedCategory === 'all'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+              }`}
+            >
+              All ({subjectPublishedNotes.length})
+            </button>
+            {NOTE_CATEGORIES.map(cat => {
+              const count = subjectPublishedNotes.filter(n => (n.category || 'Notes') === cat).length
+              if (count === 0 && selectedCategory !== cat) return null
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
+                    selectedCategory === cat
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+                  }`}
+                >
+                  {cat} ({count})
+                </button>
+              )
+            })}
+          </div>
 
           {isTouch ? (
             <div 
@@ -1773,9 +1856,21 @@ function NoteRow({
               </button>
             )}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {note.author} · {note.date} · {semNumber ? `Semester ${semNumber} · ` : ''}{isImage ? '1 image page' : `${note.pages} pages`} · {note.size}
-          </p>
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
+            <span>{note.author}</span>
+            <span>·</span>
+            <span>{note.date}</span>
+            {note.category && (
+              <>
+                <span>·</span>
+                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-secondary text-foreground border border-border/60">
+                  {note.category}
+                </span>
+              </>
+            )}
+            <span>·</span>
+            <span>{semNumber ? `Semester ${semNumber} · ` : ''}{isImage ? '1 image page' : `${note.pages} pages`} · {note.size}</span>
+          </div>
         </div>
         <div className="flex gap-2 shrink-0 items-center">
           {toggleSave && (
@@ -2257,6 +2352,7 @@ interface StagedUploadItem {
   title: string
   semester: number
   subjectCode: string
+  category: string
   seniorAdvice: string
   status: 'idle' | 'uploading' | 'done' | 'error'
   progress: number
@@ -2288,6 +2384,8 @@ function ContributorDesk({
   const [stagedFiles, setStagedFiles] = useState<StagedUploadItem[]>([]);
   const [singleTitle, setSingleTitle] = useState('');
   const [singleAdvice, setSeniorAdvice] = useState('');
+  const [singleCategory, setSingleCategory] = useState<string>('Notes');
+  const [bulkCategory, setBulkCategory] = useState<string>('Notes');
 
   const maxSemesterCap = user?.role === 'ADMIN' ? 8 : Math.max(1, Math.min(8, user?.semester || 1));
   const allowedSemesters = useMemo(() => {
@@ -2316,6 +2414,8 @@ function ContributorDesk({
       setSelectedFile(null);
       setSingleTitle('');
       setSeniorAdvice('');
+      setSingleCategory('Notes');
+      setBulkCategory('Notes');
       setUploadProgress(0);
       setBatchProgress(0);
     }
@@ -2355,6 +2455,7 @@ function ContributorDesk({
     if (incoming.length === 0) return;
     const newItems: StagedUploadItem[] = incoming.map(item => {
       const auto = autoDetectSubjectAndSemester(item.fullPath, item.file.name, subjects, selectedSemester);
+      const detectedCat = autoDetectCategory(item.fullPath || item.file.name);
       return {
         id: `${Date.now()}-${Math.random().toString(36).substring(7)}`,
         file: item.file,
@@ -2362,6 +2463,7 @@ function ContributorDesk({
         title: formatCleanTitle(item.file.name),
         semester: auto.semester,
         subjectCode: auto.subjectCode,
+        category: detectedCat,
         seniorAdvice: '',
         status: 'idle',
         progress: 0
@@ -2375,6 +2477,7 @@ function ContributorDesk({
         setSingleTitle(combined[0].title);
         setSelectedSemester(combined[0].semester);
         setSubjectCode(combined[0].subjectCode);
+        setSingleCategory(combined[0].category || 'Notes');
         setSeniorAdvice(combined[0].seniorAdvice);
       } else {
         setSelectedFile(null);
@@ -2405,11 +2508,12 @@ function ContributorDesk({
     setIsDragOver(false);
   };
 
-  const applyBatchSettingsToAll = (targetSem: number, targetCode: string) => {
+  const applyBatchSettingsToAll = (targetSem: number, targetCode: string, targetCat?: string) => {
     setStagedFiles(prev => prev.map(item => ({
       ...item,
       semester: targetSem,
-      subjectCode: targetCode
+      subjectCode: targetCode,
+      ...(targetCat ? { category: targetCat } : {})
     })));
   };
 
@@ -2504,7 +2608,8 @@ function ContributorDesk({
         description: singleAdvice.trim() || undefined,
         fileUrl,
         pages: detectedPages,
-        size: formattedSize
+        size: formattedSize,
+        category: singleCategory || 'Notes'
       });
 
       if (res.error) {
@@ -2523,7 +2628,8 @@ function ContributorDesk({
           tone: res.note.tone,
           status: res.note.status,
           fileUrl,
-          description: singleAdvice.trim() || undefined
+          description: singleAdvice.trim() || undefined,
+          category: res.note.category || singleCategory || 'Notes'
         });
         setSubmitted(true);
         setSeniorAdvice('');
@@ -2614,7 +2720,8 @@ function ContributorDesk({
           description: item.seniorAdvice.trim() || undefined,
           fileUrl,
           pages: detectedPages,
-          size: formattedSize
+          size: formattedSize,
+          category: item.category || 'Notes'
         });
 
         if (res.error) throw new Error(res.error);
@@ -2633,7 +2740,8 @@ function ContributorDesk({
             tone: res.note.tone,
             status: res.note.status,
             fileUrl,
-            description: item.seniorAdvice.trim() || undefined
+            description: item.seniorAdvice.trim() || undefined,
+            category: res.note.category || item.category || 'Notes'
           });
         }
 
@@ -2746,7 +2854,7 @@ function ContributorDesk({
                       <span className="text-xs font-bold uppercase tracking-wider text-primary">Quick Apply to All Files</span>
                       <span className="text-xs text-muted-foreground">{stagedFiles.length} files staged</span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr_auto] gap-2.5 items-center">
+                    <div className="grid grid-cols-1 sm:grid-cols-[110px_1fr_130px_auto] gap-2.5 items-center">
                       <select
                         value={selectedSemester}
                         onChange={e => {
@@ -2758,7 +2866,7 @@ function ContributorDesk({
                         className="h-10 rounded-xl border bg-background px-3 text-xs font-semibold focus:border-foreground"
                       >
                         {allowedSemesters.map(s => (
-                          <option key={s} value={s}>Semester {s}</option>
+                          <option key={s} value={s}>Sem {s}</option>
                         ))}
                       </select>
 
@@ -2776,9 +2884,19 @@ function ContributorDesk({
                         )}
                       </select>
 
+                      <select
+                        value={bulkCategory}
+                        onChange={e => setBulkCategory(e.target.value)}
+                        className="h-10 rounded-xl border bg-background px-3 text-xs font-semibold focus:border-foreground"
+                      >
+                        {NOTE_CATEGORIES.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+
                       <button
                         type="button"
-                        onClick={() => applyBatchSettingsToAll(selectedSemester, subjectCode)}
+                        onClick={() => applyBatchSettingsToAll(selectedSemester, subjectCode, bulkCategory)}
                         disabled={!subjectCode || semesterSubjects.length === 0}
                         className="h-10 px-4 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap"
                       >
@@ -2830,8 +2948,8 @@ function ContributorDesk({
                             placeholder="Note title"
                           />
 
-                          {/* Semester & Subject Selectors */}
-                          <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] gap-2">
+                          {/* Semester, Subject & Category Selectors */}
+                          <div className="grid grid-cols-1 sm:grid-cols-[100px_1fr_130px] gap-2">
                             <select
                               value={item.semester}
                               onChange={e => {
@@ -2842,7 +2960,7 @@ function ContributorDesk({
                               className="h-9 rounded-xl border bg-background px-2.5 text-xs font-semibold focus:border-foreground"
                             >
                               {allowedSemesters.map(s => (
-                                <option key={s} value={s}>Semester {s}</option>
+                                <option key={s} value={s}>Sem {s}</option>
                               ))}
                             </select>
 
@@ -2861,6 +2979,19 @@ function ContributorDesk({
                                   <option key={s.code} value={s.code}>{s.name} ({s.code})</option>
                                 ))
                               )}
+                            </select>
+
+                            <select
+                              value={item.category || 'Notes'}
+                              onChange={e => {
+                                const cat = e.target.value;
+                                setStagedFiles(prev => prev.map((it, i) => i === idx ? { ...it, category: cat } : it));
+                              }}
+                              className="h-9 rounded-xl border bg-background px-2.5 text-xs font-medium focus:border-foreground"
+                            >
+                              {NOTE_CATEGORIES.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                              ))}
                             </select>
                           </div>
 
@@ -3087,6 +3218,27 @@ function ContributorDesk({
                     </div>
                   )}
 
+                  {/* Material Type Pills */}
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm font-semibold text-foreground">Material type</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {NOTE_CATEGORIES.map(cat => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setSingleCategory(cat)}
+                          className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
+                            singleCategory === cat
+                              ? 'bg-primary text-primary-foreground shadow-xs'
+                              : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* Senior Advice */}
                   <label className="field-label flex flex-col gap-1.5">
                     <span className="flex items-center gap-1.5 font-semibold text-foreground"><GraduationCap size={16} className="text-primary" />Senior Advice &amp; Study Tips (Optional)</span>
@@ -3285,10 +3437,12 @@ function ReviewQueueCard({
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(candidate.title);
   const [description, setDescription] = useState(candidate.description || '');
+  const [category, setCategory] = useState<string>(candidate.category || 'Notes');
   
   const initialSub = subjects.find(s => s.code === candidate.code || s.name === candidate.subject);
-  const [selectedSem, setSelectedSem] = useState<number>(initialSub?.semester || 1);
-  const semSubjects = useMemo(() => subjects.filter(s => s.semester === selectedSem), [subjects, selectedSem]);
+  const [selectedSem] = useState<number>(initialSub?.semester || 1);
+  const [editSem, setEditSem] = useState<number>(initialSub?.semester || 1);
+  const semSubjects = useMemo(() => subjects.filter(s => s.semester === editSem), [subjects, editSem]);
   const [selectedCode, setSelectedCode] = useState<string>(candidate.code || (semSubjects[0]?.code || ''));
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -3297,7 +3451,7 @@ function ReviewQueueCard({
 
   const handleSave = async (publishAfter: boolean) => {
     if (!selectedCode || semSubjects.length === 0) {
-      alert(`Cannot save: Semester ${selectedSem} does not have any registered subjects yet. Please add subjects to Semester ${selectedSem} in the Curriculum tab first, or select another semester.`);
+      alert(`Cannot save: Semester ${editSem} does not have any registered subjects yet. Please add subjects to Semester ${editSem} in the Curriculum tab first, or select another semester.`);
       return;
     }
 
@@ -3306,7 +3460,8 @@ function ReviewQueueCard({
       id: String(candidate.id),
       title: title.trim() || candidate.title,
       subjectCode: selectedCode,
-      semester: selectedSem,
+      semester: editSem,
+      category,
       description: description.trim(),
       status: publishAfter ? 'PUBLISHED' : 'PENDING'
     });
@@ -3320,6 +3475,7 @@ function ReviewQueueCard({
         title: res.note.title,
         subject: updatedSubject?.name || res.note.subject?.name || candidate.subject,
         code: selectedCode,
+        category: res.note.category || category,
         description: res.note.description || undefined,
         status: res.note.status
       };
@@ -3368,13 +3524,13 @@ function ReviewQueueCard({
               <span className="text-sm font-semibold text-foreground">Target Semester</span>
               <div className="flex items-center gap-1.5 overflow-x-auto pb-2 modal-scroll touch-pan-x min-w-0 max-w-full w-full">
                 {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => {
-                  const isActive = selectedSem === sem;
+                  const isActive = editSem === sem;
                   return (
                     <button
                       key={sem}
                       type="button"
                       onClick={() => {
-                        setSelectedSem(sem);
+                        setEditSem(sem);
                         const subs = subjects.filter(s => s.semester === sem);
                         setSelectedCode(subs.length > 0 ? subs[0].code : '');
                       }}
@@ -3396,7 +3552,7 @@ function ReviewQueueCard({
               <span className="text-sm font-semibold text-foreground">Course / Subject</span>
               {semSubjects.length === 0 ? (
                 <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-3.5 text-center text-xs text-destructive flex items-center justify-center gap-1.5">
-                  <Info size={16} /> No subjects registered in Semester {selectedSem}. Add in Curriculum tab first.
+                  <Info size={16} /> No subjects registered in Semester {editSem}. Add in Curriculum tab first.
                 </div>
               ) : (
                 <div className="relative">
@@ -3467,6 +3623,27 @@ function ReviewQueueCard({
               )}
             </div>
 
+            {/* Material Type / Category Pills */}
+            <div className="flex flex-col gap-1.5 min-w-0 max-w-full w-full">
+              <span className="text-sm font-semibold text-foreground">Material Type</span>
+              <div className="flex flex-wrap gap-1.5">
+                {NOTE_CATEGORIES.map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setCategory(cat)}
+                    className={`px-3 py-1 text-xs font-semibold rounded-full whitespace-nowrap transition-colors cursor-pointer ${
+                      category === cat
+                        ? 'bg-primary text-primary-foreground shadow-xs'
+                        : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <label className="field-label">
               Contributor Advice & Tips
               <textarea
@@ -3534,13 +3711,25 @@ function ReviewQueueCard({
                     className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline bg-primary/10 px-3 py-1 rounded-full"
                   >
                     <PencilSimple size={14} />
-                    Edit title & location
+                    Edit details & tags
                   </button>
                 </div>
                 <h2 className="mt-3 text-2xl font-semibold break-words">{candidate.title}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {candidate.subject} ({candidate.code}) · Semester {semNumber} · {isImageFile ? '1 image page' : `${candidate.pages} pages`} · {candidate.size}
-                </p>
+                <div className="mt-1 text-sm text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                  <span>{candidate.subject} ({candidate.code})</span>
+                  <span>·</span>
+                  <span>Semester {semNumber}</span>
+                  {candidate.category && (
+                    <>
+                      <span>·</span>
+                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-secondary text-foreground border border-border/60">
+                        {candidate.category}
+                      </span>
+                    </>
+                  )}
+                  <span>·</span>
+                  <span>{isImageFile ? '1 image page' : `${candidate.pages} pages`} · {candidate.size}</span>
+                </div>
                 
                 {candidate.description && (
                   <div className="mt-4 rounded-2xl bg-sage/30 border border-primary/20 p-3.5 text-sm">
@@ -3839,6 +4028,11 @@ function PublishedNotesManager({
                       <span className="text-[10px] font-bold uppercase tracking-wider bg-secondary px-2 py-0.5 rounded-md text-foreground">
                         {note.code || note.subject}
                       </span>
+                      {note.category && (
+                        <span className="text-[10px] font-medium bg-secondary text-muted-foreground px-2 py-0.5 rounded-md border border-border/50">
+                          {note.category}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground truncate mt-0.5">
                       {note.author} · {semNumber ? `Sem ${semNumber} · ` : ''}{note.size} · Published

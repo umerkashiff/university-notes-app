@@ -13,6 +13,7 @@ export async function createNote(data: {
   fileUrl: string
   pages: number
   size: string
+  category?: string
 }) {
   const user = await getCurrentUser()
   if (!user || user.status !== 'ACTIVE' || (user.role !== 'SENIOR' && user.role !== 'ADMIN')) {
@@ -66,6 +67,7 @@ export async function createNote(data: {
         fileUrl: data.fileUrl,
         pages: Math.max(1, Math.min(data.pages || 1, 2000)),
         size: data.size || '0 MB',
+        category: data.category || 'Notes',
         authorId: user.id,
         subjectId: subject.id,
         status: 'PENDING',
@@ -246,6 +248,7 @@ export async function updateNote(data: {
   semester?: number
   description?: string
   status?: string
+  category?: string
 }) {
   const user = await getCurrentUser()
   if (!user || user.role !== 'ADMIN') {
@@ -273,6 +276,7 @@ export async function updateNote(data: {
       data: {
         title: data.title !== undefined ? data.title : existing.title,
         description: data.description !== undefined ? data.description : existing.description,
+        category: data.category !== undefined ? data.category : existing.category,
         subjectId,
         status: data.status !== undefined ? data.status : existing.status
       },
