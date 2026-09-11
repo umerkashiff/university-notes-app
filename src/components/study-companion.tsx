@@ -3964,12 +3964,93 @@ function PublishedNotesManager({
   setNotes: React.Dispatch<React.SetStateAction<Note[]>>
   onDeleteNote: (n: Note) => void
 }) {
+  const isTouch = useIsTouch();
   const [selectedSemFilter, setSelectedSemFilter] = useState<number | 'all'>('all');
   const [selectedCourseFilter, setSelectedCourseFilter] = useState<string | 'all'>('all');
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [orderSavedToast, setOrderSavedToast] = useState(false);
+
+  // Edit published note state
+  const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editSem, setEditSem] = useState<number>(1);
+  const [editCode, setEditCode] = useState<string>('');
+  const [editCategory, setEditCategory] = useState<string>('Notes');
+  const [editDescription, setEditDescription] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editCourseDropdownOpen, setEditCourseDropdownOpen] = useState(false);
+  const [editToast, setEditToast] = useState<string | null>(null);
+
+  const startEditing = (note: Note) => {
+    const currentSub = subjects.find(s => s.code === note.code || s.name === note.subject);
+    const initialSem = currentSub?.semester || 1;
+    const semSubs = subjects.filter(s => s.semester === initialSem);
+    setEditingNote(note);
+    setEditTitle(note.title);
+    setEditSem(initialSem);
+    setEditCode(note.code || currentSub?.code || (semSubs[0]?.code || ''));
+    setEditCategory(note.category || 'Notes');
+    setEditDescription(note.description || '');
+    setEditCourseDropdownOpen(false);
+  };
+
+  const semSubjectsForEdit = useMemo(() => {
+    return subjects.filter(s => s.semester === editSem);
+  }, [subjects, editSem]);
+
+  const handleSaveEdit = async () => {
+    if (!editingNote) return;
+    const trimmedTitle = editTitle.trim();
+    if (!trimmedTitle) {
+      alert('Note title cannot be empty.');
+      return;
+    }
+    if (!editCode || semSubjectsForEdit.length === 0) {
+      alert(`Please select a valid course for Semester ${editSem}. If no subjects exist, add one in the Curriculum tab first.`);
+      return;
+    }
+
+    setIsSavingEdit(true);
+    try {
+      const res = await updateNote({
+        id: String(editingNote.id),
+        title: trimmedTitle,
+        subjectCode: editCode,
+        semester: editSem,
+        category: editCategory,
+        description: editDescription.trim(),
+        status: 'PUBLISHED'
+      });
+
+      if (res.error) {
+        alert(res.error);
+      } else if (res.note) {
+        const updatedSubject = subjects.find(s => s.code === editCode);
+        setNotes(prev => prev.map(n => {
+          if (String(n.id) === String(editingNote.id)) {
+            return {
+              ...n,
+              title: res.note.title,
+              subject: updatedSubject?.name || res.note.subject?.name || n.subject,
+              code: editCode,
+              category: res.note.category || editCategory,
+              description: res.note.description || undefined
+            };
+          }
+          return n;
+        }));
+        setEditToast('Note updated successfully!');
+        setTimeout(() => setEditToast(null), 2500);
+        setEditingNote(null);
+      }
+    } catch (e: any) {
+      alert(e?.message || 'Failed to update note');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   // Filter notes
   const filteredNotes = useMemo(() => {
@@ -4053,6 +4134,11 @@ function PublishedNotesManager({
         </div>
 
         <div className="flex items-center gap-3">
+          {editToast && (
+            <span className="text-xs font-semibold text-primary bg-primary/10 px-3 py-1 rounded-full flex items-center gap-1 animate-scale-in">
+              <Check size={14} weight="bold" /> {editToast}
+            </span>
+          )}
           {orderSavedToast && (
             <span className="text-xs font-semibold text-primary bg-primary/10 px-3 py-1 rounded-full flex items-center gap-1 animate-scale-in">
               <Check size={14} weight="bold" /> Order saved
@@ -4178,6 +4264,14 @@ function PublishedNotesManager({
 
                 {/* Actions */}
                 <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => startEditing(note)}
+                    className="p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                    title="Edit note title & details"
+                  >
+                    <PencilSimple size={16} />
+                  </button>
                   <a
                     href={note.fileUrl ? `/api/download?url=${encodeURIComponent(note.fileUrl)}&title=${encodeURIComponent(note.title)}` : '#'}
                     download
@@ -4199,6 +4293,363 @@ function PublishedNotesManager({
             );
           })}
         </div>
+      )}
+
+      {/* Edit Published Note Modal */}
+      {isTouch ? (
+        <MobilePresence show={!!editingNote} type="backdrop" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/45">
+          {editingNote && (
+            <div className="w-full max-w-lg rounded-3xl bg-card border p-6 shadow-2xl space-y-4 m-panel-enter max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b pb-3">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-primary">Admin Note Editor</span>
+                  <h3 className="text-lg font-semibold text-foreground">Edit Note Details</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingNote(null)}
+                  className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+                  title="Close editor"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Note Title */}
+              <label className="field-label">
+                Note Title
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  className="field-input font-medium"
+                  placeholder="Enter note title..."
+                />
+              </label>
+
+              {/* Target Semester Pills */}
+              <div className="flex flex-col gap-1.5 min-w-0 max-w-full w-full">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Target Semester</span>
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 modal-scroll touch-pan-x min-w-0 max-w-full w-full">
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => {
+                    const isActive = editSem === sem;
+                    return (
+                      <button
+                        key={sem}
+                        type="button"
+                        onClick={() => {
+                          setEditSem(sem);
+                          const subs = subjects.filter(s => s.semester === sem);
+                          if (subs.length > 0 && !subs.some(s => s.code === editCode)) {
+                            setEditCode(subs[0].code);
+                          }
+                        }}
+                        className={`relative px-3 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-colors select-none shrink-0 cursor-pointer ${
+                          isActive
+                            ? 'bg-primary text-primary-foreground shadow-xs'
+                            : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+                        }`}
+                      >
+                        Semester {sem}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Course / Subject */}
+              <div className="flex flex-col gap-1.5 min-w-0 max-w-full w-full">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Course / Subject</span>
+                {semSubjectsForEdit.length === 0 ? (
+                  <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-3 text-center text-xs text-destructive flex items-center justify-center gap-1.5">
+                    <Info size={16} /> No subjects registered in Semester {editSem}.
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setEditCourseDropdownOpen(!editCourseDropdownOpen)}
+                      className="flex h-10 w-full items-center justify-between rounded-xl border bg-background px-3.5 text-xs font-medium focus:border-foreground transition-colors text-left cursor-pointer"
+                    >
+                      <span className="truncate">
+                        {subjects.find(s => s.code === editCode)
+                          ? `${subjects.find(s => s.code === editCode)?.name} (${editCode})`
+                          : 'Select a course'}
+                      </span>
+                      <CaretDown size={14} weight="bold" className={`text-muted-foreground transition-transform shrink-0 ml-2 ${editCourseDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {editCourseDropdownOpen && (
+                      <>
+                        <div className="fixed inset-0 z-30" onClick={() => setEditCourseDropdownOpen(false)} />
+                        <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-40 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl max-h-48 overflow-y-auto dropdown-scroll flex flex-col gap-1">
+                          {semSubjectsForEdit.map(s => (
+                            <button
+                              key={s.code}
+                              type="button"
+                              onClick={() => { setEditCode(s.code); setEditCourseDropdownOpen(false); }}
+                              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition-colors cursor-pointer ${
+                                editCode === s.code ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                              }`}
+                            >
+                              <span className="truncate">{s.name} ({s.code})</span>
+                              {editCode === s.code && <Check size={14} weight="bold" className="text-primary shrink-0 ml-2" />}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Material Type / Category Pills */}
+              <div className="flex flex-col gap-1.5 min-w-0 max-w-full w-full">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Material Type</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {NOTE_CATEGORIES.map(cat => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setEditCategory(cat)}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-colors cursor-pointer ${
+                        editCategory === cat
+                          ? 'bg-primary text-primary-foreground shadow-xs'
+                          : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Contributor Advice & Tips */}
+              <label className="field-label">
+                Contributor Advice & Tips (Optional)
+                <textarea
+                  value={editDescription}
+                  onChange={e => setEditDescription(e.target.value)}
+                  className="field-input min-h-20 py-2 text-xs resize-none"
+                  placeholder="Key study tips, syllabus emphasis, or exam preparation advice..."
+                />
+              </label>
+
+              <div className="flex items-center justify-between text-xs text-muted-foreground bg-secondary/40 rounded-xl px-3 py-2">
+                <span>Original Author: <b className="text-foreground">{editingNote.author}</b></span>
+                <span>Format: <b>{editingNote.size || 'PDF'}</b></span>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  disabled={isSavingEdit}
+                  onClick={() => setEditingNote(null)}
+                  className="px-4 py-2 rounded-full text-xs font-semibold bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSavingEdit || !editTitle.trim() || !editCode}
+                  onClick={handleSaveEdit}
+                  className="px-5 py-2 rounded-full text-xs font-semibold bg-primary text-primary-foreground hover:opacity-95 shadow-xs cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isSavingEdit ? (
+                    <>
+                      <div className="size-3 border-2 border-primary-foreground border-t-transparent animate-spin rounded-full" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save Changes</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </MobilePresence>
+      ) : (
+        <AnimatePresence>
+          {editingNote && (
+            <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-sm">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="w-full max-w-lg rounded-3xl bg-card border p-6 shadow-2xl space-y-4 fm-gpu max-h-[90vh] overflow-y-auto"
+              >
+                <div className="flex items-center justify-between border-b pb-3">
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-primary">Admin Note Editor</span>
+                    <h3 className="text-lg font-semibold text-foreground">Edit Note Details</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingNote(null)}
+                    className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+                    title="Close editor"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Note Title */}
+                <label className="field-label">
+                  Note Title
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={e => setEditTitle(e.target.value)}
+                    className="field-input font-medium"
+                    placeholder="Enter note title..."
+                  />
+                </label>
+
+                {/* Target Semester Pills */}
+                <div className="flex flex-col gap-1.5 min-w-0 max-w-full w-full">
+                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Target Semester</span>
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 modal-scroll touch-pan-x min-w-0 max-w-full w-full">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => {
+                      const isActive = editSem === sem;
+                      return (
+                        <button
+                          key={sem}
+                          type="button"
+                          onClick={() => {
+                            setEditSem(sem);
+                            const subs = subjects.filter(s => s.semester === sem);
+                            if (subs.length > 0 && !subs.some(s => s.code === editCode)) {
+                              setEditCode(subs[0].code);
+                            }
+                          }}
+                          className={`relative px-3 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-colors select-none shrink-0 cursor-pointer ${
+                            isActive
+                              ? 'bg-primary text-primary-foreground shadow-xs'
+                              : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+                          }`}
+                        >
+                          Semester {sem}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Course / Subject */}
+                <div className="flex flex-col gap-1.5 min-w-0 max-w-full w-full">
+                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Course / Subject</span>
+                  {semSubjectsForEdit.length === 0 ? (
+                    <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-3 text-center text-xs text-destructive flex items-center justify-center gap-1.5">
+                      <Info size={16} /> No subjects registered in Semester {editSem}.
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setEditCourseDropdownOpen(!editCourseDropdownOpen)}
+                        className="flex h-10 w-full items-center justify-between rounded-xl border bg-background px-3.5 text-xs font-medium focus:border-foreground transition-colors text-left cursor-pointer"
+                      >
+                        <span className="truncate">
+                          {subjects.find(s => s.code === editCode)
+                            ? `${subjects.find(s => s.code === editCode)?.name} (${editCode})`
+                            : 'Select a course'}
+                        </span>
+                        <CaretDown size={14} weight="bold" className={`text-muted-foreground transition-transform shrink-0 ml-2 ${editCourseDropdownOpen ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {editCourseDropdownOpen && (
+                        <>
+                          <div className="fixed inset-0 z-30" onClick={() => setEditCourseDropdownOpen(false)} />
+                          <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-40 overflow-hidden rounded-2xl border bg-card p-1.5 shadow-xl max-h-48 overflow-y-auto dropdown-scroll flex flex-col gap-1">
+                            {semSubjectsForEdit.map(s => (
+                              <button
+                                key={s.code}
+                                type="button"
+                                onClick={() => { setEditCode(s.code); setEditCourseDropdownOpen(false); }}
+                                className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition-colors cursor-pointer ${
+                                  editCode === s.code ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                                }`}
+                              >
+                                <span className="truncate">{s.name} ({s.code})</span>
+                                {editCode === s.code && <Check size={14} weight="bold" className="text-primary shrink-0 ml-2" />}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Material Type / Category Pills */}
+                <div className="flex flex-col gap-1.5 min-w-0 max-w-full w-full">
+                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Material Type</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {NOTE_CATEGORIES.map(cat => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setEditCategory(cat)}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-colors cursor-pointer ${
+                          editCategory === cat
+                            ? 'bg-primary text-primary-foreground shadow-xs'
+                            : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Contributor Advice & Tips */}
+                <label className="field-label">
+                  Contributor Advice & Tips (Optional)
+                  <textarea
+                    value={editDescription}
+                    onChange={e => setEditDescription(e.target.value)}
+                    className="field-input min-h-20 py-2 text-xs resize-none"
+                    placeholder="Key study tips, syllabus emphasis, or exam preparation advice..."
+                  />
+                </label>
+
+                <div className="flex items-center justify-between text-xs text-muted-foreground bg-secondary/40 rounded-xl px-3 py-2">
+                  <span>Original Author: <b className="text-foreground">{editingNote.author}</b></span>
+                  <span>Format: <b>{editingNote.size || 'PDF'}</b></span>
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                  <button
+                    type="button"
+                    disabled={isSavingEdit}
+                    onClick={() => setEditingNote(null)}
+                    className="px-4 py-2 rounded-full text-xs font-semibold bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSavingEdit || !editTitle.trim() || !editCode}
+                    onClick={handleSaveEdit}
+                    className="px-5 py-2 rounded-full text-xs font-semibold bg-primary text-primary-foreground hover:opacity-95 shadow-xs cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {isSavingEdit ? (
+                      <>
+                        <div className="size-3 border-2 border-primary-foreground border-t-transparent animate-spin rounded-full" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <span>Save Changes</span>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       )}
     </div>
   );
@@ -5415,6 +5866,13 @@ function AdminUsersManager() {
   };
 
   const handleChangeRole = async (userId: string, newRole: 'STUDENT' | 'SENIOR' | 'ADMIN') => {
+    const targetUser = data.activeUsers.find(u => u.id === userId);
+    if (targetUser && targetUser.role === 'ADMIN' && newRole !== 'ADMIN') {
+      const confirmDemote = window.confirm(
+        `Are you sure you want to revoke Administrator access for ${targetUser.name || targetUser.email}? They will no longer have access to the Admin CMS.`
+      );
+      if (!confirmDemote) return;
+    }
     setActionLoadingId(userId);
     try {
       await changeUserRole(userId, newRole);
@@ -5641,9 +6099,21 @@ function AdminUsersManager() {
                         <b className="text-sm sm:text-base font-bold text-foreground">{u.name || 'Unnamed User'}</b>
                         
                         {isAdmin ? (
-                          <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-primary text-primary-foreground flex items-center gap-1 shadow-2xs">
-                            <ShieldCheck size={14} /> Administrator
-                          </span>
+                          <>
+                            <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-primary text-primary-foreground flex items-center gap-1 shadow-2xs">
+                              <ShieldCheck size={14} /> Administrator
+                            </span>
+                            {u.regNumber && (
+                              <span className="bg-secondary text-foreground text-xs font-semibold px-2.5 py-1 rounded-full">
+                                {u.regNumber}
+                              </span>
+                            )}
+                            {u.batchYear && (
+                              <span className="bg-secondary text-muted-foreground text-xs font-medium px-2.5 py-1 rounded-full">
+                                Batch {u.batchYear}
+                              </span>
+                            )}
+                          </>
                         ) : (
                           <>
                             {u.regNumber && (
@@ -5678,7 +6148,7 @@ function AdminUsersManager() {
                       </div>
 
                       {/* Details Grid */}
-                      <div className={`grid gap-2 text-xs text-muted-foreground ${isAdmin ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'} bg-secondary/30 rounded-2xl p-3 border border-border/40`}>
+                      <div className="grid gap-2 text-xs text-muted-foreground grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 bg-secondary/30 rounded-2xl p-3 border border-border/40">
                         <div>
                           <span className="text-muted-foreground block text-[10px] font-semibold uppercase tracking-wider">Email</span>
                           <span className="font-semibold text-foreground break-all">{u.email}</span>
@@ -5687,74 +6157,65 @@ function AdminUsersManager() {
                           <span className="text-muted-foreground block text-[10px] font-semibold uppercase tracking-wider">Phone</span>
                           <span className="font-semibold text-foreground">{u.phone || 'N/A'}</span>
                         </div>
-                        {!isAdmin && (
-                          <>
-                            <div>
-                              <span className="text-muted-foreground block text-[10px] font-semibold uppercase tracking-wider">Current Cohort</span>
-                              <span className="font-semibold text-foreground">Semester {u.semester}</span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground block text-[10px] font-semibold uppercase tracking-wider">Section</span>
-                              <span className="font-semibold text-foreground">Section {u.section || 'A'}</span>
-                            </div>
-                          </>
-                        )}
+                        <div>
+                          <span className="text-muted-foreground block text-[10px] font-semibold uppercase tracking-wider">Current Cohort</span>
+                          <span className="font-semibold text-foreground">{u.semester ? `Semester ${u.semester}` : 'Semester 1'}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block text-[10px] font-semibold uppercase tracking-wider">Section</span>
+                          <span className="font-semibold text-foreground">Section {u.section || 'A'}</span>
+                        </div>
                       </div>
                     </div>
 
                     {/* Controls Column */}
                     <div className="flex items-center gap-2 flex-wrap shrink-0">
-                      {!isAdmin ? (
-                        <>
-                          {/* Semester Changer */}
-                          <label className="flex items-center gap-1.5 text-muted-foreground text-xs font-semibold bg-secondary/60 px-3 py-1.5 rounded-xl border border-border/40">
-                            <span>Sem:</span>
-                            <select
-                              disabled={isRunning}
-                              value={u.semester}
-                              onChange={e => handleSemesterChange(u.id, parseInt(e.target.value, 10))}
-                              className="bg-background text-foreground font-bold rounded-lg px-2 py-1 outline-none cursor-pointer text-xs"
-                            >
-                              {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
-                                <option key={s} value={s}>Sem {s}</option>
-                              ))}
-                            </select>
-                          </label>
+                      {/* Semester Changer */}
+                      <label className="flex items-center gap-1.5 text-muted-foreground text-xs font-semibold bg-secondary/60 px-3 py-1.5 rounded-xl border border-border/40">
+                        <span>Sem:</span>
+                        <select
+                          disabled={isRunning}
+                          value={u.semester || 1}
+                          onChange={e => handleSemesterChange(u.id, parseInt(e.target.value, 10))}
+                          className="bg-background text-foreground font-bold rounded-lg px-2 py-1 outline-none cursor-pointer text-xs"
+                        >
+                          {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                            <option key={s} value={s}>Sem {s}</option>
+                          ))}
+                        </select>
+                      </label>
 
-                          {/* Role Changer */}
-                          <select
-                            disabled={isRunning}
-                            value={u.role}
-                            onChange={e => handleChangeRole(u.id, e.target.value as any)}
-                            className="field-input py-1.5 px-3 text-xs rounded-xl bg-background font-semibold cursor-pointer w-32 h-9"
-                          >
-                            <option value="STUDENT">Student</option>
-                            <option value="SENIOR">Contributor</option>
-                            <option value="ADMIN">Admin</option>
-                          </select>
+                      {/* Role Changer - Always available so admins can be demoted or promoted anytime */}
+                      <select
+                        disabled={isRunning}
+                        value={u.role}
+                        onChange={e => handleChangeRole(u.id, e.target.value as any)}
+                        className={`field-input py-1.5 px-3 text-xs rounded-xl font-semibold cursor-pointer w-32 h-9 ${
+                          isAdmin ? 'bg-primary/10 text-primary border-primary/30 font-bold' : 'bg-background'
+                        }`}
+                        title="Change user access role"
+                      >
+                        <option value="STUDENT">Student</option>
+                        <option value="SENIOR">Contributor</option>
+                        <option value="ADMIN">Admin</option>
+                      </select>
 
-                          {/* Hold Back Toggle */}
-                          <button
-                            type="button"
-                            disabled={isRunning}
-                            onClick={() => handleToggleHoldBack(u.id)}
-                            className={`h-9 px-3.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border flex items-center gap-1.5 ${
-                              u.heldBack 
-                                ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/15' 
-                                : 'bg-background hover:bg-secondary text-muted-foreground hover:text-foreground border-border/60'
-                            }`}
-                            title="Toggle re-take hold-back state to prevent auto-advancing when terms change"
-                          >
-                            <Clock size={13} className={u.heldBack ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'} />
-                            <span>{u.heldBack ? 'Held Back' : 'Hold Back'}</span>
-                          </button>
-                        </>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground font-semibold px-3 py-1.5 rounded-full bg-secondary/60">
-                            Full System Privileges
-                          </span>
-                        </div>
+                      {/* Hold Back Toggle */}
+                      {!isAdmin && (
+                        <button
+                          type="button"
+                          disabled={isRunning}
+                          onClick={() => handleToggleHoldBack(u.id)}
+                          className={`h-9 px-3.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                            u.heldBack 
+                              ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/15' 
+                              : 'bg-background hover:bg-secondary text-muted-foreground hover:text-foreground border-border/60'
+                          }`}
+                          title="Toggle re-take hold-back state to prevent auto-advancing when terms change"
+                        >
+                          <Clock size={13} className={u.heldBack ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'} />
+                          <span>{u.heldBack ? 'Held Back' : 'Hold Back'}</span>
+                        </button>
                       )}
                     </div>
                   </div>
