@@ -336,7 +336,7 @@ export function StudyCompanion({
   const title = screen==='cms'
     ? 'Content studio'
     : screen==='submissions'
-    ? 'Contributor desk'
+    ? (role === 'admin' ? 'Upload notes' : 'Contributor desk')
     : screen==='notifications'
     ? 'Notifications'
     : screen==='semesters'
@@ -409,7 +409,7 @@ export function StudyCompanion({
             <div className="mx-auto max-w-7xl px-5 py-8 pb-36 md:px-8 md:py-12" style={{ paddingBottom: 'max(8rem, calc(env(safe-area-inset-bottom, 0px) + 6rem))' }}>
               <div className="mb-8 flex items-end justify-between">
                 <div>
-                  <p className="section-kicker">{screen==='settings'?'Account & Preferences':role==='admin'?'Department CMS':role==='senior'?'Contributor desk':'Your study library'}</p>
+                  <p className="section-kicker">{screen==='settings'?'Account & Preferences':screen==='submissions'&&role==='admin'?'Direct Upload':role==='admin'?'Department CMS':role==='senior'?'Contributor desk':'Your study library'}</p>
                   <h1 className="text-balance text-4xl font-semibold tracking-[-.04em] md:text-5xl">{title}</h1>
                 </div>
               </div>
@@ -420,13 +420,14 @@ export function StudyCompanion({
                 {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')}/>}
                 {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts} user={user} onMarkRead={markNotifRead} onMarkAllRead={markAllNotifsRead}/>}
                 {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])} onNavigateToSettings={()=>setScreen('settings')}/>}
-                {screen==='cms'&&role==='admin'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} alerts={alerts} setAlerts={setAlerts} publish={(note)=>{setNotes(notes.map(n=>n.id===note.id?{...n,status:'PUBLISHED'}:n));setAlerts([{id:Date.now(),audience:note.subject||'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a),...alerts])}/>}
+                {screen==='cms'&&role==='admin'&&<AdminCms onOpenUpload={()=>setScreen('submissions')} notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} alerts={alerts} setAlerts={setAlerts} publish={(note)=>{setNotes(notes.map(n=>n.id===note.id?{...n,status:'PUBLISHED'}:n));setAlerts([{id:Date.now(),audience:note.subject||'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a),...alerts])}/>}
                 {screen==='settings'&&<SettingsPage user={user} theme={theme} onChangeTheme={changeTheme} onLogout={handleLogout} onNavigate={setScreen} isLoggingOut={isLoggingOut}/>}
               </div>
             </div>
             {/* Mobile nav — CSS background-color transition replaces layoutId spring */}
             <nav className="fixed left-1/2 z-30 flex gap-1 rounded-full border border-border/80 bg-card p-1.5 shadow-xl md:hidden mobile-nav-pill" style={{ bottom:'max(1.25rem, calc(env(safe-area-inset-bottom, 0px) + 0.85rem))', transform:'translate3d(-50%, 0, 0)', WebkitBackfaceVisibility:'hidden' }}>
-              <MobileNavBtn active={role==='admin'?screen==='cms':role==='senior'?screen==='submissions':(screen==='semesters'||screen==='subject')} onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} icon={<Home/>}>Home</MobileNavBtn>
+              <MobileNavBtn active={role==='admin'?screen==='cms':role==='senior'?screen==='submissions':(screen==='semesters'||screen==='subject')} onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} icon={<Home/>}>{role==='admin' ? 'Studio' : 'Home'}</MobileNavBtn>
+              {role==='admin' && <MobileNavBtn active={screen==='submissions'} onClick={()=>setScreen('submissions')} icon={<Upload/>}>Upload</MobileNavBtn>}
               {role==='student'?<MobileNavBtn active={screen==='saved'} onClick={()=>setScreen('saved')} icon={<Bookmark/>}>Saved</MobileNavBtn>:<MobileNavBtn active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')} icon={<BookOpen/>}>Library</MobileNavBtn>}
               <MobileNavBtn active={screen==='notifications'} onClick={()=>setScreen('notifications')} icon={<Bell/>}>Notices</MobileNavBtn>
             </nav>
@@ -504,7 +505,7 @@ export function StudyCompanion({
               <nav className="hidden items-center gap-1 rounded-full bg-secondary p-1 md:flex" aria-label="Primary">
                 {role==='student'&&<><Nav active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')}>Home</Nav><Nav active={screen==='saved'} onClick={()=>setScreen('saved')}>Saved</Nav></>}
                 {role==='senior'&&<><Nav active={screen==='submissions'} onClick={()=>setScreen('submissions')}>My notes</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}
-                {role==='admin'&&<><Nav active={screen==='cms'} onClick={()=>setScreen('cms')}>Studio</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}
+                {role==='admin'&&<><Nav active={screen==='cms'} onClick={()=>setScreen('cms')}>Studio</Nav><Nav active={screen==='submissions'} onClick={()=>setScreen('submissions')}>Upload</Nav><Nav active={screen==='semesters'} onClick={()=>setScreen('semesters')}>Library</Nav></>}
                 <Nav active={screen==='notifications'} onClick={()=>setScreen('notifications')}>Notices</Nav>
               </nav>
               <div className="flex items-center gap-2">
@@ -571,7 +572,7 @@ export function StudyCompanion({
           <div className="mx-auto max-w-7xl px-5 py-8 pb-36 md:px-8 md:py-12" style={{ paddingBottom: 'max(8rem, calc(env(safe-area-inset-bottom, 0px) + 6rem))' }}>
             <div className="mb-8 flex items-end justify-between">
               <div>
-                <p className="section-kicker">{screen==='settings'?'Account & Preferences':role==='admin'?'Department CMS':role==='senior'?'Contributor desk':'Your study library'}</p>
+                <p className="section-kicker">{screen==='settings'?'Account & Preferences':screen==='submissions'&&role==='admin'?'Direct Upload':role==='admin'?'Department CMS':role==='senior'?'Contributor desk':'Your study library'}</p>
                 <h1 className="text-balance text-4xl font-semibold tracking-[-.04em] md:text-5xl">{title}</h1>
               </div>
             </div>
@@ -582,7 +583,7 @@ export function StudyCompanion({
                 {screen==='subject'&&<SubjectLibrary semester={selectedSemester} subjects={subjectsList} notes={notes} query={query} setQuery={setQuery} savedNoteIds={savedNoteIds} toggleSave={toggleSave} open={setReader} onBack={()=>setScreen('semesters')}/>} 
                 {screen==='notifications'&&<Notifications alerts={alerts} setAlerts={setAlerts} user={user} onMarkRead={markNotifRead} onMarkAllRead={markAllNotifsRead}/>} 
                 {screen==='submissions'&&<ContributorDesk user={user} notes={notes} subjects={subjectsList} add={(note)=>setNotes([note,...notes])} onNavigateToSettings={()=>setScreen('settings')}/>} 
-                {screen==='cms'&&role==='admin'&&<AdminCms notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} alerts={alerts} setAlerts={setAlerts} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),audience: note.subject || 'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
+                {screen==='cms'&&role==='admin'&&<AdminCms onOpenUpload={()=>setScreen('submissions')} notes={notes} setNotes={setNotes} subjects={subjectsList} setSubjects={setSubjectsList} alerts={alerts} setAlerts={setAlerts} publish={(note)=>{setNotes(notes.map(n => n.id === note.id ? {...n, status: 'PUBLISHED'} : n));setAlerts([{id:Date.now(),audience: note.subject || 'ALL',kind:'New note',title:`${note.subject} notes published`,body:`${note.title} is now available.`,time:'Just now',unread:true},...alerts])}} addAnnouncement={(a)=>setAlerts([mapAlert(a), ...alerts])}/>}
                 {screen==='settings'&&<SettingsPage user={user} theme={theme} onChangeTheme={changeTheme} onLogout={handleLogout} onNavigate={setScreen} isLoggingOut={isLoggingOut}/>}
               </motion.div>
             </AnimatePresence>
@@ -595,7 +596,8 @@ export function StudyCompanion({
               WebkitBackfaceVisibility: 'hidden',
             }}
           >
-            <Mobile active={role==='admin'?screen==='cms':role==='senior'?screen==='submissions':(screen==='semesters'||screen==='subject')} onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} icon={<Home/>}>Home</Mobile>
+            <Mobile active={role==='admin'?screen==='cms':role==='senior'?screen==='submissions':(screen==='semesters'||screen==='subject')} onClick={()=>setScreen(role==='admin'?'cms':role==='senior'?'submissions':'semesters')} icon={<Home/>}>{role==='admin' ? 'Studio' : 'Home'}</Mobile>
+            {role==='admin' && <Mobile active={screen==='submissions'} onClick={()=>setScreen('submissions')} icon={<Upload/>}>Upload</Mobile>}
             {role==='student'?<Mobile active={screen==='saved'} onClick={()=>setScreen('saved')} icon={<Bookmark/>}>Saved</Mobile>:<Mobile active={screen==='semesters'||screen==='subject'} onClick={()=>setScreen('semesters')} icon={<BookOpen/>}>Library</Mobile>}
             <Mobile active={screen==='notifications'} onClick={()=>setScreen('notifications')} icon={<Bell/>}>Notices</Mobile>
           </nav>
@@ -2935,16 +2937,16 @@ function ContributorDesk({
       <section className="min-w-0 w-full">
         <div className="rounded-3xl bg-mist p-7">
           <Upload size={25}/>
-          <h2 className="mt-10 text-3xl font-semibold">Share what helped you learn.</h2>
-          <p className="mt-2 max-w-xl text-muted-foreground">Every note is reviewed by the department before students can see it.</p>
+          <h2 className="mt-10 text-3xl font-semibold">{user?.role === 'ADMIN' ? 'Publish notes for any semester.' : 'Share what helped you learn.'}</h2>
+          <p className="mt-2 max-w-xl text-muted-foreground">{user?.role === 'ADMIN' ? 'Upload notes across any semester. Admin uploads are automatically published.' : 'Every note is reviewed by the department before students can see it.'}</p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <button onClick={()=>setOpen(true)} className="rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity">
-              Submit notes or folder
+              {user?.role === 'ADMIN' ? 'Upload notes or folder' : 'Submit notes or folder'}
             </button>
           </div>
         </div>
         <div className="mt-8 min-w-0">
-          <Header kicker="Your contributions" title="Submission history"/>
+          <Header kicker={user?.role === 'ADMIN' ? 'Uploaded notes' : 'Your contributions'} title={user?.role === 'ADMIN' ? 'Your published uploads' : 'Submission history'}/>
           {myNotes.length === 0 ? (
             <div className="rounded-2xl border border-dashed p-8 text-center text-muted-foreground bg-card/40">
               <FileText size={32} className="mx-auto mb-2 opacity-30"/>
@@ -3005,8 +3007,8 @@ function ContributorDesk({
               {submitted ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <div className="flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground mb-4"><Check size={28} weight="bold" /></div>
-                  <h3 className="text-xl font-bold">{isBatchMode ? `All ${stagedFiles.length} notes submitted!` : 'Uploaded for review!'}</h3>
-                  <p className="text-sm text-muted-foreground mt-1 max-w-xs">Your submissions have been sent to the department queue.</p>
+                  <h3 className="text-xl font-bold">{user?.role === 'ADMIN' ? (isBatchMode ? `All ${stagedFiles.length} notes published!` : 'Note published successfully!') : (isBatchMode ? `All ${stagedFiles.length} notes submitted!` : 'Uploaded for review!')}</h3>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-xs">{user?.role === 'ADMIN' ? 'Your notes are now live in the student library.' : 'Your submissions have been sent to the department queue.'}</p>
                 </div>
               ) : isBatchMode ? (
                 /* BATCH STAGING MODE */
@@ -3248,7 +3250,7 @@ function ContributorDesk({
                       disabled={stagedFiles.length === 0}
                       className="w-full rounded-full bg-primary py-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity disabled:opacity-50"
                     >
-                      Submit all {stagedFiles.length} notes for review
+                      {user?.role === 'ADMIN' ? `Publish all ${stagedFiles.length} notes now` : `Submit all ${stagedFiles.length} notes for review`}
                     </button>
                   )}
                 </div>
@@ -3493,7 +3495,7 @@ function ContributorDesk({
                         disabled={!selectedFile || semesterSubjects.length === 0}
                         className="rounded-full bg-primary py-3.5 font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Submit note for review
+                        {user?.role === 'ADMIN' ? 'Publish note now' : 'Submit note for review'}
                       </button>
                       {selectedFile && semesterSubjects.length === 0 && (
                         <p className="text-center text-xs text-muted-foreground">
@@ -3957,12 +3959,14 @@ function PublishedNotesManager({
   notes,
   subjects,
   setNotes,
-  onDeleteNote
+  onDeleteNote,
+  onOpenUpload
 }: {
   notes: Note[]
   subjects: SubjectItem[]
   setNotes: React.Dispatch<React.SetStateAction<Note[]>>
   onDeleteNote: (n: Note) => void
+  onOpenUpload?: () => void
 }) {
   const isTouch = useIsTouch();
   const [selectedSemFilter, setSelectedSemFilter] = useState<number | 'all'>('all');
@@ -4133,7 +4137,17 @@ function PublishedNotesManager({
           </select>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {onOpenUpload && (
+            <button
+              type="button"
+              onClick={onOpenUpload}
+              className="h-8 rounded-xl bg-primary text-primary-foreground px-3 text-xs font-semibold hover:opacity-95 transition-opacity flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+              title="Upload new notes as an administrator"
+            >
+              <UploadSimple size={14} weight="bold" /> Upload Notes
+            </button>
+          )}
           {editToast && (
             <span className="text-xs font-semibold text-primary bg-primary/10 px-3 py-1 rounded-full flex items-center gap-1 animate-scale-in">
               <Check size={14} weight="bold" /> {editToast}
@@ -4663,7 +4677,8 @@ function AdminCms({
   alerts,
   setAlerts,
   publish,
-  addAnnouncement
+  addAnnouncement,
+  onOpenUpload
 }: {
   notes: Note[]
   setNotes: React.Dispatch<React.SetStateAction<Note[]>>
@@ -4673,6 +4688,7 @@ function AdminCms({
   setAlerts: (a: any[]) => void
   publish: (n: Note) => void
   addAnnouncement: (a: any) => void
+  onOpenUpload?: () => void
 }) {
   const isTouch = useIsTouch();
   const [tab,setTab]=useState<'queue'|'content'|'curriculum'|'users'|'calendar'|'notices'|'requests'>('queue');
@@ -5242,7 +5258,7 @@ function AdminCms({
       )}
 
       {/* Published content */}
-      {tab==='content'&&<PublishedNotesManager notes={published} subjects={subjects} setNotes={setNotes} onDeleteNote={handleDeleteNote} />}
+      {tab==='content'&&<PublishedNotesManager notes={published} subjects={subjects} setNotes={setNotes} onDeleteNote={handleDeleteNote} onOpenUpload={onOpenUpload} />}
 
       {/* Curriculum & Subjects Management */}
       {tab==='curriculum'&&<div className="flex flex-col gap-7">
@@ -5549,7 +5565,7 @@ function AdminCms({
       )}
 
       {/* Published content */}
-      {tab==='content'&&<PublishedNotesManager notes={published} subjects={subjects} setNotes={setNotes} onDeleteNote={handleDeleteNote} />}
+      {tab==='content'&&<PublishedNotesManager notes={published} subjects={subjects} setNotes={setNotes} onDeleteNote={handleDeleteNote} onOpenUpload={onOpenUpload} />}
 
       {/* Curriculum & Subjects Management */}
       {tab==='curriculum'&&<div className="flex flex-col gap-7">

@@ -20,6 +20,8 @@ export async function createNote(data: {
     return { error: 'Unauthorized. Only active note contributors and administrators can upload notes.' }
   }
 
+  const isAutoPublish = user.role === 'ADMIN'
+
   // Strict file URL validation: Must point to trusted Cloudflare R2 bucket or Google Drive storage and be an allowed document/image format
   const publicBase = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || 'https://pub-4c28b39a02ca4952a6c31f0baf9d62e3.r2.dev'
   const isAllowedOrigin = data.fileUrl.startsWith(publicBase) ||
@@ -70,7 +72,7 @@ export async function createNote(data: {
         category: data.category || 'Notes',
         authorId: user.id,
         subjectId: subject.id,
-        status: 'PENDING',
+        status: isAutoPublish ? 'PUBLISHED' : 'PENDING',
       },
       include: {
         subject: true,
@@ -78,26 +80,40 @@ export async function createNote(data: {
       }
     })
 
-    // Email alert to active administrators
-    try {
-      const admins = await prisma.user.findMany({
-        where: { role: 'ADMIN', status: 'ACTIVE' },
-        select: { email: true }
-      })
-      if (admins.length > 0) {
-        const { noteSubmittedAlertEmail } = await import('@/lib/emails/templates')
-        const { sendEmail } = await import('@/lib/emails/send')
-        const { subject: emailSubj, html } = noteSubmittedAlertEmail({
-          contributorName: user.name || 'Note Contributor',
-          noteTitle: data.title,
-          subjectCode: subject.code,
-          pages: data.pages,
-          fileSize: data.size
+    if (isAutoPublish) {
+      try {
+        await prisma.announcement.create({
+          data: {
+            title: `${subject.name} notes published`,
+            body: `${note.title} is now available.`,
+            audience: `SEM_${subject.semester}`
+          }
         })
-        await sendEmail(admins.map(a => a.email), emailSubj, html)
+      } catch (e) {
+        console.warn('Failed to auto-create announcement for admin upload:', e)
       }
-    } catch (e) {
-      console.warn('Failed to send admin email alert for new note submission:', e)
+    } else {
+      // Email alert to active administrators
+      try {
+        const admins = await prisma.user.findMany({
+          where: { role: 'ADMIN', status: 'ACTIVE' },
+          select: { email: true }
+        })
+        if (admins.length > 0) {
+          const { noteSubmittedAlertEmail } = await import('@/lib/emails/templates')
+          const { sendEmail } = await import('@/lib/emails/send')
+          const { subject: emailSubj, html } = noteSubmittedAlertEmail({
+            contributorName: user.name || 'Student Contributor',
+            noteTitle: note.title,
+            subjectCode: subject.code,
+            pages: data.pages || 1,
+            fileSize: data.size || '0 MB'
+          })
+          await sendEmail(admins.map(a => a.email), emailSubj, html)
+        }
+      } catch (emailErr) {
+        console.warn('Failed to send admin notification email:', emailErr)
+      }
     }
 
     return { success: true, note }
