@@ -17,61 +17,27 @@ export interface LandingPageProps {
   onSignIn: () => void;
 }
 
-// Deep, saturated violet and purple color palette matching the original reference screenshot
-const SIGNATURE_PURPLE_COLORS = [
-  '#8a5cff', // Neon Violet
-  '#7c3aed', // Deep Purple
-  '#a855f7', // Bright Orchid
-  '#c084fc', // Soft Lavender
-  '#4f46e5'  // Electric Indigo
-];
-
 export function LandingPage({ onGetStarted, onSignIn }: LandingPageProps) {
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   return (
     <div className="relative h-[100dvh] max-h-[100dvh] h-screen w-full overflow-hidden bg-[#0a0a0f] text-white selection:bg-[#8a5cff]/30 selection:text-white flex flex-col justify-between font-sans select-none">
-      {/* ── Background ColorBends Shader Animation ──────────────────────── */}
-      <div className="absolute inset-0 z-0 pointer-events-auto overflow-hidden">
+      {/* ── Background ColorBends Shader Animation (No mouse interaction, vibrant glow) ── */}
+      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         <ColorBends
-          colors={SIGNATURE_PURPLE_COLORS}
-          rotation={isMobile ? 38 : 75}
-          speed={0.16}
-          scale={isMobile ? 0.9 : 1.05}
-          frequency={1.0}
-          warpStrength={0.88}
-          mouseInfluence={0.8}
-          parallax={0.45}
-          noise={0.06}
+          colors={['#ff5c7a', '#8a5cff', '#00ffd1']}
+          rotation={90}
+          speed={0.22}
+          scale={1.0}
+          frequency={1.05}
+          warpStrength={1.15}
+          mouseInfluence={0}
+          parallax={0}
+          noise={0.12}
           iterations={2}
-          intensity={1.05}
-          bandWidth={4.8}
+          intensity={1.85}
+          bandWidth={6}
           transparent={true}
-          className="w-full h-full"
-        />
-
-        {/* Ambient Dark Radial Gradient Vignette for perfect text contrast */}
-        <div 
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: 'radial-gradient(ellipse at 50% 50%, rgba(10,10,15,0.2) 0%, rgba(10,10,15,0.7) 65%, #0a0a0f 100%)'
-          }}
-        />
-        <div 
-          className="absolute inset-0 pointer-events-none opacity-30 mix-blend-overlay"
-          style={{
-            backgroundImage: 'radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px)',
-            backgroundSize: '24px 24px'
-          }}
+          className="w-full h-full pointer-events-none"
         />
       </div>
 

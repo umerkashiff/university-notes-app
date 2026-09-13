@@ -32,13 +32,7 @@ void main() {
   vec2 p = vUv * 2.0 - 1.0;
   p += uPointer * uParallax * 0.1;
   vec2 rp = vec2(p.x * uRot.x - p.y * uRot.y, p.x * uRot.y + p.y * uRot.x);
-  float aspect = uCanvas.x / max(uCanvas.y, 0.0001);
-  vec2 q;
-  if (aspect < 1.0) {
-    q = vec2(rp.x * 0.9, rp.y * aspect * 0.9);
-  } else {
-    q = vec2(rp.x * aspect, rp.y);
-  }
+  vec2 q = vec2(rp.x * (uCanvas.x / uCanvas.y), rp.y);
   q /= max(uScale, 0.0001);
   q /= 0.5 + 0.2 * dot(q, q);
   q += 0.2 * cos(t) - 7.56;
@@ -335,7 +329,7 @@ export default function ColorBends({
   useEffect(() => {
     const material = materialRef.current;
     const container = containerRef.current;
-    if (!material || !container) return;
+    if (!material || !container || (mouseInfluence === 0 && parallax === 0)) return;
 
     const handlePointerMove = (e: PointerEvent | MouseEvent) => {
       const rect = container.getBoundingClientRect();
@@ -348,7 +342,7 @@ export default function ColorBends({
     return () => {
       window.removeEventListener('pointermove', handlePointerMove);
     };
-  }, []);
+  }, [mouseInfluence, parallax]);
 
   return <div ref={containerRef} className={`color-bends-container ${className}`} style={style} />;
 }
