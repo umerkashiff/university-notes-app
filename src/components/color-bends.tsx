@@ -31,6 +31,7 @@ void main() {
   float t = uTime * uSpeed;
   vec2 p = vUv * 2.0 - 1.0;
   p += uPointer * uParallax * 0.1;
+  vec2 rp = vec2(p.x * uRot.x - p.y * uRot.y, p.x * uRot.y + p.y * uRot.x);
   float aspect = uCanvas.x / max(uCanvas.y, 0.0001);
   vec2 q;
   if (aspect < 1.0) {

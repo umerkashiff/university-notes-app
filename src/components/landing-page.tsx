@@ -111,27 +111,14 @@ export function LandingPage({ onGetStarted, onSignIn }: LandingPageProps) {
 
       {/* ── Main Hero Section (Guaranteed to fit on any mobile/desktop viewport) ── */}
       <main className="relative z-20 mx-auto max-w-3xl px-5 sm:px-6 py-2 sm:py-6 flex-1 min-h-0 flex flex-col items-center justify-center text-center">
-        {/* Badge Pill: For students, by students */}
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: "easeOut" }}
-          className="mb-3 sm:mb-6 shrink-0"
-        >
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 backdrop-blur-md px-3.5 py-1 text-xs text-white/90 shadow-sm">
-            <span className="size-1.5 rounded-full bg-[#a855f7] animate-pulse" />
-            <span className="font-medium tracking-tight">For students, by students</span>
-          </div>
-        </motion.div>
-
         {/* Big Bold Headline */}
         <motion.h1 
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, delay: 0.08, ease: "easeOut" }}
-          className="text-balance text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-[1.14] drop-shadow-sm max-w-2xl"
+          transition={{ duration: 0.55, ease: "easeOut" }}
+          className="text-balance text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-white leading-[1.08] drop-shadow-sm max-w-2xl"
         >
-          You have the power to reshape your own destiny
+          For students, by students
         </motion.h1>
 
         {/* Supporting Tagline */}
