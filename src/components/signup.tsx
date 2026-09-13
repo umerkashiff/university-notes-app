@@ -24,6 +24,7 @@ import { type SignupAcademicContext } from '@/lib/academic'
 interface SignUpProps {
   onRegister: (formData: FormData) => Promise<string | void>
   onSwitchToLogin: () => void
+  onSwitchToLanding?: () => void
 }
 
 function formatRegNumber(val: string): string {
@@ -184,7 +185,7 @@ function CustomSelect({
   )
 }
 
-export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
+export function SignUp({ onRegister, onSwitchToLogin, onSwitchToLanding }: SignUpProps) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -325,10 +326,15 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
         
         {/* Left Side: Brand Story & Criteria */}
         <section className="relative hidden flex-col justify-between overflow-hidden bg-sage p-8 lg:p-12 md:flex min-h-full">
-          <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onSwitchToLanding}
+            className="flex items-center gap-3 group text-left cursor-pointer hover:opacity-80 transition-opacity"
+            title="Return to Home Overview"
+          >
             <SemstackLogo size={42} className="size-[42px]" />
             <b className="text-xl tracking-tight">Semstack</b>
-          </div>
+          </button>
 
           <div className="max-w-md my-8">
             <h1 className="text-balance text-4xl lg:text-5xl font-semibold leading-[1.08] tracking-[-.04em]">
@@ -365,18 +371,33 @@ export function SignUp({ onRegister, onSwitchToLogin }: SignUpProps) {
         {/* Right Side: Sign-Up Form */}
         <section className="flex flex-col justify-center p-5 sm:p-8 lg:p-10 w-full">
           <div className="mb-5 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 md:hidden">
+            <button
+              type="button"
+              onClick={onSwitchToLanding}
+              className="flex items-center gap-2.5 md:hidden cursor-pointer hover:opacity-80 transition-opacity"
+            >
               <SemstackLogo size={34} className="size-[34px]" />
               <b className="text-base tracking-tight">Semstack</b>
-            </div>
-            <button 
-              type="button"
-              onClick={onSwitchToLogin}
-              className="text-xs font-semibold text-primary hover:underline ml-auto flex items-center gap-1 cursor-pointer py-1"
-            >
-              <span>Already have an account? Sign in</span>
-              <ArrowRight size={13} />
             </button>
+            <div className="ml-auto flex items-center gap-3">
+              {onSwitchToLanding && (
+                <button
+                  type="button"
+                  onClick={onSwitchToLanding}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer py-1"
+                >
+                  ← Overview
+                </button>
+              )}
+              <button 
+                type="button"
+                onClick={onSwitchToLogin}
+                className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer py-1"
+              >
+                <span>Already have an account? Sign in</span>
+                <ArrowRight size={13} />
+              </button>
+            </div>
           </div>
 
           <p className="section-kicker">New Student Application</p>

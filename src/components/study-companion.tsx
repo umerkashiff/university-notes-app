@@ -11,6 +11,7 @@ import { login, logout, register, requestPasswordReset, resetPasswordWithCode } 
 import { getAdminUsersData, approveUser, rejectUser, updateUserSemester, toggleHeldBack, changeUserRole, submitHeldBackSelfReport, getContentRequests, updateContentRequestStatus, deleteContentRequest } from '@/app/actions/admin'
 import { getAcademicPeriods, createAcademicPeriod, getPreAdvancementSummary, advanceSemestersForPeriod, setPeriodStatus } from '@/app/actions/academic'
 import { SignUp } from '@/components/signup'
+import { LandingPage } from '@/components/landing-page'
 import { PendingScreen } from '@/components/pending-screen'
 import { SemstackLogo } from '@/components/logo'
 import type { User as PrismaUser } from '@prisma/client'
@@ -291,7 +292,16 @@ export function StudyCompanion({
   const [query,setQuery]=useState('')
   const [showRole,setShowRole]=useState(false)
   const [isLoggingOut,setIsLoggingOut]=useState(false)
-  const [authView,setAuthView]=useState<'login'|'signup'>('login')
+  const [authView,setAuthView]=useState<'landing'|'login'|'signup'>('landing')
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const authParam = params.get('auth');
+    if (authParam === 'login' || authParam === 'signup' || authParam === 'landing') {
+      setAuthView(authParam);
+    }
+  }, []);
   const unread = alerts.filter(a=>a.unread).length
 
   const greeting = useMemo(() => {
@@ -362,9 +372,13 @@ export function StudyCompanion({
     return (
       <div key={outerKey} className="m-screen-enter">
         {!user ? (
-          authView === 'signup'
-            ? <SignUp onRegister={handleRegister} onSwitchToLogin={() => setAuthView('login')} />
-            : <Login onLogin={signIn} onSwitchToSignUp={() => setAuthView('signup')} />
+          authView === 'landing' ? (
+            <LandingPage onGetStarted={() => setAuthView('signup')} onSignIn={() => setAuthView('login')} />
+          ) : authView === 'signup' ? (
+            <SignUp onRegister={handleRegister} onSwitchToLogin={() => setAuthView('login')} onSwitchToLanding={() => setAuthView('landing')} />
+          ) : (
+            <Login onLogin={signIn} onSwitchToSignUp={() => setAuthView('signup')} onSwitchToLanding={() => setAuthView('landing')} />
+          )
         ) : isPending ? (
           <PendingScreen user={user} onLogout={handleLogout} />
         ) : reader ? (
@@ -441,7 +455,21 @@ export function StudyCompanion({
   return (
     <AnimatePresence mode="wait">
       {!user ? (
-        authView === 'signup' ? (
+        authView === 'landing' ? (
+          <motion.div
+            key="landing-screen"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.02 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            className="w-full min-h-screen fm-gpu"
+          >
+            <LandingPage
+              onGetStarted={() => setAuthView('signup')}
+              onSignIn={() => setAuthView('login')}
+            />
+          </motion.div>
+        ) : authView === 'signup' ? (
           <motion.div
             key="signup-screen"
             initial={{ opacity: 0, scale: 0.98 }}
@@ -450,7 +478,7 @@ export function StudyCompanion({
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
             className="w-full min-h-screen fm-gpu"
           >
-            <SignUp onRegister={handleRegister} onSwitchToLogin={() => setAuthView('login')} />
+            <SignUp onRegister={handleRegister} onSwitchToLogin={() => setAuthView('login')} onSwitchToLanding={() => setAuthView('landing')} />
           </motion.div>
         ) : (
           <motion.div
@@ -461,7 +489,7 @@ export function StudyCompanion({
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
             className="w-full min-h-screen fm-gpu"
           >
-            <Login onLogin={signIn} onSwitchToSignUp={() => setAuthView('signup')} />
+            <Login onLogin={signIn} onSwitchToSignUp={() => setAuthView('signup')} onSwitchToLanding={() => setAuthView('landing')} />
           </motion.div>
         )
       ) : ((user.status === 'PENDING' || user.status === 'REJECTED') && user.role !== 'ADMIN') ? (
@@ -1097,10 +1125,12 @@ function SettingsPage({
 
 function Login({ 
   onLogin, 
-  onSwitchToSignUp 
+  onSwitchToSignUp,
+  onSwitchToLanding
 }: { 
   onLogin: (credentials: FormData | { email: string; password?: string }) => Promise<string | void> | void
-  onSwitchToSignUp?: () => void 
+  onSwitchToSignUp?: () => void
+  onSwitchToLanding?: () => void
 }) {
   const [identity, setIdentity] = useState('')
   const [password, setPassword] = useState('')
@@ -1194,10 +1224,15 @@ function Login({
     <main className="login-shell min-h-screen bg-background py-6 sm:py-10 md:py-14 px-3 sm:px-6 md:px-8 flex flex-col justify-center items-center">
       <div className="mx-auto grid w-full max-w-6xl rounded-3xl sm:rounded-[2.2rem] border bg-card shadow-sm md:grid-cols-[1.05fr_.95fr] overflow-hidden my-auto">
         <section className="relative hidden flex-col justify-between overflow-hidden bg-sage p-12 md:flex">
-          <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onSwitchToLanding}
+            className="flex items-center gap-3 text-left cursor-pointer hover:opacity-80 transition-opacity w-fit"
+            title="Return to Home Overview"
+          >
             <SemstackLogo size={42} className="size-[42px]" />
             <b className="text-xl">Semstack</b>
-          </div>
+          </button>
           <div className="max-w-md">
             <h1 className="mt-5 text-balance text-5xl font-semibold leading-[1.05] tracking-[-.05em]">
               Every useful note, in one calm place.
@@ -1222,10 +1257,23 @@ function Login({
 
         <section className="flex flex-col justify-center p-7 md:p-12">
           <div className="mb-8 flex items-center justify-between md:hidden">
-            <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onSwitchToLanding}
+              className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity text-left"
+            >
               <SemstackLogo size={38} className="size-[38px]" />
               <b className="text-xl">Semstack</b>
-            </div>
+            </button>
+            {onSwitchToLanding && (
+              <button
+                type="button"
+                onClick={onSwitchToLanding}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer py-1"
+              >
+                ← Overview
+              </button>
+            )}
           </div>
 
           <p className="section-kicker">Welcome back</p>
