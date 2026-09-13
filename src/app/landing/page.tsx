@@ -8,9 +8,11 @@ export default function LandingPageRoute() {
   const router = useRouter();
 
   return (
-    <LandingPage
-      onGetStarted={() => router.push('/?auth=signup')}
-      onSignIn={() => router.push('/?auth=login')}
-    />
+    <div className="h-[100dvh] max-h-[100dvh] w-full overflow-hidden">
+      <LandingPage
+        onGetStarted={() => router.push('/?auth=signup')}
+        onSignIn={() => router.push('/?auth=login')}
+      />
+    </div>
   );
 }

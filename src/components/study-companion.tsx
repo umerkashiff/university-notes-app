@@ -370,7 +370,7 @@ export function StudyCompanion({
     const isPending = !!user && (user.status === 'PENDING' || user.status === 'REJECTED') && user.role !== 'ADMIN'
     const outerKey = !user ? authView : isPending ? 'pending' : reader ? 'pdf' : 'main'
     return (
-      <div key={outerKey} className="m-screen-enter">
+      <div key={outerKey} className={authView === 'landing' && !user ? "h-[100dvh] max-h-[100dvh] overflow-hidden m-screen-enter" : "m-screen-enter"}>
         {!user ? (
           authView === 'landing' ? (
             <LandingPage onGetStarted={() => setAuthView('signup')} onSignIn={() => setAuthView('login')} />
@@ -462,7 +462,7 @@ export function StudyCompanion({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.02 }}
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-            className="w-full min-h-screen fm-gpu"
+            className="w-full h-[100dvh] max-h-[100dvh] overflow-hidden fm-gpu"
           >
             <LandingPage
               onGetStarted={() => setAuthView('signup')}
